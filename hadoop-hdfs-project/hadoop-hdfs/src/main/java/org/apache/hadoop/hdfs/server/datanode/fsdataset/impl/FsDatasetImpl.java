@@ -66,6 +66,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockIdManager;
 import org.apache.hadoop.hdfs.server.datanode.FileIoProvider;
 import org.apache.hadoop.hdfs.server.datanode.FinalizedReplica;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
+import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.BlockListAsLongs;
@@ -248,6 +249,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   }
     
   final DataNode datanode;
+  private final DataNodeMetrics dataNodeMetrics;
   final DataStorage dataStorage;
   private final FsVolumeList volumes;
   final Map<String, DatanodeStorage> storageMap;
@@ -291,6 +293,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       ) throws IOException {
     this.fsRunning = true;
     this.datanode = datanode;
+    this.dataNodeMetrics = datanode.getMetrics();
     this.dataStorage = storage;
     this.conf = conf;
     this.smallBufferSize = DFSUtilClient.getSmallBufferSize(conf);
@@ -1244,7 +1247,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override  // FsDatasetSpi
   public ReplicaHandler append(ExtendedBlock b,
       long newGS, long expectedBlockLen) throws IOException {
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       // If the block was successfully finalized because all packets
       // were successfully processed at the Datanode but the ack for
       // some of the packets were not received by the client. The client
@@ -1278,6 +1284,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         throw e;
       }
       return new ReplicaHandler(replica, ref);
+    } finally {
+      if (dataNodeMetrics != null) {
+        long appendTimeHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long appendTimeMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addAppendOp(appendTimeMs);
+        dataNodeMetrics.addAppendHoldLock(appendTimeHoldLockMs);
+      }
     }
   }
   
@@ -1447,7 +1460,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   public ReplicaHandler createRbw(
       StorageType storageType, String storageId, ExtendedBlock b,
       boolean allowLazyPersist) throws IOException {
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(),
           b.getBlockId());
       if (replicaInfo != null) {
@@ -1507,6 +1523,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
       volumeMap.add(b.getBlockPoolId(), newReplicaInfo.getReplicaInfo());
       return new ReplicaHandler(newReplicaInfo, ref);
+    } finally {
+      if (dataNodeMetrics != null) {
+        long createRbwHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long createRbwMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addCreateRbwHoldLock(createRbwHoldLockMs);
+        dataNodeMetrics.addCreateRbwOp(createRbwMs);
+      }
     }
   }
 
@@ -1515,27 +1538,41 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       ExtendedBlock b, long newGS, long minBytesRcvd, long maxBytesRcvd)
       throws IOException {
     LOG.info("Recover RBW replica " + b);
-
-    while (true) {
-      try {
-        try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
-          ReplicaInfo replicaInfo =
-              getReplicaInfo(b.getBlockPoolId(), b.getBlockId());
-          // check the replica's state
-          if (replicaInfo.getState() != ReplicaState.RBW) {
-            throw new ReplicaNotFoundException(
-                ReplicaNotFoundException.NON_RBW_REPLICA + replicaInfo);
+    long startTimeMs = Time.monotonicNow();
+    long perLoopStartMs = 0;
+    try {
+      while (true) {
+        try {
+          try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+            perLoopStartMs = Time.monotonicNow();
+            ReplicaInfo replicaInfo =
+                getReplicaInfo(b.getBlockPoolId(), b.getBlockId());
+            // check the replica's state
+            if (replicaInfo.getState() != ReplicaState.RBW) {
+              throw new ReplicaNotFoundException(
+                  ReplicaNotFoundException.NON_RBW_REPLICA + replicaInfo);
+            }
+            ReplicaInPipeline rbw = (ReplicaInPipeline) replicaInfo;
+            if (!rbw.attemptToSetWriter(null, Thread.currentThread())) {
+              throw new MustStopExistingWriter(rbw);
+            }
+            LOG.info("At " + datanode.getDisplayName() + ", Recovering " + rbw);
+            return recoverRbwImpl(rbw, b, newGS, minBytesRcvd, maxBytesRcvd);
+          } finally {
+            if (dataNodeMetrics != null) {
+              long perLoopTimeMs = Time.monotonicNow() - perLoopStartMs;
+              dataNodeMetrics.addRecoverRbwPerLoopHoldLock(perLoopTimeMs);
+            }
           }
-          ReplicaInPipeline rbw = (ReplicaInPipeline)replicaInfo;
-          if (!rbw.attemptToSetWriter(null, Thread.currentThread())) {
-            throw new MustStopExistingWriter(rbw);
-          }
-          LOG.info("At " + datanode.getDisplayName() + ", Recovering " + rbw);
-          return recoverRbwImpl(rbw, b, newGS, minBytesRcvd, maxBytesRcvd);
+        } catch (MustStopExistingWriter e) {
+          e.getReplicaInPipeline().stopWriter(
+              datanode.getDnConf().getXceiverStopTimeout());
         }
-      } catch (MustStopExistingWriter e) {
-        e.getReplicaInPipeline().stopWriter(
-            datanode.getDnConf().getXceiverStopTimeout());
+      }
+    } finally {
+      if (dataNodeMetrics != null) {
+        long recoverRbwMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addRecoverRbwOp(recoverRbwMs);
       }
     }
   }
@@ -1603,8 +1640,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public ReplicaInPipeline convertTemporaryToRbw(
       final ExtendedBlock b) throws IOException {
-
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       final long blockId = b.getBlockId();
       final long expectedGs = b.getGenerationStamp();
       final long visible = b.getNumBytes();
@@ -1659,6 +1698,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       // overwrite the RBW in the volume map
       volumeMap.add(b.getBlockPoolId(), rbw.getReplicaInfo());
       return rbw;
+    } finally {
+      if (dataNodeMetrics != null) {
+        long convertTemporaryToRbwHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long convertTemporaryToRbwMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addConvertTemporaryToRbwHoldLock(convertTemporaryToRbwHoldLockMs);
+        dataNodeMetrics.addConvertTemporaryToRbwOp(convertTemporaryToRbwMs);
+      }
     }
   }
 
@@ -1674,11 +1720,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String storageId, ExtendedBlock b, boolean isTransfer)
       throws IOException {
     long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     long writerStopTimeoutMs = datanode.getDnConf().getXceiverStopTimeout();
     ReplicaInfo lastFoundReplicaInfo = null;
     boolean isInPipeline = false;
     do {
       try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+        startHoldLockTimeMs = Time.monotonicNow();
         ReplicaInfo currentReplicaInfo =
             volumeMap.get(b.getBlockPoolId(), b.getBlockId());
         if (currentReplicaInfo == lastFoundReplicaInfo) {
@@ -1700,6 +1748,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
                 + " and thus cannot be created.");
           }
           lastFoundReplicaInfo = currentReplicaInfo;
+        }
+      } finally {
+        if (dataNodeMetrics != null) {
+          dataNodeMetrics.addCreateTemporaryPerLoopHoldLock(Time.monotonicNow() - startHoldLockTimeMs);
         }
       }
       if (!isInPipeline) {
@@ -1732,6 +1784,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
           false);
     }
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       FsVolumeReference ref = volumes.getNextVolume(storageType, storageId, b
           .getNumBytes());
       FsVolumeImpl v = (FsVolumeImpl) ref.getVolume();
@@ -1745,6 +1798,14 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
       volumeMap.add(b.getBlockPoolId(), newReplicaInfo.getReplicaInfo());
       return new ReplicaHandler(newReplicaInfo, ref);
+    } finally {
+      if (dataNodeMetrics != null) {
+        // Create temporary operation hold write lock twice.
+        long createTemporaryNonLoopHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long createTemporaryOpMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addCreateTemporaryOp(createTemporaryOpMs);
+        dataNodeMetrics.addCreateTemporaryNonLoopHoldLock(createTemporaryNonLoopHoldLockMs);
+      }
     }
   }
 
@@ -1782,7 +1843,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       throws IOException {
     ReplicaInfo replicaInfo = null;
     ReplicaInfo finalizedReplicaInfo = null;
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       if (Thread.interrupted()) {
         // Don't allow data modifications from interrupted threads
         throw new IOException("Cannot finalize block from Interrupted Thread");
@@ -1794,6 +1858,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         return;
       }
       finalizedReplicaInfo = finalizeReplica(b.getBlockPoolId(), replicaInfo);
+    } finally {
+      if (dataNodeMetrics != null) {
+        long finalizeBlockHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long finalizeBlockMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addFinalizeBlockHoldLock(finalizeBlockHoldLockMs);
+        dataNodeMetrics.addFinalizeBlockOp(finalizeBlockMs);
+      }
     }
     /*
      * Sync the directory after rename from tmp/rbw to Finalized if
@@ -1858,7 +1929,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
    */
   @Override // FsDatasetSpi
   public void unfinalizeBlock(ExtendedBlock b) throws IOException {
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(),
           b.getLocalBlock());
       if (replicaInfo != null &&
@@ -1874,6 +1948,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
           ramDiskReplicaTracker.discardReplica(b.getBlockPoolId(),
               b.getBlockId(), true);
         }
+      }
+    } finally {
+      if (dataNodeMetrics != null) {
+        long unFinalizedBlockHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long unFinalizedBlockMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addUnfinalizeBlockHoldLock(unFinalizedBlockHoldLockMs);
+        dataNodeMetrics.addUnfinalizeBlockOp(unFinalizedBlockMs);
       }
     }
   }
@@ -2425,7 +2506,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     Block corruptBlock = null;
     ReplicaInfo memBlockInfo;
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       memBlockInfo = volumeMap.get(bpid, blockId);
       if (memBlockInfo != null &&
           memBlockInfo.getState() != ReplicaState.FINALIZED) {
@@ -2642,6 +2726,13 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
             + memBlockInfo.getBlockDataLength());
         memBlockInfo.setNumBytes(memBlockInfo.getBlockDataLength());
       }
+    } finally {
+      if (dataNodeMetrics != null) {
+        long checkAndUpdateTimeHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long checkAndUpdateTimeMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addCheckAndUpdateOp(checkAndUpdateTimeMs);
+        dataNodeMetrics.addCheckAndUpdateHoldLock(checkAndUpdateTimeHoldLockMs);
+      }
     }
 
     // Send corrupt block report outside the lock
@@ -2777,7 +2868,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
                                     final long recoveryId,
                                     final long newBlockId,
                                     final long newlength) throws IOException {
+    long startTimeMs = Time.monotonicNow();
+    long startHoldLockTimeMs = 0;
     try (AutoCloseableLock lock = datasetWriteLock.acquire()) {
+      startHoldLockTimeMs = Time.monotonicNow();
       //get replica
       final String bpid = oldBlock.getBlockPoolId();
       final ReplicaInfo replica = volumeMap.get(bpid, oldBlock.getBlockId());
@@ -2833,6 +2927,15 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       checkReplicaFiles(finalized);
 
       return finalized;
+    } finally {
+      if (dataNodeMetrics != null) {
+        long updateReplicaUnderRecoveryHoldLockMs = Time.monotonicNow() - startHoldLockTimeMs;
+        long updateReplicaUnderRecoveryMs = Time.monotonicNow() - startTimeMs;
+        dataNodeMetrics.addUpdateReplicaUnderRecoveryHoldLock(
+            updateReplicaUnderRecoveryHoldLockMs);
+        dataNodeMetrics.addUpdateReplicaUnderRecoveryOp(
+            updateReplicaUnderRecoveryMs);
+      }
     }
   }
 
