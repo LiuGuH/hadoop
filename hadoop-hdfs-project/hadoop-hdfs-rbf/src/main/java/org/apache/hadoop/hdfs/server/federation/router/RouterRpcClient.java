@@ -591,7 +591,7 @@ public class RouterRpcClient {
           namenodeResolver.updateActiveNamenode(nsId, address);
         }
         if (this.rpcMonitor != null) {
-          this.rpcMonitor.proxyOpComplete(true);
+          this.rpcMonitor.proxyOpComplete(true, nsId);
         }
         return ret;
       } catch (IOException ioe) {
@@ -599,17 +599,17 @@ public class RouterRpcClient {
         if (ioe instanceof StandbyException) {
           // Fail over indicated by retry policy and/or NN
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpFailureStandby();
+            this.rpcMonitor.proxyOpFailureStandby(nsId);
           }
           failover = true;
         } else if (isUnavailableException(ioe)) {
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpFailureCommunicate();
+            this.rpcMonitor.proxyOpFailureCommunicate(nsId);
           }
           failover = true;
         } else if (ioe instanceof RemoteException) {
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpComplete(true);
+            this.rpcMonitor.proxyOpComplete(true, nsId);
           }
           RemoteException re = (RemoteException) ioe;
           ioe = re.unwrapRemoteException();
@@ -618,7 +618,7 @@ public class RouterRpcClient {
           throw ioe;
         } else if (ioe instanceof ConnectionNullException) {
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpFailureCommunicate();
+            this.rpcMonitor.proxyOpFailureCommunicate(nsId);
           }
           LOG.error("Get connection for {} {} error: {}", nsId, rpcAddress,
               ioe.getMessage());
@@ -628,7 +628,7 @@ public class RouterRpcClient {
           throw se;
         } else if (ioe instanceof NoNamenodesAvailableException) {
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpNoNamenodes();
+            this.rpcMonitor.proxyOpNoNamenodes(nsId);
           }
           LOG.error("Cannot get available namenode for {} {} error: {}",
               nsId, rpcAddress, ioe.getMessage());
@@ -638,8 +638,8 @@ public class RouterRpcClient {
           // Other communication error, this is a failure
           // Communication retries are handled by the retry policy
           if (this.rpcMonitor != null) {
-            this.rpcMonitor.proxyOpFailureCommunicate();
-            this.rpcMonitor.proxyOpComplete(false);
+            this.rpcMonitor.proxyOpFailureCommunicate(nsId);
+            this.rpcMonitor.proxyOpComplete(false, nsId);
           }
           throw ioe;
         }
@@ -650,7 +650,7 @@ public class RouterRpcClient {
       }
     }
     if (this.rpcMonitor != null) {
-      this.rpcMonitor.proxyOpComplete(false);
+      this.rpcMonitor.proxyOpComplete(false, null);
     }
 
     // All namenodes were unavailable or in standby
