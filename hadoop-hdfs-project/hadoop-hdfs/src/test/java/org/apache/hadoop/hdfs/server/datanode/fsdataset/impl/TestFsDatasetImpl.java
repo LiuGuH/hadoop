@@ -17,15 +17,16 @@
  */
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.function.Supplier;
+
+import org.apache.hadoop.hdfs.server.datanode.DataSetLockManager;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -69,7 +70,6 @@ import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.io.MultipleIOException;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
-import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.util.FakeTimer;
 import org.apache.hadoop.util.StringUtils;
 import org.junit.Assert;
@@ -89,7 +89,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DN_CACHED_DFSUSED_CHECK_INTERVAL_MS;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_SCAN_PERIOD_HOURS_KEY;
@@ -135,6 +134,7 @@ public class TestFsDatasetImpl {
   private DataNode datanode;
   private DataStorage storage;
   private FsDatasetImpl dataset;
+  private DataSetLockManager manager = new DataSetLockManager();
   
   private final static String BLOCKPOOL = "BP-TEST";
 
@@ -185,6 +185,7 @@ public class TestFsDatasetImpl {
     this.conf.set(DFSConfigKeys.DFS_DATANODE_REPLICA_CACHE_ROOT_DIR_KEY,
         replicaCacheRootDir);
 
+    when(datanode.getDataSetLockManager()).thenReturn(manager);
     when(datanode.getConf()).thenReturn(conf);
     final DNConf dnConf = new DNConf(datanode);
     when(datanode.getDnConf()).thenReturn(dnConf);
@@ -202,117 +203,6 @@ public class TestFsDatasetImpl {
 
     assertEquals(NUM_INIT_VOLUMES, getNumVolumes());
     assertEquals(0, dataset.getNumFailedVolumes());
-  }
-
-  @Test(timeout=10000)
-  public void testReadLockEnabledByDefault()
-      throws Exception {
-    final FsDatasetSpi ds = dataset;
-    AtomicBoolean accessed = new AtomicBoolean(false);
-    CountDownLatch latch = new CountDownLatch(1);
-    CountDownLatch waiterLatch = new CountDownLatch(1);
-
-    Thread holder = new Thread() {
-      public void run() {
-        try (AutoCloseableLock l = ds.acquireDatasetReadLock()) {
-          latch.countDown();
-          // wait for the waiter thread to access the lock.
-          waiterLatch.await();
-        } catch (Exception e) {
-        }
-      }
-    };
-
-    Thread waiter = new Thread() {
-      public void run() {
-        try {
-          latch.await();
-        } catch (InterruptedException e) {
-          waiterLatch.countDown();
-          return;
-        }
-        try (AutoCloseableLock l = ds.acquireDatasetReadLock()) {
-          accessed.getAndSet(true);
-          // signal the holder thread.
-          waiterLatch.countDown();
-        } catch (Exception e) {
-        }
-      }
-    };
-    waiter.start();
-    holder.start();
-    holder.join();
-    waiter.join();
-    // The holder thread is still holding the lock, but the waiter can still
-    // run as the lock is a shared read lock.
-    assertEquals(true, accessed.get());
-    holder.interrupt();
-  }
-
-  @Test(timeout=10000)
-  public void testReadLockCanBeDisabledByConfig()
-      throws Exception {
-    HdfsConfiguration conf = new HdfsConfiguration();
-    conf.setBoolean(
-        DFSConfigKeys.DFS_DATANODE_LOCK_READ_WRITE_ENABLED_KEY, false);
-    MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
-        .numDataNodes(1).build();
-    try {
-      cluster.waitActive();
-      DataNode dn = cluster.getDataNodes().get(0);
-      final FsDatasetSpi<?> ds = DataNodeTestUtils.getFSDataset(dn);
-
-      CountDownLatch latch = new CountDownLatch(1);
-      CountDownLatch waiterLatch = new CountDownLatch(1);
-      // create a synchronized list and verify the order of elements.
-      List<Integer> syncList =
-          Collections.synchronizedList(new ArrayList<>());
-
-
-      Thread holder = new Thread() {
-        public void run() {
-          latch.countDown();
-          try (AutoCloseableLock l = ds.acquireDatasetReadLock()) {
-            syncList.add(0);
-          } catch (Exception e) {
-            return;
-          }
-          try {
-            waiterLatch.await();
-            syncList.add(2);
-          } catch (InterruptedException e) {
-          }
-        }
-      };
-
-      Thread waiter = new Thread() {
-        public void run() {
-          try {
-            // wait for holder to get into the critical section.
-            latch.await();
-          } catch (InterruptedException e) {
-            waiterLatch.countDown();
-          }
-          try (AutoCloseableLock l = ds.acquireDatasetReadLock()) {
-            syncList.add(1);
-            waiterLatch.countDown();
-          } catch (Exception e) {
-          }
-        }
-      };
-      waiter.start();
-      holder.start();
-
-      waiter.join();
-      holder.join();
-
-      // verify that the synchronized list has the correct sequence.
-      assertEquals(
-          "The sequence of checkpoints does not correspond to shared lock",
-          syncList, Arrays.asList(0, 1, 2));
-    } finally {
-      cluster.shutdown();
-    }
   }
 
   @Test

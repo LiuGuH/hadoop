@@ -117,6 +117,7 @@ import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.HDFSPolicyProvider;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.hdfs.server.common.DataNodeLockManager.LockLevel;
 import org.apache.hadoop.hdfs.server.datanode.checker.DatasetVolumeChecker;
 import org.apache.hadoop.hdfs.server.datanode.checker.StorageLocationChecker;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
@@ -402,6 +403,7 @@ public class DataNode extends ReconfigurableBase
       .availableProcessors();
   private static final double CONGESTION_RATIO = 1.5;
   private DiskBalancer diskBalancer;
+  private DataSetLockManager dataSetLockManager;
 
   private final ExecutorService xferService;
 
@@ -445,6 +447,7 @@ public class DataNode extends ReconfigurableBase
     this.pipelineSupportECN = false;
     this.socketFactory = NetUtils.getDefaultSocketFactory(conf);
     this.dnConf = new DNConf(this);
+    this.dataSetLockManager = new DataSetLockManager(conf, this);
     initOOBTimeout();
     storageLocationChecker = null;
     volumeChecker = new DatasetVolumeChecker(conf, new Timer());
@@ -463,6 +466,7 @@ public class DataNode extends ReconfigurableBase
     super(conf);
     this.tracer = createTracer(conf);
     this.fileIoProvider = new FileIoProvider(conf, this);
+    this.dataSetLockManager = new DataSetLockManager(conf, this);
     this.blockScanner = new BlockScanner(this);
     this.lastDiskErrorCheck = 0;
     this.maxNumberOfBlocksToLog = conf.getLong(DFS_MAX_NUM_BLOCKS_TO_LOG_KEY,
@@ -2197,6 +2201,7 @@ public class DataNode extends ReconfigurableBase
       notifyAll();
     }
     tracer.close();
+    dataSetLockManager.lockLeakCheck();
   }
 
   /**
@@ -3077,7 +3082,8 @@ public class DataNode extends ReconfigurableBase
     final BlockConstructionStage stage;
 
     //get replica information
-    try(AutoCloseableLock lock = data.acquireDatasetReadLock()) {
+    try (AutoCloseableLock lock = dataSetLockManager.readLock(
+        LockLevel.BLOCK_POOl, b.getBlockPoolId())) {
       Block storedBlock = data.getStoredBlock(b.getBlockPoolId(),
           b.getBlockId());
       if (null == storedBlock) {
@@ -3806,5 +3812,9 @@ public class DataNode extends ReconfigurableBase
   private static boolean isWrite(BlockConstructionStage stage) {
     return (stage == PIPELINE_SETUP_STREAMING_RECOVERY
         || stage == PIPELINE_SETUP_APPEND_RECOVERY);
+  }
+
+  public DataSetLockManager getDataSetLockManager() {
+    return dataSetLockManager;
   }
 }
