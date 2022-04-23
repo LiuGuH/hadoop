@@ -866,6 +866,7 @@ public class TestBlockManager {
 
   @Test
   public void testSkipReconstructionWithManyBusyNodes() {
+    NameNode.initMetrics(new Configuration(), HdfsServerConstants.NamenodeRole.NAMENODE);
     long blockId = -9223372036854775776L; // real ec block id
     // RS-3-2 EC policy
     ErasureCodingPolicy ecPolicy =
@@ -911,6 +912,7 @@ public class TestBlockManager {
 
   @Test
   public void testSkipReconstructionWithManyBusyNodes2() {
+    NameNode.initMetrics(new Configuration(), HdfsServerConstants.NamenodeRole.NAMENODE);
     long blockId = -9223372036854775776L; // real ec block id
     // RS-3-2 EC policy
     ErasureCodingPolicy ecPolicy =
