@@ -754,6 +754,36 @@ public interface ClientProtocol {
   void renewLease(String clientName) throws IOException;
 
   /**
+   * Client programs can cause stateful changes in the NameNode
+   * that affect other clients.  A client may obtain a file and
+   * neither abandon nor complete it.  A client might hold a series
+   * of locks that prevent other clients from proceeding.
+   * Clearly, it would be bad if a client held a bunch of locks
+   * that it never gave up.  This can happen easily if the client
+   * dies unexpectedly.
+   * <p>
+   * So, the NameNode will revoke the locks and live file-creates
+   * for clients that it thinks have died.  A client tells the
+   * NameNode that it is still alive by periodically calling
+   * renewLease().  If a certain amount of time passes since
+   * the last call to renewLease(), the NameNode assumes the
+   * client has died.
+   *
+   * @param namespaces The full Namespace list that the renewLease rpc
+   *                   should be forwarded by RBF.
+   *                   Tips: NN side, this value should be null.
+   *                         RBF side, if this value is null, this rpc will
+   *                         be forwarded to all available namespaces,
+   *                         else this rpc will be forwarded to
+   *                         the special namespaces.
+   *
+   * @throws org.apache.hadoop.security.AccessControlException permission denied
+   * @throws IOException If an I/O error occurred
+   */
+  @Idempotent
+  void renewLease(String clientName, List<String> namespaces) throws IOException;
+
+  /**
    * Start lease recovery.
    * Lightweight NameNode operation to trigger lease recovery
    *
