@@ -670,4 +670,12 @@
       concurrent calls.
     </description>
   </property>
+
+  <property>
+    <name>dfs.federation.router.fairness.acquire.timeout</name>
+    <value>1s</value>
+    <description>
+      The maximum time to wait for a permit.
+    </description>
+  </property>
 </configuration>
