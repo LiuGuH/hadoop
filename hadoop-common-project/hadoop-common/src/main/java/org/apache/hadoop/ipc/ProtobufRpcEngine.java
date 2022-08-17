@@ -80,9 +80,9 @@ public class ProtobufRpcEngine implements RpcEngine {
   @Override
   @SuppressWarnings("unchecked")
   public <T> ProtocolProxy<T> getProxy(Class<T> protocol, long clientVersion,
-      ConnectionId connId, Configuration conf, SocketFactory factory)
-      throws IOException {
-    final Invoker invoker = new Invoker(protocol, connId, conf, factory);
+      ConnectionId connId, Configuration conf, SocketFactory factory,
+      AlignmentContext alignmentContext) throws IOException {
+    final Invoker invoker = new Invoker(protocol, connId, conf, factory, alignmentContext);
     return new ProtocolProxy<T>(protocol, (T) Proxy.newProxyInstance(
         protocol.getClassLoader(), new Class[] {protocol}, invoker), false);
   }
@@ -117,7 +117,7 @@ public class ProtobufRpcEngine implements RpcEngine {
     return new ProtocolProxy<T>(protocol, (T) Proxy.newProxyInstance(
         protocol.getClassLoader(), new Class[]{protocol}, invoker), false);
   }
-  
+
   @Override
   public ProtocolProxy<ProtocolMetaInfoPB> getProtocolMetaInfoProxy(
       ConnectionId connId, Configuration conf, SocketFactory factory)
@@ -126,11 +126,11 @@ public class ProtobufRpcEngine implements RpcEngine {
     return new ProtocolProxy<ProtocolMetaInfoPB>(protocol,
         (ProtocolMetaInfoPB) Proxy.newProxyInstance(protocol.getClassLoader(),
             new Class[] { protocol }, new Invoker(protocol, connId, conf,
-                factory)), false);
+                factory, null)), false);
   }
 
   protected static class Invoker implements RpcInvocationHandler {
-    private final Map<String, Message> returnTypes = 
+    private final Map<String, Message> returnTypes =
         new ConcurrentHashMap<String, Message>();
     private boolean isClosed = false;
     private final Client.ConnectionId remoteId;
@@ -147,35 +147,40 @@ public class ProtobufRpcEngine implements RpcEngine {
         throws IOException {
       this(protocol, Client.ConnectionId.getConnectionId(
           addr, protocol, ticket, rpcTimeout, connectionRetryPolicy, conf),
-          conf, factory);
+          conf, factory, alignmentContext);
       this.fallbackToSimpleAuth = fallbackToSimpleAuth;
-      this.alignmentContext = alignmentContext;
     }
-    
+
     /**
      * This constructor takes a connectionId, instead of creating a new one.
+     * @param protocol input protocol.
+     * @param connId input connId.
+     * @param conf input Configuration.
+     * @param factory input factory.
+     * @param alignmentContext Alignment context
      */
     protected Invoker(Class<?> protocol, Client.ConnectionId connId,
-        Configuration conf, SocketFactory factory) {
+        Configuration conf, SocketFactory factory, AlignmentContext alignmentContext) {
       this.remoteId = connId;
       this.client = CLIENTS.getClient(conf, factory, RpcWritable.Buffer.class);
       this.protocolName = RPC.getProtocolName(protocol);
       this.clientProtocolVersion = RPC
           .getProtocolVersion(protocol);
+      this.alignmentContext = alignmentContext;
     }
 
     private RequestHeaderProto constructRpcRequestHeader(Method method) {
       RequestHeaderProto.Builder builder = RequestHeaderProto
           .newBuilder();
       builder.setMethodName(method.getName());
-     
+
 
       // For protobuf, {@code protocol} used when creating client side proxy is
-      // the interface extending BlockingInterface, which has the annotations 
+      // the interface extending BlockingInterface, which has the annotations
       // such as ProtocolName etc.
       //
       // Using Method.getDeclaringClass(), as in WritableEngine to get at
-      // the protocol interface will return BlockingInterface, from where 
+      // the protocol interface will return BlockingInterface, from where
       // the annotation ProtocolName and Version cannot be
       // obtained.
       //
@@ -190,15 +195,15 @@ public class ProtobufRpcEngine implements RpcEngine {
      * This is the client side invoker of RPC method. It only throws
      * ServiceException, since the invocation proxy expects only
      * ServiceException to be thrown by the method in case protobuf service.
-     * 
+     *
      * ServiceException has the following causes:
      * <ol>
-     * <li>Exceptions encountered on the client side in this method are 
+     * <li>Exceptions encountered on the client side in this method are
      * set as cause in ServiceException as is.</li>
      * <li>Exceptions from the server are wrapped in RemoteException and are
      * set as cause in ServiceException</li>
      * </ol>
-     * 
+     *
      * Note that the client calling protobuf RPC methods, must handle
      * ServiceException by getting the cause from the ServiceException. If the
      * cause is RemoteException, then unwrap it to get the exception thrown by
@@ -211,7 +216,7 @@ public class ProtobufRpcEngine implements RpcEngine {
       if (LOG.isDebugEnabled()) {
         startTime = Time.now();
       }
-      
+
       if (args.length != 2) { // RpcController + Message
         throw new ServiceException(
             "Too many or few parameters for request. Method: ["
@@ -265,7 +270,7 @@ public class ProtobufRpcEngine implements RpcEngine {
         long callTime = Time.now() - startTime;
         LOG.debug("Call: " + method.getName() + " took " + callTime + "ms");
       }
-      
+
       if (Client.isAsynchronousMode()) {
         final AsyncGet<RpcWritable.Buffer, IOException> arr
             = Client.getAsyncRpcResponse();
@@ -329,7 +334,7 @@ public class ProtobufRpcEngine implements RpcEngine {
       if (returnTypes.containsKey(method.getName())) {
         return returnTypes.get(method.getName());
       }
-      
+
       Class<?> returnType = method.getReturnType();
       Method newInstMethod = returnType.getMethod("getDefaultInstance");
       newInstMethod.setAccessible(true);
@@ -422,7 +427,7 @@ public class ProtobufRpcEngine implements RpcEngine {
 
     /**
      * Construct an RPC server.
-     * 
+     *
      * @param protocolClass the class of protocol
      * @param protocolImpl the protocolImpl whose methods will be called
      * @param conf the configuration to use
@@ -437,7 +442,7 @@ public class ProtobufRpcEngine implements RpcEngine {
     public Server(Class<?> protocolClass, Object protocolImpl,
         Configuration conf, String bindAddress, int port, int numHandlers,
         int numReaders, int queueSizePerHandler, boolean verbose,
-        SecretManager<? extends TokenIdentifier> secretManager, 
+        SecretManager<? extends TokenIdentifier> secretManager,
         String portRangeConfig, AlignmentContext alignmentContext)
         throws IOException {
       super(protocolClass, protocolImpl, conf, bindAddress, port, numHandlers,
