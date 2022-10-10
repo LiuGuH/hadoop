@@ -255,7 +255,6 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
   public void removeLock(LockLevel level, String... resources) {
     String lockName = generateLockName(level, resources);
     try (AutoCloseDataSetLock lock = writeLock(level, resources)) {
-      lock.lock();
       lockMap.removeLock(lockName);
     }
   }
