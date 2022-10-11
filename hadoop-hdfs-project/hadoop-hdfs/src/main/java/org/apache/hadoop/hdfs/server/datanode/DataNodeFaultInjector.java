@@ -157,4 +157,10 @@ public class DataNodeFaultInjector {
   public void badDecoding(ByteBuffer[] outputs) {}
 
   public void throwIOExceptionWhenReconcile() throws IOException {}
+
+  /**
+   * Just delay delete replica a while.
+   */
+  public void delayDeleteReplica() {}
+
 }
