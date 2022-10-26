@@ -4944,6 +4944,20 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     getBlockManager().getDatanodeManager().refreshNodes(new HdfsConfiguration());
     logAuditEvent(true, operationName, null);
   }
+  
+  public void refreshTopology() throws IOException {
+    String operationName = "refreshTopology";
+    checkOperation(OperationCategory.UNCHECKED);
+    checkSuperuserPrivilege(operationName);
+    writeLock();
+    try {
+      checkOperation(OperationCategory.UNCHECKED);
+      getBlockManager().getDatanodeManager().refreshTopology();
+    } finally {
+      writeUnlock(operationName);
+    }
+    logAuditEvent(true, operationName, null);
+  }
 
   void setBalancerBandwidth(long bandwidth) throws IOException {
     String operationName = "setBalancerBandwidth";

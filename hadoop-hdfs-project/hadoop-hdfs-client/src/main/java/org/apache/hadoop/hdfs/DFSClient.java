@@ -2402,6 +2402,13 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     }
   }
 
+  public void refreshTopology() throws IOException{
+    checkOpen();
+    try (TraceScope ignored = tracer.newScope("refreshTopology")) {
+      namenode.refreshTopology();
+    }
+  }
+
   /**
    * Dumps DFS data structures into specified file.
    *

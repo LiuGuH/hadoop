@@ -1692,6 +1692,10 @@ public class DistributedFileSystem extends FileSystem
   public void refreshNodes() throws IOException {
     dfs.refreshNodes();
   }
+  
+  public void refreshTopology() throws IOException{
+    dfs.refreshTopology();
+  }
 
   /**
    * Finalize previously upgraded files system state.
