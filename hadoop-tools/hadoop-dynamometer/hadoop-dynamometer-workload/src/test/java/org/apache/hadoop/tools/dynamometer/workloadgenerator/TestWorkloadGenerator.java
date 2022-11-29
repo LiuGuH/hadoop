@@ -127,6 +127,9 @@ public class TestWorkloadGenerator {
         throw new AuthorizationException(ioe);
       }
     }
+    public void authorize(String realUser, String effectUser, InetAddress remoteAddress) throws AuthorizationException {
+
+    }
   }
 
   private void testAuditWorkloadWithOutput(String auditOutputPath)

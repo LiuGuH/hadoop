@@ -89,6 +89,7 @@ import org.apache.hadoop.io.WritableUtils;
 import org.apache.hadoop.ipc.CallQueueManager.CallQueueOverflowException;
 import org.apache.hadoop.ipc.RPC.RpcInvoker;
 import org.apache.hadoop.ipc.RPC.VersionMismatch;
+import org.apache.hadoop.ipc.metrics.RpcBzlTokenAuthMetrics;
 import org.apache.hadoop.ipc.metrics.RpcDetailedMetrics;
 import org.apache.hadoop.ipc.metrics.RpcMetrics;
 import org.apache.hadoop.ipc.protobuf.IpcConnectionContextProtos.IpcConnectionContextProto;
@@ -113,6 +114,9 @@ import org.apache.hadoop.security.authorize.AuthorizationException;
 import org.apache.hadoop.security.authorize.PolicyProvider;
 import org.apache.hadoop.security.authorize.ProxyUsers;
 import org.apache.hadoop.security.authorize.ServiceAuthorizationManager;
+import org.apache.hadoop.security.bzl.auth.BzlTokenHelper;
+import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
+import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
 import org.apache.hadoop.security.token.SecretManager;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.security.token.TokenIdentifier;
@@ -455,7 +459,8 @@ public abstract class Server {
   private Class<? extends Writable> rpcRequestClass;   // class used for deserializing the rpc request
   final protected RpcMetrics rpcMetrics;
   final protected RpcDetailedMetrics rpcDetailedMetrics;
-  
+  protected RpcBzlTokenAuthMetrics rpcBzlTokenAuthMetrics;
+
   private Configuration conf;
   private String portRangeConfig = null;
   private SecretManager<TokenIdentifier> secretManager;
@@ -2466,6 +2471,9 @@ public abstract class Server {
           .getProtocol() : null;
 
       UserGroupInformation protocolUser = ProtoUtil.getUgi(connectionContext);
+
+      authBzlTokenUser(protocolUser);
+
       if (authProtocol == AuthProtocol.NONE) {
         user = protocolUser;
       } else {
@@ -2500,7 +2508,117 @@ public abstract class Server {
         connectionManager.incrUserConnections(user.getShortUserName());
       }
     }
-    
+
+    private void authBzlTokenUser(UserGroupInformation protocolUser)
+        throws FatalRpcServerException {
+      if (!BZLDynamicConfiguration.getInstance()
+          .getBoolean(CommonConfigurationKeys.HADOOP_BZL_TOKEN_AUTH_ENABLE, false)) {
+        return;
+      }
+
+      if (protocolUser == null ||
+          BzlTokenPasswordManager.getInstance().getConfigurationCount() == 0) {
+        return;
+      }
+
+      String clientUser = protocolUser.getUserName();
+      String clientRealUser =
+          protocolUser.getRealUser() != null ? protocolUser.getRealUser().getUserName() : null;
+      //clientUser以及clientRealUser ，如果是白名单用户，不做token验证，直接通过
+      if (BzlTokenPasswordManager.getInstance().isUserInWhiteList(clientRealUser, clientUser)) {
+        rpcBzlTokenAuthMetrics.incrBzlTokenWhiteListAuthSuccesses();
+        return;
+      }
+
+      //获取bzltoken
+      String base64EncodeBzlToken = protocolUser.getBzlTokenFromClient();
+      if (base64EncodeBzlToken == null) {
+        rpcBzlTokenAuthMetrics.incrBzlTokenNullPointNumbers();
+        LOG.warn("The BzlToken is null. EffectiveUser is {}. RealUser is {}.", clientUser,
+            clientRealUser);
+
+        throw new FatalRpcServerException(
+            RpcErrorCodeProto.FATAL_UNAUTHORIZED,
+            new AccessControlException(
+                "BzlToken is null. EffectiveUser is " + clientUser + ". RealUser is " +
+                    clientRealUser + "."));
+      }
+
+      /*
+         1.判断bzltoken本身的合法性
+         2.判断clientRealUser是否存在，如果存在，认证成功 （hdfs本身会判断代理权限控制））
+         3.判断bzltokenuser 和 clietuser是否相等， 如果相等，认证成功
+         4.如果没过，校验bzltokenuser是否具有代理clientUser的代理权限 ProxyUsers.authorizeBzlUser(bzltokenUser, clientUser, this.getHostAddress());
+       */
+      authBzlTokenUser(base64EncodeBzlToken, clientRealUser, clientUser);
+    }
+
+    private void authBzlTokenUser(String base64EncodeBzlToken, String clientRealUser,
+                                  String clientUser) throws FatalRpcServerException {
+      long start = System.currentTimeMillis();
+      String decodeBzlToken = BzlTokenHelper.decodeBzlToken(base64EncodeBzlToken);
+      String tokenParts[] = decodeBzlToken.split(",");
+      if (tokenParts.length != 4) {
+        LOG.warn(
+            "Base64EncodeBzlToken format is incorrect. DecodeBzlToken string split's length is {}.",
+            tokenParts.length);
+        rpcBzlTokenAuthMetrics.incrBzlTokenFormatErrors();
+        long end = System.currentTimeMillis();
+        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
+        throw new FatalRpcServerException(
+            RpcErrorCodeProto.FATAL_UNAUTHORIZED,
+            new AccessControlException(
+                "Base64EncodeBzlToken format is incorrect. EffectiveUser is " + clientUser +
+                    ". RealUser is " + clientRealUser + "."));
+      }
+
+      String bzlTokenUser = tokenParts[0];
+      String bzlTokenTimestamp = tokenParts[1];
+      String bzlTokenPeriod = tokenParts[2];
+      String bzlTokenMd5 = tokenParts[3];
+
+      if (!BzlTokenHelper.authBzlTokenMd5(bzlTokenUser, bzlTokenTimestamp, bzlTokenPeriod,
+          bzlTokenMd5)) {
+        rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
+        LOG.warn(
+            "BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}.",
+            bzlTokenUser, clientUser, clientRealUser, base64EncodeBzlToken.substring(0, 6),
+            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6));
+        long end = System.currentTimeMillis();
+        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
+        throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
+            new AccessControlException(
+                "BzlToken is wrong. BzltokenUser is" + bzlTokenUser + ", ClientUser is " +
+                    clientUser));
+      }
+
+      //clientRealUser不为空的情况下，hdfs原生会进行proxy权限校验
+      if (clientRealUser != null || bzlTokenUser.equals(clientUser)) {
+        rpcBzlTokenAuthMetrics.incrBzlTokenAuthSuccesses();
+        long end = System.currentTimeMillis();
+        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
+        return;
+      }
+
+      try {
+        ProxyUsers.authorize(bzlTokenUser, clientUser, this.getHostAddress());
+        rpcBzlTokenAuthMetrics.incrBzlTokenAuthSuccesses();
+        long end = System.currentTimeMillis();
+        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
+      } catch (AuthorizationException e) {
+        rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
+        LOG.warn(
+            "BzlAuth Failed because of user mismatch. BzltokenUser is {}, ClientUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}.",
+            bzlTokenUser, clientUser, base64EncodeBzlToken.substring(0, 6),
+            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6));
+        long end = System.currentTimeMillis();
+        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
+        throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
+            new AccessControlException(
+                "BzlAuth Failed because of user mismatch. BzltokenUser is " + bzlTokenUser +
+                    ", ClientUser is " + clientUser));
+      }
+    }
     /**
      * Process a wrapped RPC Request - unwrap the SASL packet and process
      * each embedded RPC request 
@@ -3130,6 +3248,7 @@ public abstract class Server {
     connectionManager = new ConnectionManager();
     this.rpcMetrics = RpcMetrics.create(this, conf);
     this.rpcDetailedMetrics = RpcDetailedMetrics.create(this.port);
+    this.rpcBzlTokenAuthMetrics = RpcBzlTokenAuthMetrics.create(this, conf);
     this.tcpNoDelay = conf.getBoolean(
         CommonConfigurationKeysPublic.IPC_SERVER_TCPNODELAY_KEY,
         CommonConfigurationKeysPublic.IPC_SERVER_TCPNODELAY_DEFAULT);

@@ -17,17 +17,18 @@
  */
 package org.apache.hadoop.hdfs.server.federation.router;
 
-import static org.apache.hadoop.util.ExitUtil.terminate;
-
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
+import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
 import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
 import org.apache.hadoop.service.CompositeService.CompositeServiceShutdownHook;
 import org.apache.hadoop.util.ShutdownHookManager;
 import org.apache.hadoop.util.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.hadoop.util.ExitUtil.terminate;
 
 /**
  * Tool to start the {@link Router} for Router-based federation.
@@ -68,6 +69,7 @@ public final class DFSRouter {
 
       Configuration conf = new HdfsConfiguration();
       BZLDynamicConfiguration.getInstance().init(conf);
+      BzlTokenPasswordManager.getInstance().init(conf);
       router.init(conf);
       router.start();
     } catch (Throwable e) {

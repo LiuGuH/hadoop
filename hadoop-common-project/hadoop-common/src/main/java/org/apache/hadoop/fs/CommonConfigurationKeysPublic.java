@@ -634,6 +634,24 @@ public class CommonConfigurationKeysPublic {
    */
   public static final String HADOOP_SECURITY_AUTHORIZATION =
     "hadoop.security.authorization";
+  public static final String HADOOP_BZL_TOKEN_AUTH_ENABLE =
+    "hadoop.bzl.token.auth.enable";
+  public static final String HADOOP_BZL_AUTH_LOCALDIR =
+    "hadoop.bzl.auth.localdir";
+  public static final String HADOOP_BZL_AUTH_URL_ENDPOINT =
+    "hadoop.bzl.auth.url.endpoint";
+  public static final String HADOOP_BZL_AUTH_URL_PASSWORDAPI =
+    "hadoop.bzl.auth.url.passwordapi";
+  public static final String HADOOP_BZL_AUTH_URL_WHITELISTAPI =
+    "hadoop.bzl.auth.url.whitelistapi";
+  public static final String HADOOP_BZL_AUTH_URL_AC =
+    "hadoop.bzl.auth.url.ac";
+  public static final String HADOOP_BZL_AUTH_URL_SK =
+    "hadoop.bzl.auth.url.sk";
+  public static final String HADOOP_BZL_AUTH_UPDATE_ENABLE =
+    "hadoop.bzl.auth.update.enable";
+  public static final String HADOOP_BZL_AUTH_UPDATE_PERIOD =
+    "hadoop.bzl.auth.update.period";
   public static final String HADOOP_BZL_DYNAMIC_CONFIG_ENABLE =
     "hadoop.bzl.dynamic.config.enable";
   public static final String HADOOP_BZL_DYNAMIC_CONFIG_PERIOD =

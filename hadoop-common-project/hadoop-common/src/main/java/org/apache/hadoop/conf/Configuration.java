@@ -800,6 +800,9 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
           "respectively");
       addDefaultResource("hadoop-site.xml");
     }
+    if (cL.getResource("bzl-auth.xml") != null) {
+      addDefaultResource("bzl-auth.xml");
+    }
   }
 
   private Properties properties;

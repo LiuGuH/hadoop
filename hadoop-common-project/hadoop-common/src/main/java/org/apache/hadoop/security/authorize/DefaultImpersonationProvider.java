@@ -133,7 +133,33 @@ public class DefaultImpersonationProvider implements ImpersonationProvider {
           + realUser.getUserName() + " from IP " + remoteAddress);
     }
   }
-  
+
+  @Override
+  public void authorize(String realUser, String effectUser, InetAddress remoteAddress) throws AuthorizationException {
+    if (effectUser == null) {
+      throw new IllegalArgumentException("user is null.");
+    }
+    if (realUser == null) {
+      return;
+    }
+    if (effectUser.equals(realUser))
+      return;
+    AccessControlList acl = proxyUserAcl.get(configPrefix +
+            realUser);
+    if (acl == null || !acl.isUserAllowed(realUser, effectUser)) {
+      throw new AuthorizationException("User: " + realUser
+              + " is not allowed to impersonate " + effectUser);
+    }
+
+    MachineList MachineList = proxyHosts.get(
+            getProxySuperuserIpConfKey(realUser));
+
+    if(MachineList == null || !MachineList.includes(remoteAddress)) {
+      throw new AuthorizationException("Unauthorized connection for super-user: "
+              + realUser + " from IP " + remoteAddress);
+    }
+  }
+
   private String getAclKey(String key) {
     int endIndex = key.lastIndexOf(".");
     if (endIndex != -1) {
