@@ -634,6 +634,10 @@ public class CommonConfigurationKeysPublic {
    */
   public static final String HADOOP_SECURITY_AUTHORIZATION =
     "hadoop.security.authorization";
+  public static final String HADOOP_BZL_DYNAMIC_CONFIG_ENABLE =
+    "hadoop.bzl.dynamic.config.enable";
+  public static final String HADOOP_BZL_DYNAMIC_CONFIG_PERIOD =
+    "hadoop.bzl.dynamic.config.period";
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">

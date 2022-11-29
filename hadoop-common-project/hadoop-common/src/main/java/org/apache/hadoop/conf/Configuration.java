@@ -2944,6 +2944,9 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     getOverlay().clear();
   }
 
+  public void clearResource() {
+    resources.clear();
+  }
   /**
    * Get an {@link Iterator} to go through the list of <code>String</code> 
    * key-value pairs in the configuration.
