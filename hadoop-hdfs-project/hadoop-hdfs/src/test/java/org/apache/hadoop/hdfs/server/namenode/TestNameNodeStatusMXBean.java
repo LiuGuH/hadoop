@@ -66,6 +66,10 @@ public class TestNameNodeStatusMXBean {
       String state = (String)mbs.getAttribute(mxbeanName, "State");
       Assert.assertEquals(nn.getState(), state);
 
+      // Get attribute "StateNumber"
+      Integer stateNumber = (Integer) mbs.getAttribute(mxbeanName, "ActiveState");
+      Assert.assertEquals(nn.getActiveState(), (long)stateNumber);
+
       // Get attribute "HostAndPort"
       String hostAndPort = (String)mbs.getAttribute(mxbeanName, "HostAndPort");
       Assert.assertEquals(nn.getHostAndPort(), hostAndPort);
