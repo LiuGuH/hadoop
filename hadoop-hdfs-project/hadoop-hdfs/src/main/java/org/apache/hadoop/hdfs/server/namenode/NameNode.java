@@ -1958,6 +1958,22 @@ public class NameNode extends ReconfigurableBase implements
   }
 
   @Override // NameNodeStatusMXBean
+  public int getActiveState() {
+    HAServiceState servState = getServiceState();
+    String status = Objects.toString(servState, "");
+    if (status.equals("standby")) {
+      return 0;
+    }
+    if (status.equals("active")) {
+      return 1;
+    }
+    if (status.equals("observer")) {
+      return -1;
+    }
+    return -2;
+  }
+
+  @Override // NameNodeStatusMXBean
   public String getHostAndPort() {
     return getNameNodeAddressHostPortString();
   }

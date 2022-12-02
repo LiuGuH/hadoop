@@ -782,6 +782,10 @@ public class NamenodeBeanMetrics
     return HAServiceState.ACTIVE.toString();
   }
 
+  public int getActiveState() {
+    return 1;
+  }
+
   @Override
   public String getHostAndPort() {
     return NetUtils.getHostPortString(router.getRpcServerAddress());

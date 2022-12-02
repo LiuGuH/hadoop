@@ -44,6 +44,17 @@ public interface NameNodeStatusMXBean {
   public String getState();
 
   /**
+   * Gets the NameNode state represented by number.
+   * -1 means null,
+   * 0 means standby,
+   * 1 means active,
+   * 2 means observer.
+   *
+   * @return the NameNode state number.
+   */
+  public int getActiveState();
+
+  /**
    * Gets the host and port colon separated.
    *
    * @return host and port colon separated.
