@@ -101,6 +101,11 @@ public class ProxyUsers {
     getSip().authorize(user, remoteAddress);
   }
 
+  public static void authorize(String realUser, String effectiveUser,
+                               String remoteAddress) throws AuthorizationException {
+    getSip().authorize(realUser, effectiveUser, remoteAddress);
+  }
+
   /**
    * Authorize the superuser which is doing doAs.
    *
@@ -111,6 +116,11 @@ public class ProxyUsers {
   public static void authorize(UserGroupInformation user,
       InetAddress remoteAddress) throws AuthorizationException {
     getSip().authorize(user, remoteAddress);
+  }
+
+  public static void authorize(String realUser, String effectiveUser,
+                               InetAddress remoteAddress) throws AuthorizationException {
+    getSip().authorize(realUser, effectiveUser, remoteAddress);
   }
 
   private static ImpersonationProvider getSip() {

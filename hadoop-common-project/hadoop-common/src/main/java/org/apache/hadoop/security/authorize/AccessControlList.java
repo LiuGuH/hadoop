@@ -246,8 +246,25 @@ public class AccessControlList implements Writable {
            users.contains(USE_REAL_ACLS + realUgi.getShortUserName());
   }
 
+  public final boolean isUserInList(String realUser, String effectiveUser) {
+    if (allAllowed || users.contains(effectiveUser)) {
+      return true;
+    } else if (!groups.isEmpty()) {
+      for (String group : UserGroupInformation.createRemoteUser(effectiveUser).getGroups()) {
+        if (groups.contains(group)) {
+          return true;
+        }
+      }
+    }
+    return users.contains(USE_REAL_ACLS + realUser);
+  }
+
   public boolean isUserAllowed(UserGroupInformation ugi) {
     return isUserInList(ugi);
+  }
+
+  public boolean isUserAllowed(String realUser, String effectUser) {
+    return isUserInList(realUser, effectUser);
   }
 
   /**

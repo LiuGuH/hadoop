@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
+import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
@@ -993,6 +995,8 @@ public class NameNode extends ReconfigurableBase implements
    */
   public NameNode(Configuration conf) throws IOException {
     this(conf, NamenodeRole.NAMENODE);
+    BZLDynamicConfiguration.getInstance().init(conf);
+    BzlTokenPasswordManager.getInstance().init(conf);
   }
 
   protected NameNode(Configuration conf, NamenodeRole role)

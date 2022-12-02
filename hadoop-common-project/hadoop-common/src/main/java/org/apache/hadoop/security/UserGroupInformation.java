@@ -28,9 +28,12 @@ import static org.apache.hadoop.security.UGIExceptionMessages.*;
 import static org.apache.hadoop.util.PlatformName.IBM_JAVA;
 import static org.apache.hadoop.util.StringUtils.getTrimmedStringCollection;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.IOException;
 import java.lang.reflect.UndeclaredThrowableException;
 import java.security.AccessControlContext;
@@ -206,7 +209,7 @@ public class UserGroupInformation {
         if (envUser == null) {
           envUser = System.getProperty(HADOOP_USER_NAME);
         }
-        user = envUser == null ? null : new User(envUser);
+        user = envUser == null ? null : new User(envUser, bzlClientToken);
       }
       // use the OS user
       if (user == null) {
@@ -223,7 +226,7 @@ public class UserGroupInformation {
           // subject.
           AuthenticationMethod authMethod = (user instanceof KerberosPrincipal)
             ? AuthenticationMethod.KERBEROS : AuthenticationMethod.SIMPLE;
-          userEntry = new User(user.getName(), authMethod, null);
+          userEntry = new User(user.getName(), authMethod, null, bzlClientToken);
         } catch (Exception e) {
           throw (LoginException)(new LoginException(e.toString()).initCause(e));
         }
@@ -428,6 +431,20 @@ public class UserGroupInformation {
   private static final boolean windows =
       System.getProperty("os.name").startsWith("Windows");
 
+  private String bzlTokenFromClient;
+
+  public String getBzlTokenFromClient() {
+    return bzlTokenFromClient;
+  }
+
+  public void setBzlTokenFromClient(String bzlTokenFromClient) {
+    this.bzlTokenFromClient = bzlTokenFromClient;
+  }
+
+  public String getSubjectBzltoken() {
+    return this.user.getBzltoken();
+  }
+
   /* Return the OS login module class name */
   /* For IBM JDK, use the common OS login module class name for all platforms */
   private static String getOSLoginModuleName() {
@@ -458,9 +475,59 @@ public class UserGroupInformation {
     }
     return null;
   }
+  private static String bzlClientToken;
   static {
     OS_LOGIN_MODULE_NAME = getOSLoginModuleName();
     OS_PRINCIPAL_CLASS = getOsPrincipalClass();
+
+    if (StringUtils.isNotBlank(System.getenv("HADOOP_BZL_TOKEN"))) {
+      bzlClientToken = System.getenv("HADOOP_BZL_TOKEN");
+    } else if (StringUtils.isNotBlank(System.getenv("HADOOP_BZL_TOKEN_FILE"))) {
+      bzlClientToken = readBzlToken(System.getenv("HADOOP_BZL_TOKEN_FILE"));
+    } else {
+      String osUser = System.getenv("USER");
+      if (StringUtils.isNotBlank(osUser)) {
+        String defaulttokenfile = "/home/" + osUser + "/.bzltoken/.usertoken";
+        LOG.debug("Defalut local file is {}.", defaulttokenfile);
+        bzlClientToken = readBzlToken(defaulttokenfile);
+      } else {
+        throw new RuntimeException("Osuser is not found.");
+      }
+    }
+  }
+
+  public static String readBzlToken(String fileName) {
+    String token = null;
+    BufferedReader br = null;
+    int retrycount = 0;
+    while (retrycount <= 3) {
+      try {
+        br = new BufferedReader(new FileReader(fileName));
+        token = br.readLine();
+
+        if (StringUtils.isNotBlank(token)) {
+          return token;
+        }
+      } catch (IOException e) {
+        LOG.warn("Read {} failed! The error message is: {}.", fileName, e.getMessage());
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException ex) {
+          Thread.currentThread().interrupt();
+        }
+      } finally {
+        try {
+          if (br != null) {
+            br.close();
+          }
+        } catch (IOException e) {
+          LOG.debug("Close {} failed! The error message is: {}.", fileName, e.getMessage());
+        }
+      }
+      retrycount++;
+    }
+    LOG.error("Read {} failed! Failed to get bzlToken.", fileName);
+    return null;
   }
 
   private static class RealUser implements Principal {
@@ -1415,7 +1482,7 @@ public class UserGroupInformation {
       throw new IllegalArgumentException("Null user");
     }
     Subject subject = new Subject();
-    subject.getPrincipals().add(new User(user));
+    subject.getPrincipals().add(new User(user, bzlClientToken));
     UserGroupInformation result = new UserGroupInformation(subject);
     result.setAuthenticationMethod(authMethod);
     return result;
@@ -1491,7 +1558,7 @@ public class UserGroupInformation {
     }
     Subject subject = new Subject();
     Set<Principal> principals = subject.getPrincipals();
-    principals.add(new User(user, AuthenticationMethod.PROXY, null));
+    principals.add(new User(user, AuthenticationMethod.PROXY, null, bzlClientToken));
     principals.add(new RealUser(realUser));
     return new UserGroupInformation(subject);
   }

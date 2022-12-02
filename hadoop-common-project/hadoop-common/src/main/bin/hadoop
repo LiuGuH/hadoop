@@ -183,11 +183,20 @@ function hadoopcmd_case
 # This script runs the hadoop core commands.
 
 # let's locate libexec...
+SOURCE="${BASH_SOURCE[0]}"
+  BIN_DIR="$( dirname "$SOURCE" )"
+  while [ -h "$SOURCE" ]
+  do
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+    BIN_DIR="$( cd -P "$( dirname "$SOURCE"  )" && pwd )"
+  done
+
+LIB_DIR=$BIN_DIR/../
 if [[ -n "${HADOOP_HOME}" ]]; then
   HADOOP_DEFAULT_LIBEXEC_DIR="${HADOOP_HOME}/libexec"
 else
-  bin=$(cd -P -- "$(dirname -- "${MYNAME}")" >/dev/null && pwd -P)
-  HADOOP_DEFAULT_LIBEXEC_DIR="${bin}/../libexec"
+  HADOOP_DEFAULT_LIBEXEC_DIR="$LIB_DIR/libexec"
 fi
 
 HADOOP_LIBEXEC_DIR="${HADOOP_LIBEXEC_DIR:-$HADOOP_DEFAULT_LIBEXEC_DIR}"

@@ -33,6 +33,8 @@ package hadoop.common;
 message UserInformationProto {
   optional string effectiveUser = 1;
   optional string realUser = 2;
+  //新增字段，用于bzl token存储
+  optional string bzltoken = 99;
 }
 
 /**

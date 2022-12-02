@@ -800,6 +800,9 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
           "respectively");
       addDefaultResource("hadoop-site.xml");
     }
+    if (cL.getResource("bzl-auth.xml") != null) {
+      addDefaultResource("bzl-auth.xml");
+    }
   }
 
   private Properties properties;
@@ -2944,6 +2947,9 @@ public class Configuration implements Iterable<Map.Entry<String,String>>,
     getOverlay().clear();
   }
 
+  public void clearResource() {
+    resources.clear();
+  }
   /**
    * Get an {@link Iterator} to go through the list of <code>String</code> 
    * key-value pairs in the configuration.

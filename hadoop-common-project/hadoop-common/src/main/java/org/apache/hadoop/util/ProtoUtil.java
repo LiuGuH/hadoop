@@ -34,9 +34,12 @@ import org.apache.hadoop.tracing.Tracer;
 import org.apache.hadoop.tracing.TraceUtils;
 
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public abstract class ProtoUtil {
-
+  static final Logger LOG = LoggerFactory.getLogger(
+      ProtoUtil.class);
   /**
    * Read a variable length integer in the same format that ProtoBufs encodes.
    * @param in the input stream to read from
@@ -112,7 +115,17 @@ public abstract class ProtoUtil {
           ugiProto.setRealUser(ugi.getRealUser().getUserName());
         }
       }
-    }   
+      if (ugi.getSubjectBzltoken() != null) {
+        ugiProto.setBzltoken(ugi.getSubjectBzltoken());
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("ugiProto token is " + ugi.getSubjectBzltoken());
+        }
+      } else {
+        if (LOG.isDebugEnabled()) {
+          LOG.debug("ugiProto token is null and not set from client");
+        }
+      }
+    }
     result.setUserInfo(ugiProto);
     return result.build();
   }
@@ -141,6 +154,15 @@ public abstract class ProtoUtil {
         ugi = org.apache.hadoop.security.UserGroupInformation
             .createRemoteUser(effectiveUser);
       }
+    }
+    if (ugi != null && userInfo.hasBzltoken()) {
+      ugi.setBzlTokenFromClient(userInfo.getBzltoken());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("server ugi is not null and token is " + userInfo.getBzltoken());
+      }
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug("getUgi method is executed. The ugi=" + ugi);
     }
     return ugi;
   }

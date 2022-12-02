@@ -57,6 +57,15 @@ public interface ImpersonationProvider  extends Configurable {
     }
   }
 
+  default void authorize(String realUser, String effectiveUser, String remoteAddress)
+      throws AuthorizationException {
+    try {
+      authorize(realUser, effectiveUser, InetAddress.getByName(remoteAddress));
+    } catch (UnknownHostException e) {
+      throw new AuthorizationException(e);
+    }
+  }
+
   /**
    * Authorize the superuser which is doing doAs.
    *
@@ -65,5 +74,8 @@ public interface ImpersonationProvider  extends Configurable {
    * @throws AuthorizationException
    */
   void authorize(UserGroupInformation user, InetAddress remoteAddress)
+      throws AuthorizationException;
+
+  void authorize(String realUser, String effectUser, InetAddress remoteAddress)
       throws AuthorizationException;
 }

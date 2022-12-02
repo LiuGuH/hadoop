@@ -39,10 +39,15 @@ class User implements Principal {
   private volatile LoginContext login = null;
   private volatile long lastLogin = 0;
 
+  private String bzltoken;
   public User(String name) {
     this(name, null, null);
   }
-  
+
+  public User(String name, String bzltoken) {
+    this(name, null, null, bzltoken);
+  }
+
   public User(String name, AuthenticationMethod authMethod, LoginContext login) {
     try {
       shortName = new HadoopKerberosName(name).getShortName();
@@ -56,6 +61,18 @@ class User implements Principal {
     this.login = login;
   }
 
+  public User(String name, AuthenticationMethod authMethod, LoginContext login, String bzltoken) {
+    this(name, authMethod, login);
+    this.bzltoken = bzltoken;
+  }
+
+  public String getBzltoken() {
+    return bzltoken;
+  }
+
+  public void setBzltoken(String bzltoken) {
+    this.bzltoken = bzltoken;
+  }
   /**
    * Get the full name of the user.
    */

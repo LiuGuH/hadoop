@@ -588,6 +588,11 @@ public class TestProxyUsers {
       }
     }
 
+    @Override
+    public void authorize(String realUser, String effectUser, InetAddress remoteAddress) throws AuthorizationException {
+
+    }
+
 
     @Override
     public void setConf(Configuration conf) {
