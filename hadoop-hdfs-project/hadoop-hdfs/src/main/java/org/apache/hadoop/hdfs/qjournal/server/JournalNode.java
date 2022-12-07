@@ -17,7 +17,7 @@
  */
 package org.apache.hadoop.hdfs.qjournal.server;
 
-import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hadoop.thirdparty.com.google.common.base.Strings;
@@ -218,7 +218,7 @@ public class JournalNode implements Tool, Configurable, JournalNodeMXBean {
     Preconditions.checkState(!isStarted(), "JN already running");
 
     try {
-      BZLDynamicConfiguration.getInstance().init(conf);
+      BzlDynamicConfiguration.getInstance().init(conf);
 
       for (File journalDir : localDir) {
         validateAndCreateJournalDir(journalDir);

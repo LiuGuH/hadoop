@@ -4,7 +4,7 @@ import com.google.gson.Gson;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
-import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIBuilder;
@@ -56,7 +56,7 @@ public class BzlProtectedDirectoriesUpdater {
 
     private SortedSet<String> getRemoteProtectedDirectories() {
       SortedSet<String> remoteProtectedDirectories = new TreeSet<>();
-      if (BZLDynamicConfiguration.getInstance()
+      if (BzlDynamicConfiguration.getInstance()
           .getBoolean(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_ENABLE,
               false)) {
         String jsonData = doGetHttp(protectedDirectoriesBzlRemoteUrl);
@@ -163,7 +163,7 @@ public class BzlProtectedDirectoriesUpdater {
   }
 
   private void mergeRemoteBzlProtectedDirectories() {
-    if (BZLDynamicConfiguration.getInstance()
+    if (BzlDynamicConfiguration.getInstance()
         .getBoolean(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_ENABLE,
             false) && currRemoteProtectedDirectories.size() != 0 &&
         !currRemoteProtectedDirectories.equals(prevRemoteProtectedDirectories)) {

@@ -116,7 +116,7 @@ import org.apache.hadoop.security.authorize.ProxyUsers;
 import org.apache.hadoop.security.authorize.ServiceAuthorizationManager;
 import org.apache.hadoop.security.bzl.auth.BzlTokenHelper;
 import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
-import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.security.token.SecretManager;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.security.token.TokenIdentifier;
@@ -2511,7 +2511,7 @@ public abstract class Server {
 
     private void authBzlTokenUser(UserGroupInformation protocolUser)
         throws FatalRpcServerException {
-      if (!BZLDynamicConfiguration.getInstance()
+      if (!BzlDynamicConfiguration.getInstance()
           .getBoolean(CommonConfigurationKeys.HADOOP_BZL_TOKEN_AUTH_ENABLE, false)) {
         return;
       }

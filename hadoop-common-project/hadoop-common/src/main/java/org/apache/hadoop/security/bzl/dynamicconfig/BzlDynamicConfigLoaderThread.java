@@ -30,7 +30,7 @@ public class BzlDynamicConfigLoaderThread extends Thread {
           LOG.debug("BZl dynamicconfig is {}.", conf);
         }
 
-        BZLDynamicConfiguration.getInstance().updateConfiguration(conf);
+        BzlDynamicConfiguration.getInstance().updateConfiguration(conf);
       } catch (Exception e) {
         LOG.error("BzlDynamicConfigLoaderThread throw exception. The detail is {}.",
             e.getMessage());

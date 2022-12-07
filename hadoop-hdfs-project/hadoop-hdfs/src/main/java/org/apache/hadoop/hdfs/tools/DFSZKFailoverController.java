@@ -29,7 +29,7 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -146,7 +146,7 @@ public class DFSZKFailoverController extends ZKFailoverController {
   }
 
   public static DFSZKFailoverController create(Configuration conf) {
-    BZLDynamicConfiguration.getInstance().init(conf);
+    BzlDynamicConfiguration.getInstance().init(conf);
     Configuration localNNConf = DFSHAAdmin.addSecurityConfiguration(conf);
     String nsId = DFSUtil.getNamenodeNameServiceId(conf);
 

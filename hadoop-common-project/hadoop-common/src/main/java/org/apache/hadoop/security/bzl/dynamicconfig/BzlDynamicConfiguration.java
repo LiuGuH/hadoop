@@ -10,13 +10,13 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class BZLDynamicConfiguration {
+public class BzlDynamicConfiguration {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BZLDynamicConfiguration.class);
-  private static final BZLDynamicConfiguration INSTANCE = new BZLDynamicConfiguration();
+  private static final Logger LOG = LoggerFactory.getLogger(BzlDynamicConfiguration.class);
+  private static final BzlDynamicConfiguration INSTANCE = new BzlDynamicConfiguration();
   private final ConcurrentHashMap<String, String> bzlDynamicConfigMap = new ConcurrentHashMap();
 
-  private BZLDynamicConfiguration() {
+  private BzlDynamicConfiguration() {
   }
 
   public void updateConfiguration(Configuration conf) {
@@ -37,7 +37,7 @@ public class BZLDynamicConfiguration {
     }
   }
 
-  public static BZLDynamicConfiguration getInstance() {
+  public static BzlDynamicConfiguration getInstance() {
     return INSTANCE;
   }
 
