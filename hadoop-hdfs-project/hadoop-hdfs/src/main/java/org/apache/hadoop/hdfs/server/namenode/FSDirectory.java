@@ -81,6 +81,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.Collections;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
@@ -170,7 +171,8 @@ public class FSDirectory implements Closeable {
   // be deleted unless they are empty.
   //
   // Each entry in this set must be a normalized path.
-  private volatile SortedSet<String> protectedDirectories;
+  private static volatile SortedSet<String> protectedDirectories =  Collections.synchronizedSortedSet(new TreeSet<>());;
+  private static volatile SortedSet<String> localProtectedDirectories;
   private final boolean isProtectedSubDirectoriesEnable;
 
   private final boolean isPermissionEnabled;
@@ -383,7 +385,9 @@ public class FSDirectory implements Closeable {
         DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_KEY,
         DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_DEFAULT);
 
-    this.protectedDirectories = parseProtectedDirectories(conf);
+    this.localProtectedDirectories = parseProtectedDirectories(conf);
+    BzlProtectedDirectoriesUpdater.getInstance().init(conf, protectedDirectories);
+    BzlProtectedDirectoriesUpdater.getInstance().updateLocalProtectedDirectories(localProtectedDirectories);
     this.isProtectedSubDirectoriesEnable = conf.getBoolean(
         DFS_PROTECTED_SUBDIRECTORIES_ENABLE,
         DFS_PROTECTED_SUBDIRECTORIES_ENABLE_DEFAULT);
@@ -560,12 +564,14 @@ public class FSDirectory implements Closeable {
    */
   String setProtectedDirectories(String protectedDirsString) {
     if (protectedDirsString == null) {
-      protectedDirectories = new TreeSet<>();
+      localProtectedDirectories = new TreeSet<>();
     } else {
-      protectedDirectories = parseProtectedDirectories(protectedDirsString);
+      localProtectedDirectories = parseProtectedDirectories(protectedDirsString);
     }
 
-    return Joiner.on(",").skipNulls().join(protectedDirectories);
+    BzlProtectedDirectoriesUpdater.getInstance().updateLocalProtectedDirectories(localProtectedDirectories);
+
+    return Joiner.on(",").skipNulls().join(localProtectedDirectories);
   }
 
   BlockManager getBlockManager() {

@@ -144,6 +144,12 @@ public class CommonConfigurationKeysPublic {
   /** Default value for FS_TRASH_CHECKPOINT_INTERVAL_KEY */
   public static final long    FS_TRASH_CHECKPOINT_INTERVAL_DEFAULT = 0;
 
+  public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_ENABLE =
+      "fs.protected.directories.bzl.updater.enable";
+  public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_URL =
+      "fs.protected.directories.bzl.updater.remote.url";
+   public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_PERIOD =
+      "fs.protected.directories.bzl.updater.period";
   /**
    * Directories that cannot be removed unless empty, even by an
    * administrator.
