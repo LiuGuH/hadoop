@@ -118,7 +118,7 @@ import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.server.datanode.checker.DatasetVolumeChecker;
 import org.apache.hadoop.hdfs.server.datanode.checker.StorageLocationChecker;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
-import org.apache.hadoop.security.bzl.dynamicconfig.BZLDynamicConfiguration;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.hdfs.client.BlockReportOptions;
 import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
@@ -2718,7 +2718,7 @@ public class DataNode extends ReconfigurableBase
     if (conf == null)
       conf = new HdfsConfiguration();
 
-    BZLDynamicConfiguration.getInstance().init(conf);
+    BzlDynamicConfiguration.getInstance().init(conf);
 
     if (args != null) {
       // parse generic hadoop options
