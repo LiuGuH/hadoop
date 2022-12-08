@@ -37,6 +37,8 @@ import org.apache.hadoop.crypto.OpensslAesCtrCryptoCodec;
 public class CommonConfigurationKeysPublic {
   
   // The Keys
+  public static final String HADOOP_BZL_TOKEN = "HADOOP_BZL_TOKEN";
+  public static final String HADOOP_BZL_TOKEN_FILE = "HADOOP_BZL_TOKEN_FILE";
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">
