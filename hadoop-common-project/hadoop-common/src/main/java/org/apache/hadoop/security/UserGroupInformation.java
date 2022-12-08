@@ -29,6 +29,7 @@ import static org.apache.hadoop.util.PlatformName.IBM_JAVA;
 import static org.apache.hadoop.util.StringUtils.getTrimmedStringCollection;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 
 import java.io.BufferedReader;
@@ -480,10 +481,15 @@ public class UserGroupInformation {
     OS_LOGIN_MODULE_NAME = getOSLoginModuleName();
     OS_PRINCIPAL_CLASS = getOsPrincipalClass();
 
-    if (StringUtils.isNotBlank(System.getenv("HADOOP_BZL_TOKEN"))) {
-      bzlClientToken = System.getenv("HADOOP_BZL_TOKEN");
-    } else if (StringUtils.isNotBlank(System.getenv("HADOOP_BZL_TOKEN_FILE"))) {
-      bzlClientToken = readBzlToken(System.getenv("HADOOP_BZL_TOKEN_FILE"));
+    bzlClientToken = getBzlToken();
+  }
+
+  public static String getBzlToken(){
+    String bzlClientToken = null;
+    if (StringUtils.isNotBlank(System.getenv(CommonConfigurationKeysPublic.HADOOP_BZL_TOKEN))) {
+      bzlClientToken = System.getenv(CommonConfigurationKeysPublic.HADOOP_BZL_TOKEN);
+    } else if (StringUtils.isNotBlank(System.getenv(CommonConfigurationKeysPublic.HADOOP_BZL_TOKEN_FILE))) {
+      bzlClientToken = readBzlToken(System.getenv(CommonConfigurationKeysPublic.HADOOP_BZL_TOKEN_FILE));
     } else {
       String osUser = System.getenv("USER");
       if (StringUtils.isNotBlank(osUser)) {
@@ -494,6 +500,7 @@ public class UserGroupInformation {
         throw new RuntimeException("Osuser is not found.");
       }
     }
+    return bzlClientToken;
   }
 
   public static String readBzlToken(String fileName) {
