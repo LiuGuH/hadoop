@@ -282,17 +282,17 @@ public class SlowDiskTracker {
   }
 
   @VisibleForTesting
-  ArrayList<DiskLatency> getSlowDisksReport() {
+  public ArrayList<DiskLatency> getSlowDisksReport() {
     return this.slowDisksReport;
   }
 
   @VisibleForTesting
-  long getReportValidityMs() {
+  public long getReportValidityMs() {
     return reportValidityMs;
   }
 
   @VisibleForTesting
-  void setReportValidityMs(long reportValidityMs) {
+  public void setReportValidityMs(long reportValidityMs) {
     this.reportValidityMs = reportValidityMs;
   }
 }

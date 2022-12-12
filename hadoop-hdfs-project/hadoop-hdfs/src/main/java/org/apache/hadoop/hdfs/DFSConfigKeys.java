@@ -1877,4 +1877,18 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final long DFS_LEASE_HARDLIMIT_DEFAULT =
       HdfsClientConfigKeys.DFS_LEASE_HARDLIMIT_DEFAULT;
 
+  // livenodes conf
+  public static final String LIVENODES_ENABLED_KEY =
+      "dfs.namenode.livenodes.enabled";
+  public static final boolean LIVENODES_ENABLED_DEFAULT = true;
+
+  // slow peer metrics conf
+  public static final String SLOWPEER_METRICS_ENABLED_KEY =
+      "dfs.namenode.livenodes.enabled";
+  public static final boolean SLOWPEER_METRICS_ENABLED_DEFAULT = true;
+
+  // slow disk metrics conf
+  public static final String SLOWDISK_METRICS_ENABLED_KEY =
+      "dfs.namenode.livenodes.enabled";
+  public static final boolean SLOWDISK_METRICS_ENABLED_DEFAULT = true;
 }
