@@ -95,8 +95,32 @@ public interface FederationRPCMBean {
   String getRpcClientConnections();
 
   /**
+   * JSON representation of the available handler per Ns.
+   * @return JSON string representation.
+   */
+  String getAvailableHandlerOnPerNs();
+
+  /**
    * Get the JSON representation of the async caller thread pool.
    * @return JSON string representation of the async caller thread pool.
    */
   String getAsyncCallerPool();
+
+  /**
+   * Get the number of operations rejected due to lack of permits.
+   * @return Number of operations rejected due to lack of permits.
+   */
+  long getProxyOpPermitRejected();
+
+  /**
+   * Get the number of operations rejected due to lack of permits of each namespace.
+   * @return Number of operations rejected due to lack of permits of each namespace.
+   */
+  String getProxyOpPermitRejectedPerNs();
+
+  /**
+   * Get the number of operations accepted of each namespace.
+   * @return Number of operations accepted of each namespace.
+   */
+  String getProxyOpPermitAcceptedPerNs();
 }

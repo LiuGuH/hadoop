@@ -72,6 +72,9 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   @Metric("Failed requests due to safe mode")
   private MutableCounterLong routerFailureSafemode;
 
+  @Metric("Number of operations to hit permit limits")
+  private MutableCounterLong proxyOpPermitRejected;
+
   public FederationRPCMetrics(Configuration conf, RouterRpcServer rpcServer) {
     this.rpcServer = rpcServer;
 
@@ -221,6 +224,12 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   }
 
   @Override
+  public String getAvailableHandlerOnPerNs() {
+    return rpcServer.getRPCClient().
+        getRouterRpcFairnessPolicyController().getAvailableHandlerOnPerNs();
+  }
+
+  @Override
   public String getAsyncCallerPool() {
     return rpcServer.getRPCClient().getAsyncCallerPoolJson();
   }
@@ -263,5 +272,24 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   @Override
   public long getProcessingOps() {
     return processingOp.value();
+  }
+
+  public void incrProxyOpPermitRejected() {
+    proxyOpPermitRejected.incr();
+  }
+
+  @Override
+  public long getProxyOpPermitRejected() {
+    return proxyOpPermitRejected.value();
+  }
+
+  @Override
+  public String getProxyOpPermitRejectedPerNs() {
+    return rpcServer.getRPCClient().getRejectedPermitsPerNsJSON();
+  }
+
+  @Override
+  public String getProxyOpPermitAcceptedPerNs() {
+    return rpcServer.getRPCClient().getAcceptedPermitsPerNsJSON();
   }
 }
