@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.hdfs.server.federation.router;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SEPARATOR_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SEPARATOR_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_MAX_RETRIES_ON_SOCKET_TIMEOUTS_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_TIMEOUT_KEY;
 
@@ -66,8 +68,11 @@ import org.apache.hadoop.hdfs.server.federation.resolver.RemoteLocation;
 import org.apache.hadoop.io.retry.RetryPolicies;
 import org.apache.hadoop.io.retry.RetryPolicy;
 import org.apache.hadoop.io.retry.RetryPolicy.RetryAction.RetryDecision;
+import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.ipc.RetriableException;
+import org.apache.hadoop.ipc.Server;
+import org.apache.hadoop.ipc.Server.Call;
 import org.apache.hadoop.ipc.StandbyException;
 import org.apache.hadoop.net.ConnectTimeoutException;
 import org.apache.hadoop.security.UserGroupInformation;
@@ -115,11 +120,15 @@ public class RouterRpcClient {
   private final RetryPolicy retryPolicy;
   /** Optional perf monitor. */
   private final RouterRpcMonitor rpcMonitor;
+  /** Field separator of CallerContext. */
+  private final String contextFieldSeparator;
 
   /** Pattern to parse a stack trace line. */
   private static final Pattern STACK_TRACE_PATTERN =
       Pattern.compile("\\tat (.*)\\.(.*)\\((.*):(\\d*)\\)");
 
+  private static final String CLIENT_IP_STR = "clientIp";
+  private static final String CLIENT_PORT_STR = "clientPort";
 
   /**
    * Create a router RPC client to manage remote procedure calls to NNs.
@@ -136,6 +145,9 @@ public class RouterRpcClient {
     this.namenodeResolver = resolver;
 
     Configuration clientConf = getClientConfiguration(conf);
+    this.contextFieldSeparator =
+        clientConf.get(HADOOP_CALLER_CONTEXT_SEPARATOR_KEY,
+            HADOOP_CALLER_CONTEXT_SEPARATOR_DEFAULT);
     this.connectionManager = new ConnectionManager(clientConf);
     this.connectionManager.start();
 
@@ -405,6 +417,8 @@ public class RouterRpcClient {
           + router.getRouterId());
     }
 
+    addClientIpToCallerContext();
+
     Object ret = null;
     if (rpcMonitor != null) {
       rpcMonitor.proxyOp();
@@ -517,6 +531,37 @@ public class RouterRpcClient {
     } else {
       throw new StandbyException(msg);
     }
+  }
+
+  /**
+   * For tracking which is the actual client address.
+   * It adds trace info "clientIp:ip" and "clientPort:port"
+   * in the caller context, removing the old values if they were
+   * already present.
+   */
+  private void addClientIpToCallerContext() {
+    CallerContext ctx = CallerContext.getCurrent();
+    String origContext = ctx == null ? null : ctx.getContext();
+    byte[] origSignature = ctx == null ? null : ctx.getSignature();
+    CallerContext.Builder builder =
+        new CallerContext.Builder("", contextFieldSeparator)
+            .append(CallerContext.CLIENT_IP_STR, Server.getRemoteAddress())
+            .append(CallerContext.CLIENT_PORT_STR,
+                Integer.toString(Server.getRemotePort()))
+            .setSignature(origSignature);
+    // Append the original caller context
+    if (origContext != null) {
+      for (String part : origContext.split(contextFieldSeparator)) {
+        String[] keyValue =
+            part.split(CallerContext.Builder.KEY_VALUE_SEPARATOR, 2);
+        if (keyValue.length == 2) {
+          builder.appendIfAbsent(keyValue[0], keyValue[1]);
+        } else if (keyValue.length == 1) {
+          builder.append(keyValue[0]);
+        }
+      }
+    }
+    CallerContext.setCurrent(builder.build());
   }
 
   /**
@@ -1232,6 +1277,9 @@ public class RouterRpcClient {
 
     List<T> orderedLocations = new ArrayList<>();
     List<Callable<Object>> callables = new ArrayList<>();
+    // transfer originCall & callerContext to worker threads of executor.
+    final Call originCall = Server.getCurCall().get();
+    final CallerContext originContext = CallerContext.getCurrent();
     for (final T location : locations) {
       String nsId = location.getNameserviceId();
       final List<? extends FederationNamenodeContext> namenodes =
@@ -1249,12 +1297,20 @@ public class RouterRpcClient {
             nnLocation = (T)new RemoteLocation(nsId, nnId, location.getDest());
           }
           orderedLocations.add(nnLocation);
-          callables.add(() -> invokeMethod(ugi, nnList, proto, m, paramList));
+          callables.add(
+              () -> {
+                transferThreadLocalContext(originCall, originContext);
+                return invokeMethod(ugi, nnList, proto, m, paramList);
+              });
         }
       } else {
         // Call the objectGetter in order of nameservices in the NS list
         orderedLocations.add(location);
-        callables.add(() ->  invokeMethod(ugi, namenodes, proto, m, paramList));
+        callables.add(
+            () -> {
+              transferThreadLocalContext(originCall, originContext);
+              return invokeMethod(ugi, namenodes, proto, m, paramList);
+            });
       }
     }
 
@@ -1319,6 +1375,20 @@ public class RouterRpcClient {
       throw new IOException(
           "Unexpected error while invoking API " + ex.getMessage(), ex);
     }
+  }
+
+  /**
+   * Transfer origin thread local context which is necessary to current
+   * worker thread when invoking method concurrently by executor service.
+   *
+   * @param originCall origin Call required for getting remote client ip.
+   * @param originContext origin CallerContext which should be transferred
+   *                      to server side.
+   */
+  private void transferThreadLocalContext(
+      final Call originCall, final CallerContext originContext) {
+    Server.getCurCall().set(originCall);
+    CallerContext.setCurrent(originContext);
   }
 
   /**

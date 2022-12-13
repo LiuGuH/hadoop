@@ -687,6 +687,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.datanode.metrics.logger.period.seconds";
   public static final int DFS_DATANODE_METRICS_LOGGER_PERIOD_SECONDS_DEFAULT =
       600;
+  public static final String  DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_KEY =
+      "dfs.namenode.audit.log.with.remote.port";
+  public static final boolean DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_DEFAULT =
+      false;
   /**
    * The maximum number of getBlocks RPCs data movement utilities can make to
    * a NameNode per second. Values &lt;= 0 disable throttling. This affects
@@ -914,6 +918,8 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.namenode.lifeline.handler.count";
   public static final String  DFS_NAMENODE_SERVICE_HANDLER_COUNT_KEY = "dfs.namenode.service.handler.count";
   public static final int     DFS_NAMENODE_SERVICE_HANDLER_COUNT_DEFAULT = 10;
+  // List of users that can override their client ip
+  public static final String  DFS_NAMENODE_IP_PROXY_USERS = "dfs.namenode.ip-proxy-users";
   public static final String  DFS_HTTP_POLICY_KEY = "dfs.http.policy";
   public static final String  DFS_HTTP_POLICY_DEFAULT =  HttpConfig.Policy.HTTP_ONLY.name();
   public static final String  DFS_DATANODE_HTTPSERVER_FILTER_HANDLERS = "dfs.datanode.httpserver.filter.handlers";
