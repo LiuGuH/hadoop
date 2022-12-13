@@ -19,6 +19,9 @@ package org.apache.hadoop.hdfs.server.namenode;
 
 import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
+import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.LiveNodesMetrics;
+import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.SlowDisksMetrics;
+import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.SlowPeersMetrics;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
@@ -2048,6 +2051,7 @@ public class NameNode extends ReconfigurableBase implements
       try {
         namesystem.startActiveServices();
         startTrashEmptier(getConf());
+        startCustomClusterHealthMetrics(getConf(), getNamesystem());
       } catch (Throwable t) {
         doImmediateShutdown(t);
       }
@@ -2060,6 +2064,15 @@ public class NameNode extends ReconfigurableBase implements
           namesystem.stopActiveServices();
         }
         stopTrashEmptier();
+        if (DefaultMetricsSystem.instance().getSource(LiveNodesMetrics.LIVENODES_METRICS_SOURCE_NAME) != null) {
+          DefaultMetricsSystem.instance().unregisterSource(LiveNodesMetrics.LIVENODES_METRICS_SOURCE_NAME);
+        }
+        if (DefaultMetricsSystem.instance().getSource(SlowPeersMetrics.SLOW_PEERS_METRICS_SOURCE_NAME) != null) {
+          DefaultMetricsSystem.instance().unregisterSource(SlowPeersMetrics.SLOW_PEERS_METRICS_SOURCE_NAME);
+        }
+        if (DefaultMetricsSystem.instance().getSource(SlowDisksMetrics.SLOW_DISKS_METRICS_SOURCE_NAME) != null) {
+          DefaultMetricsSystem.instance().unregisterSource(SlowDisksMetrics.SLOW_DISKS_METRICS_SOURCE_NAME);
+        }
       } catch (Throwable t) {
         doImmediateShutdown(t);
       }
@@ -2123,7 +2136,13 @@ public class NameNode extends ReconfigurableBase implements
     }
 
   }
-  
+
+  private void startCustomClusterHealthMetrics(Configuration conf, FSNamesystem namesystem) {
+    new LiveNodesMetrics(conf, namesystem);
+    new SlowPeersMetrics(conf, namesystem);
+    new SlowDisksMetrics(conf, namesystem);
+  }
+
   public boolean isStandbyState() {
     return (state.equals(STANDBY_STATE));
   }

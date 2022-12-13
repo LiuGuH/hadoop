@@ -31,6 +31,7 @@ import org.apache.hadoop.hdfs.client.HdfsAdmin;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeys.HA_HM_RPC_TIMEOUT_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeys.HA_HM_RPC_TIMEOUT_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.*;
 import static org.apache.hadoop.metrics2.source.JvmMetricsInfo.GcTimePercentage;
 import static org.apache.hadoop.test.MetricsAsserts.assertCounter;
 import static org.apache.hadoop.test.MetricsAsserts.assertCounterGt;
@@ -48,8 +49,14 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Supplier;
+
+import org.apache.hadoop.hdfs.server.blockmanagement.*;
+import org.apache.hadoop.hdfs.server.protocol.SlowDiskReports;
 import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableList;
 
+import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableMap;
+import org.apache.hadoop.util.FakeTimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -69,9 +76,6 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
 import org.apache.hadoop.hdfs.protocol.LocatedStripedBlock;
 import org.apache.hadoop.hdfs.protocol.SystemErasureCodingPolicies;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManagerTestUtil;
-import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
@@ -105,10 +109,17 @@ public class TestNameNodeMetrics {
   private static final String NN_METRICS = "NameNodeActivity";
   private static final String NS_METRICS = "FSNamesystem";
   private static final String JVM_METRICS = "JvmMetrics";
+  private static final String LIVENODES_METRICS = "LiveNodesMetrics";
+  private static final String SLOWPEER_METRICS = "SlowPeers";
+  private static final String SLOWDISK_METRICS = "SlowDisks";
+  private static final long OUTLIERS_REPORT_INTERVAL = 1000;
+  private long reportValidityMs;
   private static final int BLOCK_SIZE = 1024 * 1024;
   private static final ErasureCodingPolicy EC_POLICY =
       SystemErasureCodingPolicies.getByID(
           SystemErasureCodingPolicies.XOR_2_1_POLICY_ID);
+  private SlowDiskTracker tracker;
+  private FakeTimer timer;
 
   public static final Logger LOG =
       LoggerFactory.getLogger(TestNameNodeMetrics.class);
@@ -144,6 +155,10 @@ public class TestNameNodeMetrics {
         DFSConfigKeys.DFS_NAMENODE_AVOID_STALE_DATANODE_FOR_READ_KEY, true);
     GenericTestUtils.setLogLevel(LoggerFactory.getLogger(MetricsAsserts.class),
         Level.DEBUG);
+
+    CONF.setInt(DFS_DATANODE_FILEIO_PROFILING_SAMPLING_PERCENTAGE_KEY, 100);
+    CONF.setTimeDuration(DFS_DATANODE_OUTLIERS_REPORT_INTERVAL_KEY,
+        OUTLIERS_REPORT_INTERVAL, TimeUnit.MILLISECONDS);
   }
   
   private MiniDFSCluster cluster;
@@ -172,6 +187,9 @@ public class TestNameNodeMetrics {
     ecDir = getTestPath("/ec");
     fs.mkdirs(ecDir);
     fs.setErasureCodingPolicy(ecDir, EC_POLICY.getName());
+    timer = new FakeTimer();
+    tracker = new SlowDiskTracker(CONF, timer);
+    reportValidityMs = tracker.getReportValidityMs();
   }
   
   @After
@@ -1126,6 +1144,109 @@ public class TestNameNodeMetrics {
         dfsCluster.shutdown();
       }
     }
+
+  }
+
+  @Test
+  public void testLiveNodesMetricsPresence() throws Exception{
+    MetricsRecordBuilder rb = getMetrics(LIVENODES_METRICS);
+
+    final List<DatanodeDescriptor> live = new ArrayList<DatanodeDescriptor>();
+    this.namesystem.getBlockManager().getDatanodeManager()
+        .fetchDatanodes(live, null, false);
+    for (DatanodeDescriptor node : live) {
+      StringBuilder attrName = new StringBuilder();
+      attrName.append("livenode=");
+      attrName.append(node.getHostName() + "-" + node.getXferPort());
+      attrName.append(".lastcontact");
+      // 4 datanodes: like 127.0.0.1-XXXport
+      MetricsAsserts.assertGauge(attrName.toString(), 0L, rb);
+    }
+
+    for (DatanodeDescriptor node : live) {
+      StringBuilder attrName = new StringBuilder();
+      attrName.append("livenode=");
+      attrName.append(node.getHostName() + "-" + node.getXferPort());
+      attrName.append(".adminstate");
+      MetricsAsserts.assertGauge(attrName.toString(), 0, rb);
+    }
+
+    for (DatanodeDescriptor node : live) {
+      StringBuilder attrName = new StringBuilder();
+      attrName.append("livenode=");
+      attrName.append(node.getHostName() + "-" + node.getXferPort());
+      attrName.append(".blockscheduled");
+      MetricsAsserts.assertGauge(attrName.toString(), 0, rb);
+    }
+
+    // mock datanode volume failure.
+    DataNode dn = cluster.getDataNodes().get(0);
+    FsDatasetSpi.FsVolumeReferences volumeReferences =
+        DataNodeTestUtils.getFSDataset(dn).getFsVolumeReferences();
+    FsVolumeImpl fsVolume = (FsVolumeImpl) volumeReferences.get(0);
+    File dataDir = new File(fsVolume.getBaseURI());
+    long capacity = fsVolume.getCapacity();
+    volumeReferences.close();
+    File storageDir = new File(dataDir, Storage.STORAGE_DIR_CURRENT);
+    DataNodeTestUtils.injectDataDirFailure(storageDir);
+    DataNodeTestUtils.waitForDiskError(dn, fsVolume);
+    DataNodeTestUtils.triggerHeartbeat(dn);
+    BlockManagerTestUtil.checkHeartbeat(bm);
+
+    MetricsRecordBuilder rb1 = getMetrics(LIVENODES_METRICS);
+    StringBuilder attrName = new StringBuilder();
+    attrName.append("livenode=");
+    attrName.append(dn.getDatanodeHostname() + "-" + dn.getXferPort());
+    attrName.append(".volumefailure");
+    MetricsAsserts.assertGauge(attrName.toString(), 1, rb1);
+  }
+
+  @Test
+  public void testSlowDiskMetricsPresence() throws Exception{
+
+    try {
+      DataNode dn1 = cluster.getDataNodes().get(0);
+      DataNode dn2 = cluster.getDataNodes().get(1);
+      NameNode nn = cluster.getNameNode(0);
+
+      DatanodeManager datanodeManager = nn.getNamesystem().getBlockManager()
+          .getDatanodeManager();
+      SlowDiskTracker slowDiskTracker = datanodeManager.getSlowDiskTracker();
+      slowDiskTracker.setReportValidityMs(OUTLIERS_REPORT_INTERVAL * 100);
+
+      dn1.getDiskMetrics().addSlowDiskForTesting("disk1", ImmutableMap.of(
+          SlowDiskReports.DiskOp.WRITE, 1.3));
+      dn1.getDiskMetrics().addSlowDiskForTesting("disk2", ImmutableMap.of(
+          SlowDiskReports.DiskOp.READ, 1.6, SlowDiskReports.DiskOp.WRITE, 1.1));
+      dn2.getDiskMetrics().addSlowDiskForTesting("disk1", ImmutableMap.of(
+          SlowDiskReports.DiskOp.METADATA, 0.8));
+      dn2.getDiskMetrics().addSlowDiskForTesting("disk2", ImmutableMap.of(
+          SlowDiskReports.DiskOp.WRITE, 1.3));
+
+      String dn1ID = dn1.getDatanodeId().getIpcAddr(false);
+      String dn2ID = dn2.getDatanodeId().getIpcAddr(false);
+
+      // Advance the timer and wait for NN to receive reports from DataNodes.
+      Thread.sleep(OUTLIERS_REPORT_INTERVAL);
+      tracker.updateSlowDiskReportAsync(timer.monotonicNow());
+      // Wait for NN to receive reports from all DNs
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return (slowDiskTracker.getSlowDisksReport().size() == 4);
+        }
+      }, 1000, 100000);
+
+      MetricsRecordBuilder rb = getMetrics(SLOWDISK_METRICS);
+      StringBuilder attrName = new StringBuilder();
+      attrName.append("slowdisk=");
+      attrName.append(dn1.getDatanodeHostname() + ".path=" + "disk1");
+      attrName.append(".WriteIO");
+      MetricsAsserts.assertGauge(attrName.toString(), 1.3, rb);
+    } catch (Exception e) {
+      throw e;
+    }
+
 
   }
 }

@@ -254,7 +254,7 @@ public class SlowPeerTracker {
    * @param numNodes number of nodes to return. This is to limit the
    *                 size of the generated JSON.
    */
-  private Collection<ReportForJson> getJsonReports(int numNodes) {
+  public Collection<ReportForJson> getJsonReports(int numNodes) {
     if (allReports.isEmpty()) {
       return Collections.emptyList();
     }
