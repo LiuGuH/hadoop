@@ -998,8 +998,6 @@ public class NameNode extends ReconfigurableBase implements
    */
   public NameNode(Configuration conf) throws IOException {
     this(conf, NamenodeRole.NAMENODE);
-    BzlDynamicConfiguration.getInstance().init(conf);
-    BzlTokenPasswordManager.getInstance().init(conf);
   }
 
   protected NameNode(Configuration conf, NamenodeRole role)
@@ -1726,6 +1724,9 @@ public class NameNode extends ReconfigurableBase implements
       return null;
     }
     setStartupOption(conf, startOpt);
+
+    BzlDynamicConfiguration.getInstance().init(conf);
+    BzlTokenPasswordManager.getInstance().init(conf);
 
     boolean aborted = false;
     switch (startOpt) {

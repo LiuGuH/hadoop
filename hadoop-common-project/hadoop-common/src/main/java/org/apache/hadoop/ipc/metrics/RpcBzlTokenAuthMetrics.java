@@ -63,8 +63,8 @@ public class RpcBzlTokenAuthMetrics {
 
       for (int i = 0; i < intervals.length; i++) {
         int interval = intervals[i];
-        rpcBzlTokenAuthTimeQuantiles[i] = registry.newQuantiles("rpcBzlAuthTime"
-                + interval + "s", "rpc BzlAuth time in " + metricsTimeUnit, "ops",
+        rpcBzlTokenAuthTimeQuantiles[i] = registry.newQuantiles("rpcBzlTokenAuthTime"
+                + interval + "s", "rpc BzlTokenAuth time in " + metricsTimeUnit, "ops",
             "latency", interval);
       }
     }
