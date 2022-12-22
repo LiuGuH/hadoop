@@ -1653,6 +1653,8 @@ public class TestWebHDFS {
   @Test
   public void testSetStoragePolicyWhenPolicyDisabled() throws Exception {
     Configuration conf = new HdfsConfiguration();
+    conf.setBoolean("dfs.webhdfs.enabled", true);
+    conf.setBoolean("dfs.router.webhdfs.enabled", true);
     conf.setBoolean(DFSConfigKeys.DFS_STORAGE_POLICY_ENABLED_KEY, false);
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0)
         .build();
@@ -1692,6 +1694,8 @@ public class TestWebHDFS {
   @Test
   public void testECPolicyCommands() throws Exception {
     Configuration conf = new HdfsConfiguration();
+    conf.setBoolean("dfs.webhdfs.enabled", true);
+    conf.setBoolean("dfs.router.webhdfs.enabled", true);
     cluster = new MiniDFSCluster.Builder(conf).numDataNodes(0).build();
     cluster.waitActive();
     final DistributedFileSystem dfs = cluster.getFileSystem();
@@ -2022,6 +2026,8 @@ public class TestWebHDFS {
   @Test
   public void testStatistics() throws Exception {
     final Configuration conf = new HdfsConfiguration();
+    conf.setBoolean("dfs.webhdfs.enabled", true);
+    conf.setBoolean("dfs.router.webhdfs.enabled", true);
     conf.set(DFSConfigKeys.DFS_STORAGE_POLICY_SATISFIER_MODE_KEY,
         StoragePolicySatisfierMode.EXTERNAL.toString());
     StoragePolicySatisfier sps = new StoragePolicySatisfier(conf);
