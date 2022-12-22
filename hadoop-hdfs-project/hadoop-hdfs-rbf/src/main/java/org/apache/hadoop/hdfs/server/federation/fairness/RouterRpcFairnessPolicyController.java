@@ -67,4 +67,9 @@ public interface RouterRpcFairnessPolicyController {
    * Returns the JSON string of the available handler for each Ns.
    */
   String getAvailableHandlerOnPerNs();
+
+  /**
+   * Returns the available permits of the specific Ns.
+   */
+  int getAvailablePermits(String nsId);
 }

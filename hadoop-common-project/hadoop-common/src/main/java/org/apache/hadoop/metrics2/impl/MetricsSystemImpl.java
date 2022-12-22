@@ -257,8 +257,7 @@ public class MetricsSystemImpl extends MetricsSystem implements MetricsSource {
     DefaultMetricsSystem.removeSourceName(name);
   }
 
-  synchronized
-  void registerSource(String name, String desc, MetricsSource source) {
+  synchronized void registerSource(String name, String desc, MetricsSource source) {
     checkNotNull(config, "config");
     MetricsConfig conf = sourceConfigs.get(name);
     MetricsSourceAdapter sa = new MetricsSourceAdapter(prefix, name, desc,
