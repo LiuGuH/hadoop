@@ -43,6 +43,8 @@ public class WebHdfsTestUtil {
 
   public static Configuration createConf() {
     final Configuration conf = new Configuration();
+    conf.setBoolean("dfs.webhdfs.enabled", true);
+    conf.setBoolean("dfs.router.webhdfs.enabled", true);
     return conf;
   }
 

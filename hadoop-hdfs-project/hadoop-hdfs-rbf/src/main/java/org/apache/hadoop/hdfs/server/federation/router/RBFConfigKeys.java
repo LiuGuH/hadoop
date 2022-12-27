@@ -311,6 +311,8 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final long DFS_ROUTER_QUOTA_CACHE_UPATE_INTERVAL_DEFAULT =
       60000;
 
+  public static final String DFS_ROUTER_WEBHDFS_ENABLED = "dfs.router.webhdfs.enabled";
+  public static final boolean DFS_ROUTER_WEBHDFS_ENABLED_DEFAULT = false;
   // HDFS Router security
   public static final String DFS_ROUTER_KEYTAB_FILE_KEY =
       FEDERATION_ROUTER_PREFIX + "keytab.file";

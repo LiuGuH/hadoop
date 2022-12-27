@@ -159,10 +159,16 @@ public class NameNodeHttpServer {
       httpServer.setAttribute(DFSConfigKeys.DFS_DATANODE_HTTPS_PORT_KEY,
           datanodeSslPort.getPort());
     }
-    String httpKeytab = conf.get(DFSUtil.getSpnegoKeytabKey(conf,
-        DFSConfigKeys.DFS_NAMENODE_KEYTAB_FILE_KEY));
-    initWebHdfs(conf, bindAddress.getHostName(), httpKeytab, httpServer,
-        NamenodeWebHdfsMethods.class.getPackage().getName());
+
+    final boolean isWebHdfsEnabled = conf.getBoolean(
+        DFSConfigKeys.DFS_WEBHDFS_ENABLED,
+        DFSConfigKeys.DFS_WEBHDFS_ENABLED_DEFAULT);
+    if (isWebHdfsEnabled) {
+      String httpKeytab = conf.get(DFSUtil.getSpnegoKeytabKey(conf,
+          DFSConfigKeys.DFS_NAMENODE_KEYTAB_FILE_KEY));
+      initWebHdfs(conf, bindAddress.getHostName(), httpKeytab, httpServer,
+          NamenodeWebHdfsMethods.class.getPackage().getName());
+    }
 
     httpServer.setAttribute(NAMENODE_ATTRIBUTE_KEY, nn);
     httpServer.setAttribute(JspHelper.CURRENT_CONF, conf);
