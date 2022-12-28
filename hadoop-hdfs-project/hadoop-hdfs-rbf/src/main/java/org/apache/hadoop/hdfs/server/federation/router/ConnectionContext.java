@@ -18,7 +18,6 @@
 package org.apache.hadoop.hdfs.server.federation.router;
 
 import java.net.InetSocketAddress;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.NameNodeProxiesClient.ProxyAndInfo;
@@ -53,7 +52,7 @@ public class ConnectionContext {
   /** Last timestamp the connection was active. */
   private long lastActiveTs = 0;
   /** The connection's active status would expire after this window. */
-  private final static long ACTIVE_WINDOW_TIME = TimeUnit.SECONDS.toMillis(30);
+  private final long activeWindowTime;
   /** The maximum number of requests that this connection can handle concurrently. **/
   private final int maxConcurrencyPerConn;
 
@@ -62,6 +61,9 @@ public class ConnectionContext {
     this.maxConcurrencyPerConn = conf.getInt(
         RBFConfigKeys.DFS_ROUTER_MAX_CONCURRENCY_PER_CONNECTION_KEY,
         RBFConfigKeys.DFS_ROUTER_MAX_CONCURRENCY_PER_CONNECTION_DEFAULT);
+    this.activeWindowTime = conf.getLong(
+        RBFConfigKeys.DFS_ROUTER_CONNECTION_ACTIVE_WINDOW_TIME_KEY,
+        RBFConfigKeys.DFS_ROUTER_CONNECTION_ACTIVE_WINDOW_TIME_DEFAULT);
   }
 
   /**
@@ -80,7 +82,7 @@ public class ConnectionContext {
    * was active in the past period of time.
    */
   public synchronized boolean isActiveRecently() {
-    return Time.monotonicNow() - this.lastActiveTs <= ACTIVE_WINDOW_TIME;
+    return Time.monotonicNow() - this.lastActiveTs <= activeWindowTime;
   }
 
   /**

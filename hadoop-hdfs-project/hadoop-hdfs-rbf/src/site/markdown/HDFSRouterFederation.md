@@ -410,6 +410,7 @@ It uses a pool of connections to reduce the latency of creating them.
 | dfs.federation.router.connection.pool.clean.ms | 60000 | Time interval, in milliseconds, to check if the connection manager should remove unused connection pools. |
 | dfs.federation.router.enable.multiple.socket | false | If true, ConnectionPool will use a new socket when creating a new connection for the same user. And it's best used with dfs.federation.router.max.concurrency.per.connection together. |
 | dfs.federation.router.max.concurrency.per.connection | 1 | The maximum number of requests that a connection can handle concurrently. |
+| dfs.federation.router.connection.active.window.time | 30000 | Time interval, in milliseconds, the connection's active status would expire after this window. |
 
 ### Admin server
 

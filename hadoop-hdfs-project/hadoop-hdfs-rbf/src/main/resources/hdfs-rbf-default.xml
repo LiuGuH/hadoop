@@ -162,6 +162,14 @@
   </property>
 
   <property>
+    <name>dfs.federation.router.connection.active.window.time</name>
+    <value>30000</value>
+    <description>
+      Time interval, in milliseconds, the connection's active status would expire after this window
+    </description>
+  </property>
+
+  <property>
     <name>dfs.federation.router.connection.pool.clean.ms</name>
     <value>60000</value>
     <description>

@@ -131,6 +131,9 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final String DFS_ROUTER_MAX_CONCURRENCY_PER_CONNECTION_KEY =
       FEDERATION_ROUTER_PREFIX + "max.concurrency.per.connection";
   public static final int DFS_ROUTER_MAX_CONCURRENCY_PER_CONNECTION_DEFAULT = 1;
+  public static final String DFS_ROUTER_CONNECTION_ACTIVE_WINDOW_TIME_KEY =
+      FEDERATION_ROUTER_PREFIX + "connection.active.window.time";
+  public static final long DFS_ROUTER_CONNECTION_ACTIVE_WINDOW_TIME_DEFAULT = 30000;
 
   // HDFS Router RPC client
   public static final String DFS_ROUTER_CLIENT_THREADS_SIZE =
