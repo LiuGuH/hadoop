@@ -504,23 +504,14 @@ public abstract class Server {
   private Responder responder = null;
   private Handler[] handlers = null;
 
-  private boolean logSlowRPC = false;
-
   /**
    * Checks if LogSlowRPC is set true.
    * @return true, if LogSlowRPC is set true, false, otherwise.
    */
   protected boolean isLogSlowRPC() {
-    return logSlowRPC;
-  }
-
-  /**
-   * Sets slow RPC flag.
-   * @param logSlowRPCFlag
-   */
-  @VisibleForTesting
-  protected void setLogSlowRPC(boolean logSlowRPCFlag) {
-    this.logSlowRPC = logSlowRPCFlag;
+    return BzlDynamicConfiguration.getInstance()
+        .getBoolean(CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC,
+            CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_DEFAULT);
   }
 
   private void setPurgeIntervalNanos(int purgeInterval) {
@@ -2609,7 +2600,7 @@ public abstract class Server {
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
             new AccessControlException(
-                "BzlToken is wrong. BzltokenUser is" + bzlTokenUser + ", ClientUser is " +
+                "BzlToken is wrong. BzltokenUser is " + bzlTokenUser + ", ClientUser is " +
                     clientUser));
       }
 
@@ -3273,10 +3264,6 @@ public abstract class Server {
     this.tcpNoDelay = conf.getBoolean(
         CommonConfigurationKeysPublic.IPC_SERVER_TCPNODELAY_KEY,
         CommonConfigurationKeysPublic.IPC_SERVER_TCPNODELAY_DEFAULT);
-
-    this.setLogSlowRPC(conf.getBoolean(
-        CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC,
-        CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_DEFAULT));
 
     this.setPurgeIntervalNanos(conf.getInt(
         CommonConfigurationKeysPublic.IPC_SERVER_PURGE_INTERVAL_MINUTES_KEY,
