@@ -499,6 +499,9 @@ public class CommonConfigurationKeysPublic {
   public static final String IPC_SERVER_LOG_SLOW_RPC =
                                                 "ipc.server.log.slow.rpc";
   public static final boolean IPC_SERVER_LOG_SLOW_RPC_DEFAULT = false;
+  public static final String IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE =
+      "ipc.server.log.slow.rpc.threshold.value";
+  public static final long IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE_DEFAULT = 2000l;
 
   public static final String IPC_SERVER_PURGE_INTERVAL_MINUTES_KEY =
     "ipc.server.purge.interval";
