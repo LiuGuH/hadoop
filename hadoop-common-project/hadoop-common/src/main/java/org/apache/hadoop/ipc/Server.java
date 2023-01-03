@@ -544,20 +544,12 @@ public abstract class Server {
    */
   void logSlowRpcCalls(String methodName, Call call,
       ProcessingDetails details) {
-    final int deviation = 3;
-
-    // 1024 for minSampleSize just a guess -- not a number computed based on
-    // sample size analysis. It is chosen with the hope that this
-    // number is high enough to avoid spurious logging, yet useful
-    // in practice.
-    final int minSampleSize = 1024;
-    final double threeSigma = rpcMetrics.getProcessingMean() +
-        (rpcMetrics.getProcessingStdDev() * deviation);
 
     long processingTime =
             details.get(Timing.PROCESSING, rpcMetrics.getMetricsTimeUnit());
-    if ((rpcMetrics.getProcessingSampleCount() > minSampleSize) &&
-        (processingTime > threeSigma)) {
+    if (processingTime > BzlDynamicConfiguration.getInstance()
+        .getLong(CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE,
+            CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE_DEFAULT)) {
       LOG.warn(
           "Slow RPC : {} took {} {} to process from client {},"
               + " the processing detail is {}",

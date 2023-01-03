@@ -51,6 +51,10 @@ public class BzlDynamicConfiguration {
     return StringUtils.equalsIgnoreCase("true", valueString);
   }
 
+  public long getLong(String key, long defaultValue) {
+    String valueString = bzlDynamicConfigMap.getOrDefault(key, String.valueOf(defaultValue));
+    return Long.parseLong(valueString);
+  }
 
   public void init(Configuration conf) {
     if (conf.getBoolean(CommonConfigurationKeys.HADOOP_BZL_DYNAMIC_CONFIG_ENABLE, false)) {
