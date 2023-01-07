@@ -402,6 +402,15 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
   }
 
   /**
+   * Get the routerStateIdContext used by this server.
+   * @return routerStateIdContext
+   */
+  @VisibleForTesting
+  protected RouterStateIdContext getRouterStateIdContext() {
+    return routerStateIdContext;
+  }
+
+  /**
    * Get the RPC security manager.
    *
    * @return RPC security manager.
