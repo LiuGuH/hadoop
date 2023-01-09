@@ -548,4 +548,95 @@ public class TestObserverWithRouter {
     Assertions.assertEquals(1, latestFederateState.size());
     Assertions.assertEquals(10L, latestFederateState.get("ns0"));
   }
+
+  @Test
+  public void testStateIdProgressionInRouter() throws Exception {
+    Path rootPath = new Path("/");
+    fileSystem  = routerContext.getFileSystem(getConfToEnableObserverReads());
+    RouterStateIdContext routerStateIdContext = routerContext
+        .getRouterRpcServer()
+        .getRouterStateIdContext();
+    for (int i = 0; i < 10; i++) {
+      fileSystem.create(new Path(rootPath, "file" + i)).close();
+    }
+
+    // Get object storing state of the namespace in the shared RouterStateIdContext
+    LongAccumulator namespaceStateId  = routerStateIdContext.getNamespaceStateId("ns0");
+    assertEquals("Router's shared should have progressed.", 21, namespaceStateId.get());
+  }
+
+  @Test
+  @Tag(SKIP_BEFORE_EACH_CLUSTER_STARTUP)
+  public void testSharedStateInRouterStateIdContext() throws Exception {
+    Path rootPath = new Path("/");
+    long cleanupPeriodMs = 1000;
+
+    Configuration conf = new Configuration(false);
+    conf.setLong(RBFConfigKeys.DFS_ROUTER_NAMENODE_CONNECTION_POOL_CLEAN, cleanupPeriodMs);
+    conf.setLong(RBFConfigKeys.DFS_ROUTER_NAMENODE_CONNECTION_CLEAN_MS, cleanupPeriodMs / 10);
+    startUpCluster(1, conf);
+    fileSystem  = routerContext.getFileSystem(getConfToEnableObserverReads());
+    RouterStateIdContext routerStateIdContext = routerContext.getRouterRpcServer()
+        .getRouterStateIdContext();
+
+    // First read goes to active and creates connection pool for this user to active
+    fileSystem.listStatus(rootPath);
+    // Second read goes to observer and creates connection pool for this user to observer
+    fileSystem.listStatus(rootPath);
+    // Get object storing state of the namespace in the shared RouterStateIdContext
+    LongAccumulator namespaceStateId1  = routerStateIdContext.getNamespaceStateId("ns0");
+
+    // Wait for connection pools to expire and be cleaned up.
+    Thread.sleep(cleanupPeriodMs * 2);
+
+    // Third read goes to observer.
+    // New connection pool to observer is created since existing one expired.
+    fileSystem.listStatus(rootPath);
+    fileSystem.close();
+    // Get object storing state of the namespace in the shared RouterStateIdContext
+    LongAccumulator namespaceStateId2  = routerStateIdContext.getNamespaceStateId("ns0");
+
+    long rpcCountForActive = routerContext.getRouter().getRpcServer()
+        .getRPCMetrics().getActiveProxyOps();
+    long rpcCountForObserver = routerContext.getRouter().getRpcServer()
+        .getRPCMetrics().getObserverProxyOps();
+
+    // First list status goes to active
+    assertEquals("One call should be sent to active", 1, rpcCountForActive);
+    // Last two listStatuses  go to observer.
+    assertEquals("Two calls should be sent to observer", 2, rpcCountForObserver);
+
+    Assertions.assertSame(namespaceStateId1, namespaceStateId2,
+        "The same object should be used in the shared RouterStateIdContext");
+  }
+
+
+  @Test
+  @Tag(SKIP_BEFORE_EACH_CLUSTER_STARTUP)
+  public void testRouterStateIdContextCleanup() throws Exception {
+    Path rootPath = new Path("/");
+    long recordExpiry = TimeUnit.SECONDS.toMillis(1);
+
+    Configuration confOverride = new Configuration(false);
+    confOverride.setLong(RBFConfigKeys.FEDERATION_STORE_MEMBERSHIP_EXPIRATION_MS, recordExpiry);
+
+    startUpCluster(1, confOverride);
+    fileSystem  = routerContext.getFileSystem(getConfToEnableObserverReads());
+    RouterStateIdContext routerStateIdContext = routerContext.getRouterRpcServer()
+        .getRouterStateIdContext();
+
+    fileSystem.listStatus(rootPath);
+    List<String> namespace1 = routerStateIdContext.getNamespaces();
+    fileSystem.close();
+
+    MockResolver mockResolver = (MockResolver) routerContext.getRouter().getNamenodeResolver();
+    mockResolver.cleanRegistrations();
+    mockResolver.setDisableRegistration(true);
+    Thread.sleep(recordExpiry * 2);
+
+    List<String> namespace2 = routerStateIdContext.getNamespaces();
+    assertEquals(1, namespace1.size());
+    assertEquals("ns0", namespace1.get(0));
+    assertTrue(namespace2.isEmpty());
+  }
 }
