@@ -552,9 +552,9 @@ public abstract class Server {
             CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE_DEFAULT)) {
       LOG.warn(
           "Slow RPC : {} took {} {} to process from client {},"
-              + " the processing detail is {}",
+              + " the processing detail is {}, current handler is {}.",
           methodName, processingTime, rpcMetrics.getMetricsTimeUnit(), call,
-          details.toString());
+          details.toString(), Thread.currentThread().getName());
       rpcMetrics.incrSlowRpc();
     }
   }
