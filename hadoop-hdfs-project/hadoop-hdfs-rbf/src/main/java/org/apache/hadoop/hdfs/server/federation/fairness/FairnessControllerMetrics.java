@@ -53,7 +53,7 @@ public class FairnessControllerMetrics implements MetricsSource {
     rb.addGauge(buildRejectedPermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getRejectedPermitForNs(RouterRpcFairnessConstants.CONCURRENT_NS));
 
-    rb.addGauge(buildRejectedPermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
+    rb.addGauge(buildAvailablePermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getRouterRpcFairnessPolicyController()
             .getAvailablePermits(RouterRpcFairnessConstants.CONCURRENT_NS));
   }
