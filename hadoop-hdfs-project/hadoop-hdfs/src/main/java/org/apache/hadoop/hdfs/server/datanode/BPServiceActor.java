@@ -1359,6 +1359,11 @@ class BPServiceActor implements Runnable {
             if (!bpos.processCommandFromActor(cmd, actor)) {
               return false;
             }
+            long processOneCommandMs = monotonicNow() - startProcessCommands;
+            if (processOneCommandMs > dnConf.getProcessCommandsThresholdMs()) {
+              LOG.info("Took {} ms to process {} command from NN",
+                  processOneCommandMs, cmd);
+            }
           } catch (RemoteException re) {
             String reClass = re.getClassName();
             if (UnregisteredNodeException.class.getName().equals(reClass) ||
