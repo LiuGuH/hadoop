@@ -35,6 +35,8 @@ import org.apache.hadoop.fs.PathIsNotEmptyDirectoryException;
 import org.apache.hadoop.fs.PathNotFoundException;
 import org.apache.hadoop.fs.Trash;
 import org.apache.hadoop.util.ToolRunner;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SHELL_SAFELY_DELETE_LIMIT_NUM_FILES;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SHELL_SAFELY_DELETE_LIMIT_NUM_FILES_DEFAULT;
@@ -46,6 +48,8 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SHELL_SA
 @InterfaceStability.Evolving
 
 class Delete {
+  private static final Logger LOG =
+      LoggerFactory.getLogger(Delete.class);
   public static void registerCommands(CommandFactory factory) {
     factory.addClass(Rm.class, "-rm");
     factory.addClass(Rmdir.class, "-rmdir");
@@ -149,18 +153,21 @@ class Delete {
 
     private boolean moveToTrash(PathData item) throws IOException {
       boolean success = false;
-      if (!skipTrash) {
-        try {
-          success = Trash.moveToAppropriateTrash(item.fs, item.path, getConf());
-        } catch(FileNotFoundException fnfe) {
-          throw fnfe;
-        } catch (IOException ioe) {
-          String msg = ioe.getMessage();
-          if (ioe.getCause() != null) {
-            msg += ": " + ioe.getCause().getMessage();
-          }
-          throw new IOException(msg + ". Consider using -skipTrash option", ioe);
+      //禁止跳过回收站，-skipTrash 将不会生效，shell的rm命令都会进入回收站
+      if(skipTrash){
+       LOG.warn("It is not allowed to execute rm command with skipTrash.");
+      }
+
+      try {
+        success = Trash.moveToAppropriateTrash(item.fs, item.path, getConf());
+      } catch (FileNotFoundException fnfe) {
+        throw fnfe;
+      } catch (IOException ioe) {
+        String msg = ioe.getMessage();
+        if (ioe.getCause() != null) {
+          msg += ": " + ioe.getCause().getMessage();
         }
+        throw new IOException(msg + ".", ioe);
       }
       return success;
     }
