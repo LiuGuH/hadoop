@@ -22,6 +22,7 @@ package org.apache.hadoop.hdfs.server.datanode.metrics;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.metrics2.MetricsJsonBuilder;
 import org.apache.hadoop.metrics2.lib.MutableRollingAverages;
 import org.slf4j.Logger;
@@ -32,6 +33,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_PEER_METRICS_MIN_OUTLIER_DETECTION_SAMPLES_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_PEER_METRICS_MIN_OUTLIER_DETECTION_SAMPLES_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_SLOWPEER_LOW_THRESHOLD_MS_KEY;
 
 /**
  * This class maintains DataNode peer metrics (e.g. numOps, AvgTime, etc.) for
@@ -57,6 +59,11 @@ public class DataNodePeerMetrics {
   private final OutlierDetector slowNodeDetector;
 
   /**
+   * Threshold in milliseconds below which a DataNode is definitely not slow.
+   */
+  private volatile long lowThresholdMs;
+
+  /**
    * Minimum number of packet send samples which are required to qualify
    * for outlier detection. If the number of samples is below this then
    * outlier detection is skipped.
@@ -68,8 +75,11 @@ public class DataNodePeerMetrics {
     minOutlierDetectionSamples = conf.getLong(
         DFS_DATANODE_PEER_METRICS_MIN_OUTLIER_DETECTION_SAMPLES_KEY,
         DFS_DATANODE_PEER_METRICS_MIN_OUTLIER_DETECTION_SAMPLES_DEFAULT);
+    lowThresholdMs =
+        conf.getLong(DFS_DATANODE_SLOWPEER_LOW_THRESHOLD_MS_KEY,
+            DFSConfigKeys.DFS_DATANODE_SLOWPEER_LOW_THRESHOLD_MS_DEFAULT);
     this.slowNodeDetector = new OutlierDetector(MIN_OUTLIER_DETECTION_NODES,
-        LOW_THRESHOLD_MS);
+        lowThresholdMs);
     sendPacketDownstreamRollingAverages = new MutableRollingAverages("Time");
   }
 

@@ -658,6 +658,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.datanode.slowdisk.low.threshold.ms";
   public static final long DFS_DATANODE_SLOWDISK_LOW_THRESHOLD_MS_DEFAULT =
       20L;
+  public static final String DFS_DATANODE_SLOWPEER_LOW_THRESHOLD_MS_KEY =
+      "dfs.datanode.slowpeer.low.threshold.ms";
+  public static final long DFS_DATANODE_SLOWPEER_LOW_THRESHOLD_MS_DEFAULT =
+      1000L;
   public static final String  DFS_DATANODE_HOST_NAME_KEY =
       HdfsClientConfigKeys.DeprecatedKeys.DFS_DATANODE_HOST_NAME_KEY;
   public static final String  DFS_NAMENODE_CHECKPOINT_DIR_KEY =
