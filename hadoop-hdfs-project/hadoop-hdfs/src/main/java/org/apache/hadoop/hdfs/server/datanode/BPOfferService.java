@@ -678,15 +678,19 @@ class BPOfferService {
       actor.reRegister();
       return false;
     }
-    writeLock();
+
+    boolean isActive;
+    readLock();
     try {
-      if (actor == bpServiceToActive) {
-        return processCommandFromActive(cmd, actor);
-      } else {
-        return processCommandFromStandby(cmd, actor);
-      }
+      isActive = (actor == bpServiceToActive);
     } finally {
-      writeUnlock();
+      readUnlock();
+    }
+
+    if (isActive) {
+      return processCommandFromActive(cmd, actor);
+    } else {
+      return processCommandFromStandby(cmd, actor);
     }
   }
 
