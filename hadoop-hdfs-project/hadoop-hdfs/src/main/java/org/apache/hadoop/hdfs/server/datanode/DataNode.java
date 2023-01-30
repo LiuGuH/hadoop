@@ -335,6 +335,8 @@ public class DataNode extends ReconfigurableBase
   Daemon localDataXceiverServer = null;
   ShortCircuitRegistry shortCircuitRegistry = null;
   ThreadGroup threadGroup = null;
+  ThrottlerBandwidthUpdater throttlerBandwidthuUpdater = null;
+  Daemon throttlerBandwidthDaemon = null;
   private DNConf dnConf;
   private volatile boolean heartbeatsDisabledForTests = false;
   private volatile boolean ibrDisabledForTests = false;
@@ -1161,6 +1163,7 @@ public class DataNode extends ReconfigurableBase
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
 
+    DataXceiverServer localXceiverServer = null;
     if (getConf().getBoolean(
         HdfsClientConfigKeys.Read.ShortCircuit.KEY,
         HdfsClientConfigKeys.Read.ShortCircuit.DEFAULT) ||
@@ -1171,13 +1174,17 @@ public class DataNode extends ReconfigurableBase
       DomainPeerServer domainPeerServer =
                 getDomainPeerServer(getConf(), streamingAddr.getPort());
       if (domainPeerServer != null) {
-        this.localDataXceiverServer = new Daemon(threadGroup,
-            new DataXceiverServer(domainPeerServer, getConf(), this));
+        localXceiverServer = new DataXceiverServer(domainPeerServer, getConf(), this);
+        this.localDataXceiverServer = new Daemon(threadGroup, localXceiverServer);
         LOG.info("Listening on UNIX domain socket: {}",
             domainPeerServer.getBindPath());
       }
     }
     this.shortCircuitRegistry = new ShortCircuitRegistry(getConf());
+
+    this.throttlerBandwidthuUpdater = new ThrottlerBandwidthUpdater(xserver, localXceiverServer, getConf());
+    this.throttlerBandwidthDaemon = new Daemon(threadGroup, throttlerBandwidthuUpdater);
+
   }
 
   private static DomainPeerServer getDomainPeerServer(Configuration conf,
