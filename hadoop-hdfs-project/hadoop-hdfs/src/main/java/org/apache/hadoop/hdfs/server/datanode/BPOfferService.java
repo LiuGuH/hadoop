@@ -25,6 +25,7 @@ import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.ha.HAServiceProtocol.HAServiceState;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
@@ -33,6 +34,7 @@ import org.apache.hadoop.hdfs.protocolPB.DatanodeProtocolClientSideTranslatorPB;
 import org.apache.hadoop.hdfs.server.protocol.*;
 import org.apache.hadoop.hdfs.server.protocol.BlockECReconstructionCommand.BlockECReconstructionInfo;
 import org.apache.hadoop.hdfs.server.protocol.ReceivedDeletedBlockInfo.BlockStatus;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 
 import org.slf4j.Logger;
 
@@ -679,18 +681,36 @@ class BPOfferService {
       return false;
     }
 
-    boolean isActive;
-    readLock();
-    try {
-      isActive = (actor == bpServiceToActive);
-    } finally {
-      readUnlock();
-    }
+    if (BzlDynamicConfiguration.getInstance()
+        .getBoolean(DFSConfigKeys.DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE,
+            DFSConfigKeys.DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE_DEFAULT)) {
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("The dfs.datanode.bpofferservice.lock.optimization.enable is set to true");
+      }
+      boolean isActive;
+      readLock();
+      try {
+        isActive = (actor == bpServiceToActive);
+      } finally {
+        readUnlock();
+      }
 
-    if (isActive) {
-      return processCommandFromActive(cmd, actor);
+      if (isActive) {
+        return processCommandFromActive(cmd, actor);
+      } else {
+        return processCommandFromStandby(cmd, actor);
+      }
     } else {
-      return processCommandFromStandby(cmd, actor);
+      writeLock();
+      try {
+        if (actor == bpServiceToActive) {
+          return processCommandFromActive(cmd, actor);
+        } else {
+          return processCommandFromStandby(cmd, actor);
+        }
+      } finally {
+        writeUnlock();
+      }
     }
   }
 

@@ -1903,4 +1903,8 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String SLOWDISK_METRICS_ENABLED_KEY =
       "dfs.namenode.livenodes.enabled";
   public static final boolean SLOWDISK_METRICS_ENABLED_DEFAULT = true;
+
+  public static final String DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE =
+      "dfs.datanode.bpofferservice.lock.optimization.enable";
+  public static final boolean DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE_DEFAULT = false;
 }
