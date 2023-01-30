@@ -33,6 +33,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.net.Peer;
 import org.apache.hadoop.hdfs.net.PeerServer;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.util.Daemon;
 
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -202,23 +203,22 @@ class DataXceiverServer implements Runnable {
         conf.getInt(DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_KEY,
             DFSConfigKeys.DFS_DATANODE_BALANCE_MAX_NUM_CONCURRENT_MOVES_DEFAULT));
 
-    long bandwidthPerSec = conf.getLongBytes(
-        DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_KEY,
-        DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_DEFAULT);
-    if (bandwidthPerSec > 0) {
-      this.transferThrottler = new DataTransferThrottler(bandwidthPerSec);
-    } else {
-      this.transferThrottler = null;
+    long bandwidthPerSec = BzlDynamicConfiguration.getInstance()
+        .getLong(DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_KEY,
+            DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_DEFAULT);
+    if (bandwidthPerSec <= 0) {
+      bandwidthPerSec = DFSConfigKeys.DFS_DATANODE_DATA_TRANSFER_BANDWIDTHPERSEC_DEFAULT;
     }
+    this.transferThrottler = new DataTransferThrottler(bandwidthPerSec);
 
-    bandwidthPerSec = conf.getLongBytes(
-        DFSConfigKeys.DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_KEY,
-        DFSConfigKeys.DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_DEFAULT);
-    if (bandwidthPerSec > 0) {
-      this.writeThrottler = new DataTransferThrottler(bandwidthPerSec);
-    } else {
-      this.writeThrottler = null;
+    bandwidthPerSec = BzlDynamicConfiguration.getInstance()
+        .getLong(DFSConfigKeys.DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_KEY,
+            DFSConfigKeys.DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_DEFAULT);
+    if (bandwidthPerSec <= 0) {
+      bandwidthPerSec = DFSConfigKeys.DFS_DATANODE_DATA_WRITE_BANDWIDTHPERSEC_DEFAULT;
     }
+    this.writeThrottler = new DataTransferThrottler(bandwidthPerSec);
+
   }
 
   @Override
