@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.NumOpenConnectionsPerUserMetrics;
 import org.apache.hadoop.security.bzl.auth.BzlTokenPasswordManager;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.LiveNodesMetrics;
@@ -2074,6 +2075,9 @@ public class NameNode extends ReconfigurableBase implements
         if (DefaultMetricsSystem.instance().getSource(SlowDisksMetrics.SLOW_DISKS_METRICS_SOURCE_NAME) != null) {
           DefaultMetricsSystem.instance().unregisterSource(SlowDisksMetrics.SLOW_DISKS_METRICS_SOURCE_NAME);
         }
+        if (DefaultMetricsSystem.instance().getSource(NumOpenConnectionsPerUserMetrics.class.getName()) != null) {
+          DefaultMetricsSystem.instance().unregisterSource(NumOpenConnectionsPerUserMetrics.class.getName());
+        }
       } catch (Throwable t) {
         doImmediateShutdown(t);
       }
@@ -2142,6 +2146,7 @@ public class NameNode extends ReconfigurableBase implements
     new LiveNodesMetrics(conf, namesystem);
     new SlowPeersMetrics(conf, namesystem);
     new SlowDisksMetrics(conf, namesystem);
+    new NumOpenConnectionsPerUserMetrics(rpcServer);
   }
 
   public boolean isStandbyState() {
