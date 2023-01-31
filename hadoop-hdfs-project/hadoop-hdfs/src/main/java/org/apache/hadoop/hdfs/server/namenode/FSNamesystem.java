@@ -3005,6 +3005,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
+    logAuditEvent(true, operationName, src);
     return lb;
   }
 
