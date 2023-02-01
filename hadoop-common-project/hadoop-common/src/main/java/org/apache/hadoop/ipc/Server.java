@@ -3672,6 +3672,10 @@ public abstract class Server {
     return null;
   }
 
+  public Map<String, Integer> obtainUserToConnectionsMap() {
+    return connectionManager.getUserToConnectionsMap();
+  }
+
   /**
    * The number of RPC connections dropped due to
    * too many connections.
@@ -3886,7 +3890,6 @@ public abstract class Server {
     Map<String, Integer> getUserToConnectionsMap() {
       return userToConnectionsMap;
     }
-
 
     long getDroppedConnections() {
       return droppedConnections.get();
