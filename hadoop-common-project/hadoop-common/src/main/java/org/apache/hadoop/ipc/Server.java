@@ -550,7 +550,7 @@ public abstract class Server {
     if (processingTime > BzlDynamicConfiguration.getInstance()
         .getLong(CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE,
             CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE_DEFAULT)) {
-      LOG.warn(
+      LOG.info(
           "Slow RPC : {} took {} {} to process from client {},"
               + " the processing detail is {}",
           methodName, processingTime, rpcMetrics.getMetricsTimeUnit(), call,
