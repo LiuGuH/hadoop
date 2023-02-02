@@ -2,6 +2,7 @@ package org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer;
+import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.metrics2.MetricsCollector;
 import org.apache.hadoop.metrics2.MetricsInfo;
 import org.apache.hadoop.metrics2.MetricsRecordBuilder;
@@ -20,9 +21,9 @@ public class NumOpenConnectionsPerUserMetrics implements MetricsSource {
 
   public static final Logger LOG = LoggerFactory.getLogger(NumOpenConnectionsPerUserMetrics.class);
 
-  private NameNodeRpcServer rpcServer;
+  private Server rpcServer;
 
-  public NumOpenConnectionsPerUserMetrics(NameNodeRpcServer rpcServer) {
+  public NumOpenConnectionsPerUserMetrics(Server rpcServer) {
     this.rpcServer = rpcServer;
     MetricsSystem ms = DefaultMetricsSystem.instance();
     if (ms.getSource(NumOpenConnectionsPerUserMetrics.class.getName()) == null) {
@@ -35,7 +36,7 @@ public class NumOpenConnectionsPerUserMetrics implements MetricsSource {
   public void getMetrics(MetricsCollector collector, boolean all) {
     MetricsRecordBuilder rb = collector.addRecord(NumOpenConnectionsPerUserMetrics.class.getName())
         .setContext("dfs");
-    Map<String, Integer> userOpenConnectionsMap = rpcServer.getClientRpcServer().obtainUserToConnectionsMap();
+    Map<String, Integer> userOpenConnectionsMap = rpcServer.obtainUserToConnectionsMap();
     Iterator<Map.Entry<String, Integer>> iterator = userOpenConnectionsMap.entrySet().iterator();
     while (iterator.hasNext()) {
       Map.Entry<String, Integer> entry = iterator.next();

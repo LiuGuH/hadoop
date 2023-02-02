@@ -23,6 +23,7 @@ import static org.apache.hadoop.metrics2.impl.MsInfo.SessionId;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.federation.fairness.FairnessControllerMetrics;
 import org.apache.hadoop.hdfs.server.federation.router.RouterRpcServer;
+import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.NumOpenConnectionsPerUserMetrics;
 import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.bean.LiveDataNodeBean;
 import org.apache.hadoop.metrics2.MetricsRecordBuilder;
 import org.apache.hadoop.metrics2.MetricsSource;
@@ -84,6 +85,7 @@ public class FederationRPCMetrics implements FederationRPCMBean {
     registry.tag(SessionId, "RouterRPCSession");
     registry.tag(ProcessName, "Router");
     new FairnessControllerMetrics(rpcServer, conf);
+    new NumOpenConnectionsPerUserMetrics(rpcServer.getServer());
   }
 
   public static FederationRPCMetrics create(Configuration conf,
@@ -101,6 +103,7 @@ public class FederationRPCMetrics implements FederationRPCMBean {
     MetricsSystem ms = DefaultMetricsSystem.instance();
     ms.unregisterSource(FederationRPCMetrics.class.getName());
     ms.unregisterSource(FairnessControllerMetrics.class.getName());
+    ms.unregisterSource(NumOpenConnectionsPerUserMetrics.class.getName());
   }
 
   public void incrProxyOpFailureStandby() {

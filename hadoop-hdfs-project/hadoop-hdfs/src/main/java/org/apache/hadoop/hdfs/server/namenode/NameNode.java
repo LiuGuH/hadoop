@@ -2146,7 +2146,7 @@ public class NameNode extends ReconfigurableBase implements
     new LiveNodesMetrics(conf, namesystem);
     new SlowPeersMetrics(conf, namesystem);
     new SlowDisksMetrics(conf, namesystem);
-    new NumOpenConnectionsPerUserMetrics(rpcServer);
+    new NumOpenConnectionsPerUserMetrics(rpcServer.getClientRpcServer());
   }
 
   public boolean isStandbyState() {
