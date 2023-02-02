@@ -551,7 +551,7 @@ public abstract class Server {
         .getLong(CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE,
             CommonConfigurationKeysPublic.IPC_SERVER_LOG_SLOW_RPC_THRESHOLD_VALUE_DEFAULT)) {
       LOG.info(
-          "Slow RPC : {} took {} {} to process from client {},"
+          "[Warning] Slow RPC : {} took {} {} to process from client {},"
               + " the processing detail is {}, current handler is {}.",
           methodName, processingTime, rpcMetrics.getMetricsTimeUnit(), call,
           details.toString(), Thread.currentThread().getName());
@@ -2538,8 +2538,8 @@ public abstract class Server {
       String base64EncodeBzlToken = protocolUser.getBzlTokenFromClient();
       if (base64EncodeBzlToken == null) {
         rpcBzlTokenAuthMetrics.incrBzlTokenNullPointNumbers();
-        LOG.warn("The BzlToken is null. EffectiveUser is {}. RealUser is {}.", clientUser,
-            clientRealUser);
+        LOG.info("[Warning] The BzlToken is null. EffectiveUser is {}. RealUser is {}. Remoteaddress is {}.", clientUser,
+            clientRealUser, this.getHostAddress());
 
         throw new FatalRpcServerException(
             RpcErrorCodeProto.FATAL_UNAUTHORIZED,
@@ -2563,9 +2563,9 @@ public abstract class Server {
       String decodeBzlToken = BzlTokenHelper.decodeBzlToken(base64EncodeBzlToken);
       String tokenParts[] = decodeBzlToken.split(",");
       if (tokenParts.length != 4) {
-        LOG.warn(
-            "Base64EncodeBzlToken format is incorrect. DecodeBzlToken string split's length is {}.",
-            tokenParts.length);
+        LOG.info(
+            "[Warning] Base64EncodeBzlToken format is incorrect. DecodeBzlToken string split's length is {}. ClientIp is {}.",
+            tokenParts.length, this.getHostAddress());
         rpcBzlTokenAuthMetrics.incrBzlTokenFormatErrors();
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
@@ -2584,10 +2584,11 @@ public abstract class Server {
       if (!BzlTokenHelper.authBzlTokenMd5(bzlTokenUser, bzlTokenTimestamp, bzlTokenPeriod,
           bzlTokenMd5)) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
-        LOG.warn(
-            "BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}.",
+        LOG.info(
+            "[Warning] BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientIp is {}.",
             bzlTokenUser, clientUser, clientRealUser, base64EncodeBzlToken.substring(0, 6),
-            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6));
+            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6),
+            this.getHostAddress());
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
@@ -2611,10 +2612,11 @@ public abstract class Server {
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
       } catch (AuthorizationException e) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
-        LOG.warn(
-            "BzlAuth Failed because of user mismatch. BzltokenUser is {}, ClientUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}.",
+        LOG.info(
+            "[Warning] BzlAuth Failed because of user mismatch. BzltokenUser is {}, ClientUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientIp is {}.",
             bzlTokenUser, clientUser, base64EncodeBzlToken.substring(0, 6),
-            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6));
+            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6),
+            this.getHostAddress());
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
