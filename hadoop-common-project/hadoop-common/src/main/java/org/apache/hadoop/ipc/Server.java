@@ -2538,8 +2538,8 @@ public abstract class Server {
       String base64EncodeBzlToken = protocolUser.getBzlTokenFromClient();
       if (base64EncodeBzlToken == null) {
         rpcBzlTokenAuthMetrics.incrBzlTokenNullPointNumbers();
-        LOG.info("[Warning] The BzlToken is null. EffectiveUser is {}. RealUser is {}. Remoteaddress is {}.", clientUser,
-            clientRealUser, this.getHostAddress());
+        LOG.info("[Warning] The BzlToken is null. EffectiveUser is {}. RealUser is {}. ClientInfo is {}:{}.", clientUser,
+            clientRealUser, this.getHostAddress(), this.getRemotePort());
 
         throw new FatalRpcServerException(
             RpcErrorCodeProto.FATAL_UNAUTHORIZED,
@@ -2564,8 +2564,8 @@ public abstract class Server {
       String tokenParts[] = decodeBzlToken.split(",");
       if (tokenParts.length != 4) {
         LOG.info(
-            "[Warning] Base64EncodeBzlToken format is incorrect. DecodeBzlToken string split's length is {}. ClientIp is {}.",
-            tokenParts.length, this.getHostAddress());
+            "[Warning] Base64EncodeBzlToken format is incorrect. DecodeBzlToken string split's length is {}. ClientInfo is {}:{}.",
+            tokenParts.length, this.getHostAddress(), this.getRemotePort());
         rpcBzlTokenAuthMetrics.incrBzlTokenFormatErrors();
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
@@ -2585,10 +2585,10 @@ public abstract class Server {
           bzlTokenMd5)) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
         LOG.info(
-            "[Warning] BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientIp is {}.",
+            "[Warning] BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientInfo is {}:{}.",
             bzlTokenUser, clientUser, clientRealUser, base64EncodeBzlToken.substring(0, 6),
             base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6),
-            this.getHostAddress());
+            this.getHostAddress(), this.getRemotePort());
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
@@ -2613,10 +2613,10 @@ public abstract class Server {
       } catch (AuthorizationException e) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
         LOG.info(
-            "[Warning] BzlAuth Failed because of user mismatch. BzltokenUser is {}, ClientUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientIp is {}.",
+            "[Warning] BzlAuth Failed because of user mismatch. BzltokenUser is {}, ClientUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientInfo is {}:{}.",
             bzlTokenUser, clientUser, base64EncodeBzlToken.substring(0, 6),
             base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6),
-            this.getHostAddress());
+            this.getHostAddress(), this.getRemotePort());
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
