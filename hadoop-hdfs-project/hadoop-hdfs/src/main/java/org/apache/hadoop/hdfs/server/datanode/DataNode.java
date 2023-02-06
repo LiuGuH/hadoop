@@ -335,6 +335,7 @@ public class DataNode extends ReconfigurableBase
   Daemon localDataXceiverServer = null;
   ShortCircuitRegistry shortCircuitRegistry = null;
   ThreadGroup threadGroup = null;
+  ThreadGroup updaterThreadGroup = null;
   ThrottlerBandwidthUpdater throttlerBandwidthuUpdater = null;
   Daemon throttlerBandwidthDaemon = null;
   private DNConf dnConf;
@@ -1159,6 +1160,7 @@ public class DataNode extends ReconfigurableBase
     streamingAddr = tcpPeerServer.getStreamingAddr();
     LOG.info("Opened streaming server at {}", streamingAddr);
     this.threadGroup = new ThreadGroup("dataXceiverServer");
+    this.updaterThreadGroup = new ThreadGroup("dynamicConfUpdater");
     xserver = new DataXceiverServer(tcpPeerServer, getConf(), this);
     this.dataXceiverServer = new Daemon(threadGroup, xserver);
     this.threadGroup.setDaemon(true); // auto destroy when empty
@@ -1183,7 +1185,8 @@ public class DataNode extends ReconfigurableBase
     this.shortCircuitRegistry = new ShortCircuitRegistry(getConf());
 
     this.throttlerBandwidthuUpdater = new ThrottlerBandwidthUpdater(xserver, localXceiverServer, getConf());
-    this.throttlerBandwidthDaemon = new Daemon(threadGroup, throttlerBandwidthuUpdater);
+    this.throttlerBandwidthDaemon = new Daemon(updaterThreadGroup, throttlerBandwidthuUpdater);
+    this.updaterThreadGroup.setDaemon(true);
 
   }
 
@@ -2690,6 +2693,7 @@ public class DataNode extends ReconfigurableBase
     if (localDataXceiverServer != null) {
       localDataXceiverServer.start();
     }
+    throttlerBandwidthDaemon.start();
     ipcServer.setTracer(tracer);
     ipcServer.start();
     startTime = now();
