@@ -111,6 +111,7 @@ import static org.apache.hadoop.ha.HAServiceProtocol.HAServiceState.OBSERVER;
 
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 
+import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import org.apache.hadoop.hdfs.protocol.BatchedDirectoryListing;
@@ -386,6 +387,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private final MetricsRegistry registry = new MetricsRegistry("FSNamesystem");
   @Metric final MutableRatesWithAggregation detailedLockHoldTimeMetrics =
       registry.newRatesWithAggregation("detailedLockHoldTimeMetrics");
+
+  @Metric final MutableRate checkPermissionProcessingTime =
+      registry.newRate("checkPermissionProcessingTime");
 
   private final String contextFieldSeparator;
 
@@ -8726,6 +8730,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         getEffectiveLayoutVersion())) {
       throw new UnsupportedActionException(operationName + " not supported.");
     }
+  }
+
+  public MutableRate getCheckPermissionProcessingTime() {
+    return checkPermissionProcessingTime;
   }
 }
 
