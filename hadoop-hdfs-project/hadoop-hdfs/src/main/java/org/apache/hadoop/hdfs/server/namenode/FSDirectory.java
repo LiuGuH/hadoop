@@ -18,6 +18,8 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
+import org.apache.hadoop.metrics2.lib.MutableRate;
+import org.apache.hadoop.metrics2.lib.MutableRatesWithAggregation;
 import org.apache.hadoop.util.StringUtils;
 
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -212,6 +214,8 @@ public class FSDirectory implements Closeable {
   // If external inode attribute provider is configured, use the new
   // authorizeWithContext() API or not.
   private boolean useAuthorizationWithContextAPI = false;
+
+  private final MutableRate checkPermissionProcessingTime;
 
   public void setINodeAttributeProvider(
       @Nullable INodeAttributeProvider provider) {
@@ -417,7 +421,7 @@ public class FSDirectory implements Closeable {
     this.quotaInitThreads = conf.getInt(
         DFSConfigKeys.DFS_NAMENODE_QUOTA_INIT_THREADS_KEY,
         DFSConfigKeys.DFS_NAMENODE_QUOTA_INIT_THREADS_DEFAULT);
-
+    this.checkPermissionProcessingTime = namesystem.getCheckPermissionProcessingTime();
     initUsersToBypassExtProvider(conf);
   }
 
@@ -1942,8 +1946,10 @@ public class FSDirectory implements Closeable {
     if (!pc.isSuperUser()) {
       readLock();
       try {
+        long start = Time.monotonicNowNanos();
         pc.checkPermission(iip, doCheckOwner, ancestorAccess,
             parentAccess, access, subAccess, ignoreEmptyDir);
+        checkPermissionProcessingTime.add(Time.monotonicNowNanos() - start);
       } finally {
         readUnlock();
       }
