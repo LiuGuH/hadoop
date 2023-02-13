@@ -138,6 +138,8 @@ public class RouterRpcClient {
   private volatile RouterRpcFairnessPolicyController routerRpcFairnessPolicyController;
   private Map<String, LongAdder> rejectedPermitsPerNs = new ConcurrentHashMap<>();
   private Map<String, LongAdder> acceptedPermitsPerNs = new ConcurrentHashMap<>();
+  private Map<String, Map<String, LongAdder>> acceptedPermitsPerNsPerUser = new ConcurrentHashMap<>();
+  private Map<String, Map<String, LongAdder>> rejectedPermitsPerNsPerUser = new ConcurrentHashMap<>();
 
   /**
    * Create a router RPC client to manage remote procedure calls to NNs.
@@ -1536,6 +1538,7 @@ public class RouterRpcClient {
           rpcMonitor.getRPCMetrics().incrProxyOpPermitRejected();
         }
         incrRejectedPermitForNs(nsId);
+        incrRejectedPermitPerUserForNs(nsId, ugi.getShortUserName());
         LOG.debug("Permit denied for ugi: {} for method: {}",
             ugi, m.getMethodName());
         String msg =
@@ -1544,6 +1547,7 @@ public class RouterRpcClient {
         throw new StandbyException(msg);
       }
       incrAcceptedPermitForNs(nsId);
+      incrAcceptedPermitPerUserForNs(nsId, ugi.getShortUserName());
     }
   }
 
@@ -1580,6 +1584,40 @@ public class RouterRpcClient {
 
   private void incrAcceptedPermitForNs(String ns) {
     acceptedPermitsPerNs.computeIfAbsent(ns, k -> new LongAdder()).increment();
+  }
+
+  private void incrAcceptedPermitPerUserForNs(String ns, String shortUserName) {
+    Map<String, LongAdder> perUserAcceptedPermitMap = acceptedPermitsPerNsPerUser.get(ns);
+    if (perUserAcceptedPermitMap == null) {
+      perUserAcceptedPermitMap = new ConcurrentHashMap<>();
+      acceptedPermitsPerNsPerUser.put(ns, perUserAcceptedPermitMap);
+    }
+    perUserAcceptedPermitMap.computeIfAbsent(shortUserName, k -> new LongAdder()).increment();
+  }
+
+  private void incrRejectedPermitPerUserForNs(String ns, String shortUserName) {
+    Map<String, LongAdder> perUserRejectedPermitMap = rejectedPermitsPerNsPerUser.get(ns);
+    if (perUserRejectedPermitMap == null) {
+      perUserRejectedPermitMap = new ConcurrentHashMap<>();
+      rejectedPermitsPerNsPerUser.put(ns, perUserRejectedPermitMap);
+    }
+    perUserRejectedPermitMap.computeIfAbsent(shortUserName, k -> new LongAdder()).increment();
+  }
+
+  public Map<String, LongAdder> getAcceptedPermitsPerUserForNs(String ns) {
+    Map<String, LongAdder> perUserAcceptedPermitMap = acceptedPermitsPerNsPerUser.get(ns);
+    if (perUserAcceptedPermitMap == null) {
+      return new ConcurrentHashMap<String, LongAdder>();
+    }
+    return perUserAcceptedPermitMap;
+  }
+
+  public Map<String, LongAdder> getRejectedPermitsPerUserForNs(String ns) {
+    Map<String, LongAdder> perUserRejectedPermitMap = rejectedPermitsPerNsPerUser.get(ns);
+    if (perUserRejectedPermitMap == null) {
+      return new ConcurrentHashMap<String, LongAdder>();
+    }
+    return perUserRejectedPermitMap;
   }
 
   public Long getAcceptedPermitForNs(String ns) {

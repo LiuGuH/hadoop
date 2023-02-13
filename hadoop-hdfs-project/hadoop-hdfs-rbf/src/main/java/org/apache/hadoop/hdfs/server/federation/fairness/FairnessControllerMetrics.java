@@ -10,7 +10,9 @@ import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.Interns;
 
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.LongAdder;
 
 public class FairnessControllerMetrics implements MetricsSource {
 
@@ -47,16 +49,55 @@ public class FairnessControllerMetrics implements MetricsSource {
       rb.addGauge(buildAcceptedPermitsMetricsInfo(ns), acceptedPermits);
       rb.addGauge(buildRejectedPermitsMetricsInfo(ns), rejectedPermits);
       rb.addGauge(buildAvailablePermitsMetricsInfo(ns), availablePermits);
+      Map<String, LongAdder> acceptedPermitsPerUserForNs = this.rpcServer.getRPCClient()
+          .getAcceptedPermitsPerUserForNs(ns);
+      for (Map.Entry<String, LongAdder> entry : acceptedPermitsPerUserForNs.entrySet()) {
+        String user = entry.getKey();
+        long acceptedPermitsPerUser = entry.getValue().longValue();
+        rb.addGauge(buildAcceptedPermitsPerUserMetricsInfo(ns, user), acceptedPermitsPerUser);
+      }
+      Map<String, LongAdder> rejectedPermitsPerUserForNs = this.rpcServer.getRPCClient()
+          .getRejectedPermitsPerUserForNs(ns);
+      for (Map.Entry<String, LongAdder> entry : rejectedPermitsPerUserForNs.entrySet()) {
+        String user = entry.getKey();
+        long rejectedPermitsPerUser = entry.getValue().longValue();
+        rb.addGauge(buildRejectedPermitsPerUserMetricsInfo(ns, user), rejectedPermitsPerUser);
+      }
     }
     rb.addGauge(buildAcceptedPermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getAcceptedPermitForNs(RouterRpcFairnessConstants.CONCURRENT_NS));
-
+    Map<String, LongAdder> acceptedPermitsPerUserForNs = this.rpcServer.getRPCClient()
+        .getAcceptedPermitsPerUserForNs(RouterRpcFairnessConstants.CONCURRENT_NS);
+    for (Map.Entry<String, LongAdder> entry : acceptedPermitsPerUserForNs.entrySet()) {
+      String user = entry.getKey();
+      long acceptedPermitsPerUser = entry.getValue().longValue();
+      rb.addGauge(buildAcceptedPermitsPerUserMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS, user),
+          acceptedPermitsPerUser);
+    }
     rb.addGauge(buildRejectedPermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getRejectedPermitForNs(RouterRpcFairnessConstants.CONCURRENT_NS));
+    Map<String, LongAdder> rejectedPermitsPerUserForNs = this.rpcServer.getRPCClient()
+        .getRejectedPermitsPerUserForNs(RouterRpcFairnessConstants.CONCURRENT_NS);
+    for (Map.Entry<String, LongAdder> entry : rejectedPermitsPerUserForNs.entrySet()) {
+      String user = entry.getKey();
+      long rejectedPermitsPerUser = entry.getValue().longValue();
+      rb.addGauge(buildRejectedPermitsPerUserMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS, user),
+          rejectedPermitsPerUser);
+    }
 
     rb.addGauge(buildAvailablePermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getRouterRpcFairnessPolicyController()
             .getAvailablePermits(RouterRpcFairnessConstants.CONCURRENT_NS));
+  }
+
+  private MetricsInfo buildAcceptedPermitsPerUserMetricsInfo(String ns, String user) {
+    return Interns.info("nameservice=" + ns + ".user=" + user + ".acceptedPermits",
+        "AcceptedPermitsPerUser");
+  }
+
+  private MetricsInfo buildRejectedPermitsPerUserMetricsInfo(String ns, String user) {
+    return Interns.info("nameservice=" + ns + ".user=" + user + ".rejectedPermits",
+        "RejectedPermitsPerUser");
   }
 
   private MetricsInfo buildAcceptedPermitsMetricsInfo(String ns) {
