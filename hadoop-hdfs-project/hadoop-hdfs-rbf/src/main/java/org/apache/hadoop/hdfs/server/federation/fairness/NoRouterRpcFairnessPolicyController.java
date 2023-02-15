@@ -38,8 +38,18 @@ public class NoRouterRpcFairnessPolicyController implements
   }
 
   @Override
+  public boolean acquireUserPermit(String nsId, String user) {
+    return true;
+  }
+
+  @Override
   public void releasePermit(String nsId) {
     // Dummy, pass through.
+  }
+
+  @Override
+  public void releaseUserPermit(String nsId, String user) {
+
   }
 
   @Override
@@ -53,7 +63,17 @@ public class NoRouterRpcFairnessPolicyController implements
   }
 
   @Override
+  public String getAvailableHandlerOnPerNsUser() {
+    return "N/A";
+  }
+
+  @Override
   public int getAvailablePermits(String nsId) {
+    return 0;
+  }
+
+  @Override
+  public int getAvailableUserPermits(String nsId, String user) {
     return 0;
   }
 }

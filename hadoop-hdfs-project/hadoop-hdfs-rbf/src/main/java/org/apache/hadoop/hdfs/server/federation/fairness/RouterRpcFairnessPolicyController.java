@@ -48,6 +48,8 @@ public interface RouterRpcFairnessPolicyController {
    */
   boolean acquirePermit(String nsId);
 
+  boolean acquireUserPermit(String nsId, String user);
+
   /**
    * Handler threads are expected to invoke this method that signals
    * controller to release the resources allocated to the thread for the
@@ -57,6 +59,8 @@ public interface RouterRpcFairnessPolicyController {
    * @param nsId Name service id for which permission release request is made.
    */
   void releasePermit(String nsId);
+
+  void releaseUserPermit(String nsId, String user);
 
   /**
    * Shutdown steps to stop accepting new permission requests and clean-up.
@@ -68,8 +72,13 @@ public interface RouterRpcFairnessPolicyController {
    */
   String getAvailableHandlerOnPerNs();
 
+  String getAvailableHandlerOnPerNsUser();
+
   /**
    * Returns the available permits of the specific Ns.
    */
   int getAvailablePermits(String nsId);
+
+  int getAvailableUserPermits(String nsId, String user);
+
 }
