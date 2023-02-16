@@ -355,4 +355,22 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
       FEDERATION_ROUTER_FAIRNESS_PREFIX + "acquire.timeout";
   public static final long   DFS_ROUTER_FAIRNESS_ACQUIRE_TIMEOUT_DEFAULT =
       TimeUnit.SECONDS.toMillis(1);
+
+  public static final String DFS_ROUTER_FAIR_USER_HANDLER_CONFIG =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.config";
+
+  public static final String DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT =
+      "trino:10000,other:10000";
+
+  public static final String DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.dynamic.update.enable";
+
+  public static final Boolean DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT =
+      false;
+
+  public static final String DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.dynamic.update.period";
+
+  public static final Long DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT =
+      30000l;
 }

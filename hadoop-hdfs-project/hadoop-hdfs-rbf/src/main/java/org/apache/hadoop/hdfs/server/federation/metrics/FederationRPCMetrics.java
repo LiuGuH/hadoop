@@ -80,6 +80,9 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   @Metric("Number of operations to hit permit limits")
   private MutableCounterLong proxyOpPermitRejected;
 
+  @Metric("Number of operations to hit permit user limits")
+  private MutableCounterLong proxyOpUserPermitRejected;
+
   public FederationRPCMetrics(Configuration conf, RouterRpcServer rpcServer) {
     this.rpcServer = rpcServer;
     registry.tag(SessionId, "RouterRPCSession");
@@ -296,6 +299,10 @@ public class FederationRPCMetrics implements FederationRPCMBean {
     proxyOpPermitRejected.incr();
   }
 
+  public void incrProxyOpUserPermitRejected() {
+    proxyOpUserPermitRejected.incr();
+  }
+
   @Override
   public long getProxyOpPermitRejected() {
     return proxyOpPermitRejected.value();
@@ -305,9 +312,18 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   public String getProxyOpPermitRejectedPerNs() {
     return rpcServer.getRPCClient().getRejectedPermitsPerNsJSON();
   }
+  @Override
+  public String getProxyOpPermitRejectedPerNsUser() {
+    return rpcServer.getRPCClient().getRejectedPermitsPerNsUserJSON();
+  }
 
   @Override
   public String getProxyOpPermitAcceptedPerNs() {
     return rpcServer.getRPCClient().getAcceptedPermitsPerNsJSON();
+  }
+
+  @Override
+  public String getProxyOpPermitAcceptedPerNsUser() {
+    return rpcServer.getRPCClient().getAcceptedPermitsPerNsUserJSON();
   }
 }
