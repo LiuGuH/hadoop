@@ -251,6 +251,12 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   }
 
   @Override
+  public String getAvailableHandlerOnPerNsUser() {
+    return rpcServer.getRPCClient().
+        getRouterRpcFairnessPolicyController().getAvailableHandlerOnPerNsUser();
+  }
+
+  @Override
   public String getAsyncCallerPool() {
     return rpcServer.getRPCClient().getAsyncCallerPoolJson();
   }
