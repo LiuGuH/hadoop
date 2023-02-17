@@ -115,6 +115,9 @@ public interface FederationRPCMBean {
    */
   String getAvailableHandlerOnPerNs();
 
+  String getAvailableHandlerOnPerNsUser();
+
+
   /**
    * Get the JSON representation of the async caller thread pool.
    * @return JSON string representation of the async caller thread pool.
