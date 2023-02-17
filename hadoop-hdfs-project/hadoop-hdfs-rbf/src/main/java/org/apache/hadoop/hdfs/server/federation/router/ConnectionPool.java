@@ -297,7 +297,7 @@ public class ConnectionPool {
    *
    * @return Number of connections.
    */
-  protected int getNumConnections() {
+  public int getNumConnections() {
     return this.connections.size();
   }
 
@@ -306,7 +306,7 @@ public class ConnectionPool {
    *
    * @return Number of active connections.
    */
-  protected int getNumActiveConnections() {
+  public int getNumActiveConnections() {
     int ret = 0;
     List<ConnectionContext> tmpConnections = this.connections;
     for (ConnectionContext conn : tmpConnections) {
@@ -322,7 +322,7 @@ public class ConnectionPool {
    *
    * @return Number of idle connections
    */
-  protected int getNumIdleConnections() {
+  public int getNumIdleConnections() {
     int ret = 0;
     List<ConnectionContext> tmpConnections = this.connections;
     for (ConnectionContext conn : tmpConnections) {
@@ -338,7 +338,7 @@ public class ConnectionPool {
    *
    * @return Number of active connections recently.
    */
-  protected int getNumActiveConnectionsRecently() {
+  public int getNumActiveConnectionsRecently() {
     int ret = 0;
     List<ConnectionContext> tmpConnections = this.connections;
     for (ConnectionContext conn : tmpConnections) {

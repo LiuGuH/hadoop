@@ -140,4 +140,12 @@ public class ConnectionPoolId implements Comparable<ConnectionPoolId> {
     Collections.sort(tokenIds);
     return tokenIds;
   }
+
+  public String getNnId() {
+    return nnId;
+  }
+
+  public String getUserName() {
+    return ugi.getUserName();
+  }
 }
