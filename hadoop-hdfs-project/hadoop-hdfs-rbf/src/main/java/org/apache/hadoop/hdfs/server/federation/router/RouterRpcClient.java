@@ -908,9 +908,9 @@ public class RouterRpcClient {
       throws IOException {
     UserGroupInformation ugi = RouterRpcServer.getRemoteUser();
     RouterRpcFairnessPolicyController controller = getRouterRpcFairnessPolicyController();
-    acquirePermit(nsId, ugi, method, controller);
+    acquireUserPermit(nsId, ugi, method, controller);
     try {
-      acquireUserPermit(nsId, ugi, method, controller);
+      acquirePermit(nsId, ugi, method, controller);
       try {
         List<? extends FederationNamenodeContext> nns =
             getNamenodesForNameservice(nsId);
@@ -920,10 +920,10 @@ public class RouterRpcClient {
         Object[] params = method.getParams(loc);
         return invokeMethod(ugi, nns, proto, m, params);
       }finally {
-        releaseUserPermit(nsId, ugi, method, controller);
+        releasePermit(nsId, ugi, method, controller);
       }
     } finally {
-      releasePermit(nsId, ugi, method, controller);
+      releaseUserPermit(nsId, ugi, method, controller);
     }
   }
 
@@ -1043,9 +1043,9 @@ public class RouterRpcClient {
     // Invoke in priority order
     for (final RemoteLocationContext loc : locations) {
       String ns = loc.getNameserviceId();
-      acquirePermit(ns, ugi, remoteMethod, controller);
+      acquireUserPermit(ns, ugi, remoteMethod, controller);
       try {
-        acquireUserPermit(ns, ugi, remoteMethod, controller);
+        acquirePermit(ns, ugi, remoteMethod, controller);
         List<? extends FederationNamenodeContext> namenodes =
             getNamenodesForNameservice(ns);
         try {
@@ -1080,10 +1080,10 @@ public class RouterRpcClient {
               "Unexpected exception proxying API " + e.getMessage(), e);
           thrownExceptions.add(ioe);
         } finally {
-          releaseUserPermit(ns, ugi, remoteMethod, controller);
+          releasePermit(ns, ugi, remoteMethod, controller);
         }
       }finally {
-        releasePermit(ns, ugi, remoteMethod, controller);
+        releaseUserPermit(ns, ugi, remoteMethod, controller);
       }
     }
 
@@ -1410,9 +1410,9 @@ public class RouterRpcClient {
       T location = locations.iterator().next();
       String ns = location.getNameserviceId();
       RouterRpcFairnessPolicyController controller = getRouterRpcFairnessPolicyController();
-      acquirePermit(ns, ugi, method, controller);
+      acquireUserPermit(ns, ugi, method, controller);
       try {
-        acquireUserPermit(ns, ugi, method, controller);
+        acquirePermit(ns, ugi, method, controller);
         final List<? extends FederationNamenodeContext> namenodes =
             getNamenodesForNameservice(ns);
         try {
@@ -1425,10 +1425,10 @@ public class RouterRpcClient {
           // Localize the exception
           throw processException(ioe, location);
         } finally {
-          releaseUserPermit(ns, ugi, method, controller);
+          releasePermit(ns, ugi, method, controller);
         }
       }finally {
-        releasePermit(ns, ugi, method, controller);
+        releaseUserPermit(ns, ugi, method, controller);
       }
     }
 
@@ -1476,9 +1476,9 @@ public class RouterRpcClient {
     }
 
     RouterRpcFairnessPolicyController controller = getRouterRpcFairnessPolicyController();
-    acquirePermit(CONCURRENT_NS, ugi, method, controller);
+    acquireUserPermit(CONCURRENT_NS, ugi, method, controller);
     try {
-      acquireUserPermit(CONCURRENT_NS, ugi, method, controller);
+      acquirePermit(CONCURRENT_NS, ugi, method, controller);
       try {
         List<Future<Object>> futures = null;
         if (timeOutMs > 0) {
@@ -1536,10 +1536,10 @@ public class RouterRpcClient {
         throw new IOException(
             "Unexpected error while invoking API " + ex.getMessage(), ex);
       } finally {
-        releaseUserPermit(CONCURRENT_NS, ugi, method, controller);
+        releasePermit(CONCURRENT_NS, ugi, method, controller);
       }
     } finally{
-      releasePermit(CONCURRENT_NS, ugi, method, controller);
+      releaseUserPermit(CONCURRENT_NS, ugi, method, controller);
     }
   }
 
@@ -1663,7 +1663,7 @@ public class RouterRpcClient {
             ugi, user, m.getMethodName());
         String msg =
             "Router " + router.getRouterId() +
-                " is overloaded for NS: " + nsId+" User:"+ user;
+                " is overloaded for NS: " + nsId+" User: "+ user;
         throw new StandbyException(msg);
       }
       incrAcceptedPermitForNsUser(combineNsIdUser(nsId,user));
