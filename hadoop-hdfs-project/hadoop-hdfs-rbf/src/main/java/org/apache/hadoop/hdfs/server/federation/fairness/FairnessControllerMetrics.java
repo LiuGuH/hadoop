@@ -12,6 +12,7 @@ import org.apache.hadoop.metrics2.lib.Interns;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.LongAdder;
 
 public class FairnessControllerMetrics implements MetricsSource {
@@ -88,6 +89,53 @@ public class FairnessControllerMetrics implements MetricsSource {
     rb.addGauge(buildAvailablePermitsMetricsInfo(RouterRpcFairnessConstants.CONCURRENT_NS),
         this.rpcServer.getRPCClient().getRouterRpcFairnessPolicyController()
             .getAvailablePermits(RouterRpcFairnessConstants.CONCURRENT_NS));
+
+    Map<String, LongAdder> acceptedPermitsPerNsUser = rpcServer.getRPCClient().getAcceptedPermitsPerNsUser();
+    for (Map.Entry<String, LongAdder> entry : acceptedPermitsPerNsUser.entrySet()) {
+      // eg: yj-hdfs2:trino
+      String nsAndUser = entry.getKey();
+      String[] splits = nsAndUser.split(":");
+      String nameservice = splits[0];
+      String user = splits[1];
+      long acceptedValue = entry.getValue().longValue();
+      rb.addGauge(buildAcceptedPermitsPerNsUser(nameservice, user), acceptedValue);
+    }
+    
+    Map<String, LongAdder> rejectedPermitsPerNsUser = rpcServer.getRPCClient().getRejectedPermitsPerNsUser();
+    for (Map.Entry<String, LongAdder> entry : rejectedPermitsPerNsUser.entrySet()) {
+      // eg: yj-hdfs2:trino
+      String nsAndUser = entry.getKey();
+      String[] splits = nsAndUser.split(":");
+      String nameservice = splits[0];
+      String user = splits[1];
+      long rejectedValue = entry.getValue().longValue();
+      rb.addGauge(buildRejectedPermitsPerNsUser(nameservice, user), rejectedValue);
+    }
+
+    AbstractRouterRpcFairnessPolicyController absRouterFairnessController = (AbstractRouterRpcFairnessPolicyController)
+        (rpcServer.getRPCClient().getRouterRpcFairnessPolicyController());
+    Map<String, Semaphore> userPermits = absRouterFairnessController.getUserPermits();
+    for (Map.Entry<String, Semaphore> entry : userPermits.entrySet()) {
+      String nsIdUser = entry.getKey();
+      int available = entry.getValue().availablePermits();
+      String[] splits = nsIdUser.split(":");
+      rb.addGauge(buildAvailablePermitsPerNsUserMetricsInfo(splits[0], splits[1]), available);
+    }
+  }
+
+  private MetricsInfo buildAvailablePermitsPerNsUserMetricsInfo(String nameservice, String user) {
+    return Interns.info("nameservice=" + nameservice + ".user=" + user
+        + ".perNsUserAvailablePermits", "PerNsUserAvailablePermits");
+  }
+
+  private MetricsInfo buildRejectedPermitsPerNsUser(String nameservice, String user) {
+    return Interns.info("nameservice=" + nameservice +
+        ".user=" + user + ".outterRejectedPermits", "OutterRejectedPermits");
+  }
+
+  private MetricsInfo buildAcceptedPermitsPerNsUser(String nameservice, String user) {
+    return Interns.info("nameservice=" + nameservice +
+        ".user=" + user + ".outterAcceptedPermits", "OutterAcceptedPermits");
   }
 
   private MetricsInfo buildAcceptedPermitsPerUserMetricsInfo(String ns, String user) {

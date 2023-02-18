@@ -1816,4 +1816,12 @@ public class RouterRpcClient {
   public ConnectionManager getConnectionManager() {
     return connectionManager;
   }
+
+  public Map<String, LongAdder> getRejectedPermitsPerNsUser() {
+    return rejectedPermitsPerNsUser;
+  }
+
+  public Map<String, LongAdder> getAcceptedPermitsPerNsUser() {
+    return acceptedPermitsPerNsUser;
+  }
 }
