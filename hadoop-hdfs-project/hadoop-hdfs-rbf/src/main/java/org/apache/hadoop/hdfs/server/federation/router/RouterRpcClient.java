@@ -65,6 +65,7 @@ import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.SnapshotException;
 import org.apache.hadoop.hdfs.server.federation.fairness.RouterRpcFairnessPolicyController;
+import org.apache.hadoop.hdfs.server.federation.metrics.ClientConnectionsMetrics;
 import org.apache.hadoop.hdfs.server.federation.resolver.ActiveNamenodeResolver;
 import org.apache.hadoop.hdfs.server.federation.resolver.FederationNamenodeContext;
 import org.apache.hadoop.hdfs.server.federation.resolver.FederationNamenodeServiceState;
@@ -78,6 +79,8 @@ import org.apache.hadoop.ipc.RetriableException;
 import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.ipc.Server.Call;
 import org.apache.hadoop.ipc.StandbyException;
+import org.apache.hadoop.metrics2.MetricsSystem;
+import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.net.ConnectTimeoutException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
@@ -211,6 +214,8 @@ public class RouterRpcClient {
     this.retryPolicy = RetryPolicies.failoverOnNetworkException(
         RetryPolicies.TRY_ONCE_THEN_FAIL, maxFailoverAttempts, maxRetryAttempts,
         failoverSleepBaseMillis, failoverSleepMaxMillis);
+
+    new ClientConnectionsMetrics(this);
   }
 
   private class RefreshFairnessPolicyControllerThread extends Thread {
@@ -306,6 +311,7 @@ public class RouterRpcClient {
    * Shutdown the client.
    */
   public void shutdown() {
+    shutdownMetrics();
     if (this.connectionManager != null) {
       this.connectionManager.close();
     }
@@ -315,6 +321,11 @@ public class RouterRpcClient {
     if (this.routerRpcFairnessPolicyController != null) {
       this.routerRpcFairnessPolicyController.shutdown();
     }
+  }
+
+  private void shutdownMetrics() {
+    MetricsSystem ms = DefaultMetricsSystem.instance();
+    ms.unregisterSource(ClientConnectionsMetrics.class.getName());
   }
 
   /**
@@ -1800,5 +1811,9 @@ public class RouterRpcClient {
       return routerRpcFairnessPolicyController.getClass().getCanonicalName();
     }
     return null;
+  }
+
+  public ConnectionManager getConnectionManager() {
+    return connectionManager;
   }
 }

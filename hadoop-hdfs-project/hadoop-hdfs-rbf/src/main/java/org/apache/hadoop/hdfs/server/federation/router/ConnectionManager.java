@@ -348,7 +348,7 @@ public class ConnectionManager {
   }
 
   @VisibleForTesting
-  Map<ConnectionPoolId, ConnectionPool> getPools() {
+  public Map<ConnectionPoolId, ConnectionPool> getPools() {
     return this.pools;
   }
 
