@@ -220,4 +220,8 @@ public class AbstractRouterRpcFairnessPolicyController
     });
     return json.toString();
   }
+
+  public Map<String, Semaphore> getUserPermits() {
+    return userPermits;
+  }
 }
