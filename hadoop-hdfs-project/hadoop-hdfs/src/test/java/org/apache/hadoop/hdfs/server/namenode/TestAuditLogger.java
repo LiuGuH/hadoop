@@ -618,7 +618,7 @@ public class TestAuditLogger {
     }
 
     public void logAuditEvent(boolean succeeded, String userName,
-        InetAddress addr, String cmd, String src, String dst,
+        InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus stat) {
       remoteAddr = addr.getHostAddress();
       logCount++;
@@ -644,7 +644,7 @@ public class TestAuditLogger {
     }
 
     public void logAuditEvent(boolean succeeded, String userName,
-        InetAddress addr, String cmd, String src, String dst,
+        InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus stat) {
       if (!cmd.equals("datanodeReport")) {
         throw new RuntimeException("uh oh");

@@ -54,7 +54,7 @@ public interface AuditLogger {
    *             metadata (permissions, owner, times, etc).
    */
   void logAuditEvent(boolean succeeded, String userName,
-      InetAddress addr, String cmd, String src, String dst,
+      InetAddress addr, int port, String cmd, String src, String dst,
       FileStatus stat);
 
 }

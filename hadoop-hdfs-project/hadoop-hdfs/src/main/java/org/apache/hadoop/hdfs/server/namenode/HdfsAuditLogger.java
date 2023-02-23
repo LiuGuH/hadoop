@@ -35,15 +35,15 @@ public abstract class HdfsAuditLogger implements AuditLogger {
 
   @Override
   public void logAuditEvent(boolean succeeded, String userName,
-      InetAddress addr, String cmd, String src, String dst,
+      InetAddress addr, int port, String cmd, String src, String dst,
       FileStatus status) {
-    logAuditEvent(succeeded, userName, addr, cmd, src, dst, status,
+    logAuditEvent(succeeded, userName, addr, port, cmd, src, dst, status,
         null /*callerContext*/, null /*ugi*/, null /*dtSecretManager*/);
   }
 
   /**
    * Same as
-   * {@link #logAuditEvent(boolean, String, InetAddress, String, String, String,
+   * {@link #logAuditEvent(boolean, String, InetAddress, int ,String, String, String,
    * FileStatus)} with additional parameters related to logging delegation token
    * tracking IDs.
    * 
@@ -62,18 +62,18 @@ public abstract class HdfsAuditLogger implements AuditLogger {
    *          token tracking information
    */
   public abstract void logAuditEvent(boolean succeeded, String userName,
-      InetAddress addr, String cmd, String src, String dst,
+      InetAddress addr, int port, String cmd, String src, String dst,
       FileStatus stat, CallerContext callerContext, UserGroupInformation ugi,
       DelegationTokenSecretManager dtSecretManager);
 
   /**
    * Same as
-   * {@link #logAuditEvent(boolean, String, InetAddress, String, String,
+   * {@link #logAuditEvent(boolean, String, InetAddress, int, String, String,
    * String, FileStatus, CallerContext, UserGroupInformation,
    * DelegationTokenSecretManager)} without {@link CallerContext} information.
    */
   public abstract void logAuditEvent(boolean succeeded, String userName,
-      InetAddress addr, String cmd, String src, String dst,
+      InetAddress addr, int port, String cmd, String src, String dst,
       FileStatus stat, UserGroupInformation ugi,
       DelegationTokenSecretManager dtSecretManager);
 }
