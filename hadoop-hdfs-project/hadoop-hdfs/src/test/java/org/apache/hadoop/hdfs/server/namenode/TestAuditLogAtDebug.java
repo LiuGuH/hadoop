@@ -67,7 +67,7 @@ public class TestAuditLogAtDebug {
   
   private void logDummyCommandToAuditLog(HdfsAuditLogger logger, String command) {
     logger.logAuditEvent(true, "",
-                         Inet4Address.getLoopbackAddress(),
+                         Inet4Address.getLoopbackAddress(), 0,
                          command, "", "",
                          null, null, null, null);
   }

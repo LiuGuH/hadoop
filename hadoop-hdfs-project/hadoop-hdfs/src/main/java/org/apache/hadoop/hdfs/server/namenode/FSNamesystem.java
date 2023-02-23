@@ -406,7 +406,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private void logAuditEvent(boolean succeeded, String cmd, String src,
       String dst, FileStatus stat) throws IOException {
     if (isAuditEnabled() && isExternalInvocation()) {
-      logAuditEvent(succeeded, Server.getRemoteUser(), Server.getRemoteIp(),
+      logAuditEvent(succeeded, Server.getRemoteUser(), Server.getRemoteIp(), Server.getRemotePort(),
           cmd, src, dst, stat);
     }
   }
@@ -432,7 +432,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   private void logAuditEvent(boolean succeeded,
-      UserGroupInformation ugi, InetAddress addr, String cmd, String src,
+      UserGroupInformation ugi, InetAddress addr, int port, String cmd, String src,
       String dst, FileStatus status) {
     final String ugiStr = ugi.toString();
     for (AuditLogger logger : auditLoggers) {
@@ -441,10 +441,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         if (auditLogWithRemotePort) {
           appendClientPortToCallerContextIfAbsent();
         }
-        hdfsLogger.logAuditEvent(succeeded, ugiStr, addr, cmd, src, dst,
+        hdfsLogger.logAuditEvent(succeeded, ugiStr, addr, port, cmd, src, dst,
             status, CallerContext.getCurrent(), ugi, dtSecretManager);
       } else {
-        logger.logAuditEvent(succeeded, ugiStr, addr, cmd, src, dst, status);
+        logger.logAuditEvent(succeeded, ugiStr, addr, port, cmd, src, dst, status);
       }
     }
   }
@@ -6330,11 +6330,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @param remoteAddress Remote address of the request.
    * @throws IOException if {@link #getRemoteUser()} fails.
    */
-  void logFsckEvent(boolean succeeded, String src, InetAddress remoteAddress)
+  void logFsckEvent(boolean succeeded, String src, InetAddress remoteAddress, int remotePort)
       throws IOException {
     if (isAuditEnabled()) {
       logAuditEvent(succeeded, getRemoteUser(),
-                    remoteAddress,
+                    remoteAddress, remotePort,
                     "fsck", src, null, null);
     }
   }
@@ -8486,7 +8486,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     @Override
     public void logAuditEvent(boolean succeeded, String userName,
-        InetAddress addr, String cmd, String src, String dst,
+        InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus status, CallerContext callerContext, UserGroupInformation ugi,
         DelegationTokenSecretManager dtSecretManager) {
 
@@ -8499,6 +8499,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         sb.append("allowed=").append(succeeded).append("\t")
             .append("ugi=").append(userName).append("\t")
             .append("ip=").append(addr).append("\t")
+            .append("port=").append(port).append("\t")
             .append("cmd=").append(cmd).append("\t")
             .append("src=").append(src).append("\t")
             .append("dst=").append(dst).append("\t");
@@ -8552,10 +8553,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
     @Override
     public void logAuditEvent(boolean succeeded, String userName,
-        InetAddress addr, String cmd, String src, String dst,
+        InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus status, UserGroupInformation ugi,
         DelegationTokenSecretManager dtSecretManager) {
-      this.logAuditEvent(succeeded, userName, addr, cmd, src, dst, status,
+      this.logAuditEvent(succeeded, userName, addr, port, cmd, src, dst, status,
               null /*CallerContext*/, ugi, dtSecretManager);
     }
 
