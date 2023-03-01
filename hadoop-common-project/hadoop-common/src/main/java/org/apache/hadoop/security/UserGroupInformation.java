@@ -212,6 +212,11 @@ public class UserGroupInformation {
         }
         user = envUser == null ? null : new User(envUser, bzlClientToken);
       }
+      if (user == null) {
+        String envUser = System.getenv("USER");
+        user = envUser == null ? null : new User(envUser, bzlClientToken);
+        LOG.debug("Using local env user: {}", user);
+      }
       // use the OS user
       if (user == null) {
         user = getCanonicalUser(OS_PRINCIPAL_CLASS);
