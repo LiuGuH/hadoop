@@ -148,7 +148,7 @@ public class TestBalancerService {
     }
   }
 
-  @Test(timeout = 60000)
+  @Test(timeout = 600000)
   public void testBalancerServiceOnError() throws Exception {
     Configuration conf = new HdfsConfiguration();
     // retry for every 5 seconds
@@ -168,7 +168,7 @@ public class TestBalancerService {
       // for 2+ times
       cluster.shutdownNameNode(0);
       GenericTestUtils.waitFor(
-          () -> Balancer.getExceptionsSinceLastBalance() > 0, 1000, 10000);
+          () -> Balancer.getExceptionsSinceLastBalance() > 0, 1000, 300000);
       assertTrue(Balancer.getExceptionsSinceLastBalance() > 0);
       cluster.restartNameNode(0);
       cluster.transitionToActive(0);

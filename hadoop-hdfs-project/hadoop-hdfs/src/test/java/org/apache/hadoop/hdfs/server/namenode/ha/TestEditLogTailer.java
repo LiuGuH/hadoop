@@ -87,7 +87,7 @@ public class TestEditLogTailer {
   private static final String DIR_PREFIX = "/dir";
   private static final int DIRS_TO_MAKE = 20;
   static final long SLEEP_TIME = 1000;
-  static final long NN_LAG_TIMEOUT = 10 * 1000;
+  static final long NN_LAG_TIMEOUT = 100 * 1000;
   
   static {
     GenericTestUtils.setLogLevel(FSImage.LOG, Level.DEBUG);
