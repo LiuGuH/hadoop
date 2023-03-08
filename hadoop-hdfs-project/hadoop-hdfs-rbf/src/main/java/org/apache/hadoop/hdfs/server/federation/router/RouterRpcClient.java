@@ -65,6 +65,7 @@ import org.apache.hadoop.hdfs.client.HdfsClientConfigKeys;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.SnapshotException;
 import org.apache.hadoop.hdfs.server.federation.fairness.RouterRpcFairnessPolicyController;
+import org.apache.hadoop.hdfs.server.federation.metrics.AsyncCallerPoolMetrics;
 import org.apache.hadoop.hdfs.server.federation.metrics.ClientConnectionsMetrics;
 import org.apache.hadoop.hdfs.server.federation.resolver.ActiveNamenodeResolver;
 import org.apache.hadoop.hdfs.server.federation.resolver.FederationNamenodeContext;
@@ -216,6 +217,7 @@ public class RouterRpcClient {
         failoverSleepBaseMillis, failoverSleepMaxMillis);
 
     new ClientConnectionsMetrics(this);
+    new AsyncCallerPoolMetrics(this);
   }
 
   private class RefreshFairnessPolicyControllerThread extends Thread {
@@ -326,6 +328,7 @@ public class RouterRpcClient {
   private void shutdownMetrics() {
     MetricsSystem ms = DefaultMetricsSystem.instance();
     ms.unregisterSource(ClientConnectionsMetrics.class.getName());
+    ms.unregisterSource(AsyncCallerPoolMetrics.class.getName());
   }
 
   /**
@@ -1823,5 +1826,9 @@ public class RouterRpcClient {
 
   public Map<String, LongAdder> getAcceptedPermitsPerNsUser() {
     return acceptedPermitsPerNsUser;
+  }
+
+  public ThreadPoolExecutor getExecutorService() {
+    return executorService;
   }
 }
