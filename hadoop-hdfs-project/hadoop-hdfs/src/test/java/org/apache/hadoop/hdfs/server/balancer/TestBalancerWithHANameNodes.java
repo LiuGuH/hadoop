@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.balancer;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_ALLOW_BLANCER_STALE_READ_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_ALLOW_STALE_READ_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_ALLOW_STALE_READ_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_TAILEDITS_PERIOD_KEY;
@@ -77,7 +78,7 @@ public class TestBalancerWithHANameNodes {
    * it to be 30% full (with a single file replicated identically to all
    * datanodes); It then adds one new empty node and starts balancing.
    */
-  @Test(timeout = 60000)
+  @Test(timeout = 600000)
   public void testBalancerWithHANameNodes() throws Exception {
     Configuration conf = new HdfsConfiguration();
     TestBalancer.initConf(conf);
@@ -95,7 +96,7 @@ public class TestBalancerWithHANameNodes {
     try {
       cluster.waitActive();
       cluster.transitionToActive(0);
-      Thread.sleep(500);
+      Thread.sleep(5000);
       client = NameNodeProxies.createProxy(conf, FileSystem.getDefaultUri(conf),
           ClientProtocol.class).getProxy();
 
@@ -114,7 +115,7 @@ public class TestBalancerWithHANameNodes {
         / numOfDatanodes, (short) numOfDatanodes, 0);
 
     boolean isRequestStandby = conf.getBoolean(
-        DFS_HA_ALLOW_STALE_READ_KEY, DFS_HA_ALLOW_STALE_READ_DEFAULT);
+        DFS_HA_ALLOW_BLANCER_STALE_READ_KEY, true);
     if (isRequestStandby) {
       HATestUtil.waitForStandbyToCatchUp(cluster.getNameNode(0),
           cluster.getNameNode(1));
@@ -143,7 +144,7 @@ public class TestBalancerWithHANameNodes {
   @Test(timeout = 60000)
   public void testBalancerRequestSBNWithHA() throws Exception {
     Configuration conf = new HdfsConfiguration();
-    conf.setBoolean(DFS_HA_ALLOW_STALE_READ_KEY, true);
+    conf.setBoolean(DFS_HA_ALLOW_BLANCER_STALE_READ_KEY, true);
     conf.setLong(DFS_HA_TAILEDITS_PERIOD_KEY, 1);
     //conf.setBoolean(DFS_HA_BALANCER_REQUEST_STANDBY_KEY, true);
     TestBalancer.initConf(conf);

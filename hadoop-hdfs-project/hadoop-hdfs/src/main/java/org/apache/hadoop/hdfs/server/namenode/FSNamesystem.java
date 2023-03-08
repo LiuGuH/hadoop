@@ -659,6 +659,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private String nameNodeHostName = null;
 
   /**
+   * allow balancer read from snn
+   */
+  private boolean allowBalancerStaleReads = false;
+
+  /**
    * HDFS-14497: Concurrency control when many metaSave request to write
    * meta to same out stream after switch to read lock.
    */
@@ -1046,6 +1051,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       Preconditions.checkArgument(blockDeletionIncrement > 0,
           DFSConfigKeys.DFS_NAMENODE_BLOCK_DELETION_INCREMENT_KEY +
               " must be a positive integer.");
+
+      this.allowBalancerStaleReads = conf.getBoolean(
+              DFSConfigKeys.DFS_HA_ALLOW_BLANCER_STALE_READ_KEY,
+              DFSConfigKeys.DFS_HA_ALLOW_BLANCER_STALE_READ_DEFAULT);
     } catch(IOException e) {
       LOG.error(getClass().getSimpleName() + " initialization failed.", e);
       close();
@@ -1887,10 +1896,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   public BlocksWithLocations getBlocks(DatanodeID datanode, long size, long
       minimumBlockSize) throws IOException {
-    checkOperation(OperationCategory.READ);
+    // allow read from snn
+    if (!allowBalancerStaleReads) {
+      checkOperation(OperationCategory.READ);
+    }
     readLock();
     try {
-      checkOperation(OperationCategory.READ);
+      if (!allowBalancerStaleReads) {
+        checkOperation(OperationCategory.READ);
+      }
       return getBlockManager().getBlocksWithLocations(datanode, size,
           minimumBlockSize);
     } finally {

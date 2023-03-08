@@ -147,11 +147,11 @@ public class NameNodeConnector implements Closeable {
 
   private final BalancerProtocols namenode;
   /**
-   * If set requestToStandby true, Balancer will getBlocks from
+   * If set allowBalancerStaleReads true, Balancer will getBlocks from
    * Standby NameNode only and it can reduce the performance impact of Active
    * NameNode, especially in a busy HA mode cluster.
    */
-  private boolean requestToStandby;
+  private boolean allowBalancerStaleReads;
   private String nsId;
   private Configuration config;
   private final KeyManager keyManager;
@@ -190,9 +190,9 @@ public class NameNodeConnector implements Closeable {
 
     this.namenode = NameNodeProxies.createProxy(conf, nameNodeUri,
         BalancerProtocols.class, fallbackToSimpleAuth).getProxy();
-    this.requestToStandby = conf.getBoolean(
-        DFSConfigKeys.DFS_HA_ALLOW_STALE_READ_KEY,
-        DFSConfigKeys.DFS_HA_ALLOW_STALE_READ_DEFAULT);
+    this.allowBalancerStaleReads = conf.getBoolean(
+        DFSConfigKeys.DFS_HA_ALLOW_BLANCER_STALE_READ_KEY,
+        DFSConfigKeys.DFS_HA_ALLOW_BLANCER_STALE_READ_DEFAULT);
     this.config = conf;
 
     this.fs = (DistributedFileSystem)FileSystem.get(nameNodeUri, conf);
@@ -256,7 +256,7 @@ public class NameNodeConnector implements Closeable {
     boolean isRequestStandby = false;
     NamenodeProtocol nnproxy = null;
     try {
-      if (requestToStandby && nsId != null
+      if (allowBalancerStaleReads && nsId != null
           && HAUtil.isHAEnabled(config, nsId)) {
         List<ClientProtocol> namenodes =
             HAUtil.getProxiesForAllNameNodesInNameservice(config, nsId);
@@ -284,10 +284,11 @@ public class NameNodeConnector implements Closeable {
       } else {
         nnproxy = namenode;
       }
+      LOG.info("Request #getBlocks to NameNode: " + RPC.getServerAddress(nnproxy));
       return nnproxy.getBlocks(datanode, size, minBlockSize);
     } finally {
       if (isRequestStandby) {
-        LOG.info("Request #getBlocks to Standby NameNode success.");
+        LOG.info("Request #getBlocks to Standby NameNode success. Address: " + RPC.getServerAddress(nnproxy));
       }
     }
   }

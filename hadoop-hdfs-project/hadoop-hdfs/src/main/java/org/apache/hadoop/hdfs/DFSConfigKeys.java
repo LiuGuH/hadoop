@@ -1241,6 +1241,9 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String DFS_HA_ALLOW_STALE_READ_KEY =
       "dfs.ha.allow.stale.reads";
   public static final boolean DFS_HA_ALLOW_STALE_READ_DEFAULT = false;
+  public static final String DFS_HA_ALLOW_BLANCER_STALE_READ_KEY =
+          "dfs.ha.allow.balancer.stale.reads";
+  public static final boolean DFS_HA_ALLOW_BLANCER_STALE_READ_DEFAULT = false;
 
   // Security-related configs
   public static final String DFS_ENCRYPT_DATA_TRANSFER_KEY = "dfs.encrypt.data.transfer";
