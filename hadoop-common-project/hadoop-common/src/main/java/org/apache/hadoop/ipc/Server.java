@@ -585,8 +585,27 @@ public abstract class Server {
         details.get(Timing.PROCESSING, rpcMetrics.getMetricsTimeUnit());
     long waitTime =
         details.get(Timing.LOCKWAIT, rpcMetrics.getMetricsTimeUnit());
+    long freeTime =
+        details.get(Timing.LOCKFREE, rpcMetrics.getMetricsTimeUnit());
+    long exclusiveTime =
+        details.get(Timing.LOCKEXCLUSIVE, rpcMetrics.getMetricsTimeUnit());
+    long sharedTime =
+        details.get(Timing.LOCKSHARED, rpcMetrics.getMetricsTimeUnit());
+    long enqueueTime =
+        details.get(Timing.ENQUEUE, rpcMetrics.getMetricsTimeUnit());
+    long handlerTime =
+        details.get(Timing.HANDLER, rpcMetrics.getMetricsTimeUnit());
+    long responseTime =
+        details.get(Timing.RESPONSE, rpcMetrics.getMetricsTimeUnit());
     rpcMetrics.addRpcLockWaitTime(waitTime);
     rpcMetrics.addRpcProcessingTime(processingTime);
+    rpcMetrics.addRpcLockFreeTime(freeTime);
+    rpcMetrics.addRpcLockExclusiveTime(exclusiveTime);
+    rpcMetrics.addRpcLockSharedTime(sharedTime);
+    rpcMetrics.addRpcEnqueueTime(enqueueTime);
+    rpcMetrics.addRpcHandlerTime(handlerTime);
+    rpcMetrics.addRpcResponseTime(responseTime);
+
     // don't include lock wait for detailed metrics.
     processingTime -= waitTime;
     String name = call.getDetailedMetricsName();
@@ -1724,7 +1743,8 @@ public abstract class Server {
         }
       } finally {
         if (error && call != null) {
-          LOG.warn(Thread.currentThread().getName()+", call " + call + ": output error");
+          LOG.info("[Warning] "+Thread.currentThread().getName()+", call " + call + ": output error");
+          rpcMetrics.incrRpcResponseError();
           done = true;               // error. no more data for this channel.
           closeConnection(call.connection);
         }

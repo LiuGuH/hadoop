@@ -73,10 +73,23 @@ public class RpcMetrics {
           new MutableQuantiles[intervals.length];
       rpcLockWaitTimeQuantiles =
           new MutableQuantiles[intervals.length];
+      rpcLockFreeTimeQuantiles =
+          new MutableQuantiles[intervals.length];
+      rpcLockSharedTimeQuantiles =
+          new MutableQuantiles[intervals.length];
+      rpcLockExclusiveTimeQuantiles =
+          new MutableQuantiles[intervals.length];
       rpcProcessingTimeQuantiles =
           new MutableQuantiles[intervals.length];
       deferredRpcProcessingTimeQuantiles =
           new MutableQuantiles[intervals.length];
+      rpcEnqueueTimeQuantiles =
+          new MutableQuantiles[intervals.length];
+      rpcHandlerTimeQuantiles =
+          new MutableQuantiles[intervals.length];
+      rpcResponseTimeQuantiles =
+          new MutableQuantiles[intervals.length];
+
       for (int i = 0; i < intervals.length; i++) {
         int interval = intervals[i];
         rpcQueueTimeQuantiles[i] = registry.newQuantiles("rpcQueueTime"
@@ -86,6 +99,18 @@ public class RpcMetrics {
             "rpcLockWaitTime" + interval + "s",
             "rpc lock wait time in " + metricsTimeUnit, "ops",
             "latency", interval);
+        rpcLockFreeTimeQuantiles[i] = registry.newQuantiles(
+            "rpcLockFreeTime" + interval + "s",
+            "rpc lock free time in " + metricsTimeUnit, "ops",
+            "latency", interval);
+        rpcLockSharedTimeQuantiles[i] = registry.newQuantiles(
+            "rpcLockSharedTime" + interval + "s",
+            "rpc lock share time in " + metricsTimeUnit, "ops",
+            "latency", interval);
+        rpcLockExclusiveTimeQuantiles[i] = registry.newQuantiles(
+            "rpcLockExclusiveTime" + interval + "s",
+            "rpc lock exclusive time in " + metricsTimeUnit, "ops",
+            "latency", interval);
         rpcProcessingTimeQuantiles[i] = registry.newQuantiles(
             "rpcProcessingTime" + interval + "s",
             "rpc processing time in " + metricsTimeUnit, "ops",
@@ -93,6 +118,18 @@ public class RpcMetrics {
         deferredRpcProcessingTimeQuantiles[i] = registry.newQuantiles(
             "deferredRpcProcessingTime" + interval + "s",
             "deferred rpc processing time in " + metricsTimeUnit, "ops",
+            "latency", interval);
+        rpcEnqueueTimeQuantiles[i] = registry.newQuantiles(
+            "rpcEnqueueTime" + interval + "s",
+            "rpc enqueue time in " + metricsTimeUnit, "ops",
+            "latency", interval);
+        rpcHandlerTimeQuantiles[i] = registry.newQuantiles(
+            "rpcHandlerTime" + interval + "s",
+            "rpc handler time in " + metricsTimeUnit, "ops",
+            "latency", interval);
+        rpcResponseTimeQuantiles[i] = registry.newQuantiles(
+            "rpcResponseTime" + interval + "s",
+            "rpc response time in " + metricsTimeUnit, "ops",
             "latency", interval);
       }
     }
@@ -112,10 +149,22 @@ public class RpcMetrics {
   MutableQuantiles[] rpcQueueTimeQuantiles;
   @Metric("Lock wait time") MutableRate rpcLockWaitTime;
   MutableQuantiles[] rpcLockWaitTimeQuantiles;
+  @Metric("Lock free time") MutableRate rpcLockFreeTime;
+  MutableQuantiles[] rpcLockFreeTimeQuantiles;
+  @Metric("Lock shared time") MutableRate rpcLockSharedTime;
+  MutableQuantiles[] rpcLockSharedTimeQuantiles;
+  @Metric("Lock exclusive time") MutableRate rpcLockExclusiveTime;
+  MutableQuantiles[] rpcLockExclusiveTimeQuantiles;
   @Metric("Processing time") MutableRate rpcProcessingTime;
   MutableQuantiles[] rpcProcessingTimeQuantiles;
   @Metric("Deferred Processing time") MutableRate deferredRpcProcessingTime;
   MutableQuantiles[] deferredRpcProcessingTimeQuantiles;
+  @Metric("Enqueue time") MutableRate rpcEnqueueTime;
+  MutableQuantiles[] rpcEnqueueTimeQuantiles;
+  @Metric("Handler time") MutableRate rpcHandlerTime;
+  MutableQuantiles[] rpcHandlerTimeQuantiles;
+  @Metric("Response time") MutableRate rpcResponseTime;
+  MutableQuantiles[] rpcResponseTimeQuantiles;
   @Metric("Number of authentication failures")
   MutableCounterLong rpcAuthenticationFailures;
   @Metric("Number of authentication successes")
@@ -128,6 +177,8 @@ public class RpcMetrics {
   MutableCounterLong rpcClientBackoff;
   @Metric("Number of Slow RPC calls")
   MutableCounterLong rpcSlowCalls;
+  @Metric("Number of rpc response outpur error")
+  MutableCounterLong rpcResponseError;
 
   @Metric("Number of open connections") public int numOpenConnections() {
     return server.getNumOpenConnections();
@@ -252,6 +303,32 @@ public class RpcMetrics {
     }
   }
 
+  public void addRpcLockFreeTime(long waitTime) {
+    rpcLockFreeTime.add(waitTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcLockFreeTimeQuantiles) {
+        q.add(waitTime);
+      }
+    }
+  }
+
+  public void addRpcLockSharedTime(long waitTime) {
+    rpcLockSharedTime.add(waitTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcLockSharedTimeQuantiles) {
+        q.add(waitTime);
+      }
+    }
+  }
+
+  public void addRpcLockExclusiveTime(long waitTime) {
+    rpcLockExclusiveTime.add(waitTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcLockExclusiveTimeQuantiles) {
+        q.add(waitTime);
+      }
+    }
+  }
   /**
    * Add an RPC processing time sample
    * @param processingTime the processing time
@@ -274,6 +351,32 @@ public class RpcMetrics {
     }
   }
 
+  public void addRpcEnqueueTime(long processingTime) {
+    rpcEnqueueTime.add(processingTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcEnqueueTimeQuantiles) {
+        q.add(processingTime);
+      }
+    }
+  }
+
+  public void addRpcHandlerTime(long processingTime) {
+    rpcHandlerTime.add(processingTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcHandlerTimeQuantiles) {
+        q.add(processingTime);
+      }
+    }
+  }
+
+  public void addRpcResponseTime(long processingTime) {
+    rpcResponseTime.add(processingTime);
+    if (rpcQuantileEnable) {
+      for (MutableQuantiles q : rpcResponseTimeQuantiles) {
+        q.add(processingTime);
+      }
+    }
+  }
   /**
    * One client backoff event
    */
@@ -287,6 +390,10 @@ public class RpcMetrics {
    */
   public  void incrSlowRpc() {
     rpcSlowCalls.incr();
+  }
+
+  public  void incrRpcResponseError() {
+    rpcResponseError.incr();
   }
   /**
    * Returns a MutableRate Counter.
