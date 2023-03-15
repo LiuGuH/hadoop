@@ -12,12 +12,14 @@ import org.apache.hadoop.metrics2.MetricsSystem;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.Interns;
 
+import java.util.HashMap;
 import java.util.Map;
 
 
 public class ClientConnectionsMetrics implements MetricsSource {
 
   private RouterRpcClient routerRpcClient;
+  Map<ConnectionPoolId, ConnectionPool> forMetrics = new HashMap<>();
 
   public ClientConnectionsMetrics(RouterRpcClient routerRpcClient) {
     this.routerRpcClient = routerRpcClient;
@@ -32,8 +34,8 @@ public class ClientConnectionsMetrics implements MetricsSource {
   public void getMetrics(MetricsCollector collector, boolean all) {
     MetricsRecordBuilder rb = collector.addRecord(ClientConnectionsMetrics.class.getName())
         .setContext("dfs");
-    for (Map.Entry<ConnectionPoolId, ConnectionPool> entry :
-        routerRpcClient.getConnectionManager().getPools().entrySet()) {
+    forMetrics.putAll(routerRpcClient.getConnectionManager().getPools());
+    for (Map.Entry<ConnectionPoolId, ConnectionPool> entry : forMetrics.entrySet()) {
       ConnectionPoolId connectionPoolId = entry.getKey();
       ConnectionPool pool = entry.getValue();
       ClientConnectionBean bean = new ClientConnectionBean();
@@ -48,7 +50,7 @@ public class ClientConnectionsMetrics implements MetricsSource {
       rb.addGauge(buildRpcClientConnectionsIdle(bean), bean.getIdle());
       rb.addGauge(buildRpcClientConnectionsTotal(bean), bean.getTotal());
     }
-
+    forMetrics.clear();
   }
 
   private MetricsInfo buildRpcClientConnectionsActive(ClientConnectionBean bean) {
