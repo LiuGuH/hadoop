@@ -85,6 +85,7 @@ import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.net.ConnectTimeoutException;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
+import org.apache.hadoop.util.Time;
 import org.eclipse.jetty.util.ajax.JSON;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1641,7 +1642,14 @@ public class RouterRpcClient {
       final RemoteMethod m, RouterRpcFairnessPolicyController controller)
       throws IOException {
     if (controller != null) {
-      if (!controller.acquirePermit(nsId)) {
+      long startTime = Time.monotonicNowNanos();
+      boolean result = controller.acquirePermit(nsId);
+      long deltaNanos = Time.monotonicNowNanos() - startTime;
+      if (rpcMonitor != null) {
+        rpcMonitor.getRPCMetrics().addPermitProcessing(deltaNanos);
+      }
+
+      if (!result) {
         // Throw StandByException,
         // Clients could fail over and try another router.
         if (rpcMonitor != null) {
@@ -1666,7 +1674,14 @@ public class RouterRpcClient {
       throws IOException {
     if (controller != null) {
       String user = ugi.getUserName();
-      if (!controller.acquireUserPermit(nsId, user)) {
+      long startTime = Time.monotonicNowNanos();
+      boolean result = controller.acquireUserPermit(nsId, user);
+      long deltaNanos = Time.monotonicNowNanos() - startTime;
+      if (rpcMonitor != null) {
+        rpcMonitor.getRPCMetrics().addUserPermitProcessing(deltaNanos);
+      }
+
+      if (!result) {
         // Throw StandByException,
         // Clients could fail over and try another router.
         if (rpcMonitor != null) {
