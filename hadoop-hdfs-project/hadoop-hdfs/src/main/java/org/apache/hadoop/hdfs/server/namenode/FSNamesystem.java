@@ -390,6 +390,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
   @Metric final MutableRate checkPermissionProcessingTime =
       registry.newRate("checkPermissionProcessingTime");
+  @Metric final MutableRate logAuditEventProcessingTime =
+      registry.newRate("logAuditEventProcessingTime");
 
   private final String contextFieldSeparator;
 
@@ -405,10 +407,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   
   private void logAuditEvent(boolean succeeded, String cmd, String src,
       String dst, FileStatus stat) throws IOException {
+    long start = Time.monotonicNowNanos();
     if (isAuditEnabled() && isExternalInvocation()) {
       logAuditEvent(succeeded, Server.getRemoteUser(), Server.getRemoteIp(), Server.getRemotePort(),
           cmd, src, dst, stat);
     }
+    logAuditEventProcessingTime.add(Time.monotonicNowNanos() - start);
   }
 
   private void logAuditEvent(boolean succeeded, String cmd, String src,
@@ -8751,6 +8755,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
   public MutableRate getCheckPermissionProcessingTime() {
     return checkPermissionProcessingTime;
+  }
+
+  public MutableRate getLogAuditEventProcessingTime() {
+    return logAuditEventProcessingTime;
   }
 }
 
