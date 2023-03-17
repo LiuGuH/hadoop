@@ -63,6 +63,13 @@ public interface HAContext {
    */
   void writeUnlock();
 
+
+  /**
+   * Unlock the lock taken by {@link #writeLock()}
+   * @param opName operation name which unlocks write lock.
+   */
+  void writeUnlock(String opName);
+
   /**
    * Verify that the given operation category is allowed in the current state.
    * This is to allow NN implementations (eg BackupNode) to override it with

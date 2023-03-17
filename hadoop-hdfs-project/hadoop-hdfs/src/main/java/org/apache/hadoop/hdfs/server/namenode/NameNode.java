@@ -2124,6 +2124,12 @@ public class NameNode extends ReconfigurableBase implements
       namesystem.unlockRetryCache();
       namesystem.writeUnlock();
     }
+
+    @Override
+    public void writeUnlock(String opName) {
+      namesystem.unlockRetryCache();
+      namesystem.writeUnlock(opName);
+    }
     
     /** Check if an operation of given category is allowed */
     @Override
