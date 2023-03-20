@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode.top.metrics;
 
+import org.apache.hadoop.hdfs.server.namenode.ExtensionInfo;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -125,24 +126,26 @@ public class TopMetrics implements MetricsSource {
    * @param src
    * @param dst
    * @param status
+   * @param extensionInfo
    */
   public void report(boolean succeeded, String userName, InetAddress addr,
-      String cmd, String src, String dst, FileStatus status) {
+      String cmd, String src, String dst, FileStatus status, ExtensionInfo extensionInfo) {
     // currently nntop only makes use of the username and the command
-    report(userName, cmd);
+    report(userName, cmd, extensionInfo);
   }
 
-  public void report(String userName, String cmd) {
+  public void report(String userName, String cmd, ExtensionInfo extensionInfo) {
     long currTime = Time.monotonicNow();
-    report(currTime, userName, cmd);
+    report(currTime, userName, cmd, extensionInfo);
   }
 
-  public void report(long currTime, String userName, String cmd) {
+  public void report(long currTime, String userName, String cmd, ExtensionInfo extensionInfo) {
+    int numBlocks = extensionInfo == null ? 1 : extensionInfo.getNumBlocks() > 0 ? extensionInfo.getNumBlocks() : 1;
     LOG.debug("a metric is reported: cmd: {} user: {}", cmd, userName);
     userName = UserGroupInformation.trimLoginMethod(userName);
     for (RollingWindowManager rollingWindowManager : rollingWindowManagers
         .values()) {
-      rollingWindowManager.recordMetric(currTime, cmd, userName, 1);
+      rollingWindowManager.recordMetric(currTime, cmd, userName, numBlocks);
     }
   }
 

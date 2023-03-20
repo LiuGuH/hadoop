@@ -52,9 +52,10 @@ public interface AuditLogger {
    * @param dst Path of affected destination file (if any).
    * @param stat File information for operations that change the file's
    *             metadata (permissions, owner, times, etc).
+   * @param extensionInfo the block nums associated with cmd. if no needs blocknums, default value
+   *                       would be 0.
    */
   void logAuditEvent(boolean succeeded, String userName,
       InetAddress addr, int port, String cmd, String src, String dst,
-      FileStatus stat);
-
+      FileStatus stat, ExtensionInfo extensionInfo);
 }
