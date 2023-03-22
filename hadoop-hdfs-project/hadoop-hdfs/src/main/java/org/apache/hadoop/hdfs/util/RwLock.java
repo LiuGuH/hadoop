@@ -40,6 +40,8 @@ public interface RwLock {
   /** Release write lock. */
   public void writeUnlock();
 
+  public void writeUnlock(String opName);
+
   /** Check if the current thread holds write lock. */
   public boolean hasWriteLock();
 }
