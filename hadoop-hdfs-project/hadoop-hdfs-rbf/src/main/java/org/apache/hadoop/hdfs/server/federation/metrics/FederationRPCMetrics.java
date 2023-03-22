@@ -24,9 +24,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.federation.fairness.FairnessControllerMetrics;
 import org.apache.hadoop.hdfs.server.federation.router.RouterRpcServer;
 import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.NumOpenConnectionsPerUserMetrics;
-import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.bean.LiveDataNodeBean;
-import org.apache.hadoop.metrics2.MetricsRecordBuilder;
-import org.apache.hadoop.metrics2.MetricsSource;
 import org.apache.hadoop.metrics2.MetricsSystem;
 import org.apache.hadoop.metrics2.annotation.Metric;
 import org.apache.hadoop.metrics2.annotation.Metrics;
@@ -54,6 +51,11 @@ public class FederationRPCMetrics implements FederationRPCMBean {
   private MutableRate proxy;
   @Metric("Number of operations the Router proxied to a Namenode")
   private MutableCounterLong proxyOp;
+
+  @Metric("Time for the try to accquire user Permit")
+  private MutableRate userPermitProcessing;
+  @Metric("Time for the try to accquire Permit")
+  private MutableRate permitProcessing;
 
   @Metric("Number of operations to fail to reach NN")
   private MutableCounterLong proxyOpFailureStandby;
@@ -291,6 +293,13 @@ public class FederationRPCMetrics implements FederationRPCMBean {
     processingOp.incr();
   }
 
+  public void addUserPermitProcessing(long time) {
+    userPermitProcessing.add(time);
+  }
+
+  public void addPermitProcessing(long time) {
+    permitProcessing.add(time);
+  }
   @Override
   public double getProcessingAvg() {
     return processing.lastStat().mean();
