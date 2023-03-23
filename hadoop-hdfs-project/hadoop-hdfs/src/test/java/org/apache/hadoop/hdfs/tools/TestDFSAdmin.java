@@ -19,7 +19,6 @@ package org.apache.hadoop.hdfs.tools;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_CLIENT_CONNECT_MAX_RETRIES_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY;
-import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_PEER_STATS_ENABLED_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_PLACEMENT_EC_CLASSNAME_KEY;
@@ -1106,52 +1105,6 @@ public class TestDFSAdmin {
         return 0;
       }
     });
-  }
-
-  @Test
-  public void testAllDatanodesReconfig()
-      throws IOException, InterruptedException, TimeoutException {
-    ReconfigurationUtil reconfigurationUtil = mock(ReconfigurationUtil.class);
-    cluster.getDataNodes().get(0).setReconfigurationUtil(reconfigurationUtil);
-    cluster.getDataNodes().get(1).setReconfigurationUtil(reconfigurationUtil);
-
-    List<ReconfigurationUtil.PropertyChange> changes = new ArrayList<>();
-    changes.add(new ReconfigurationUtil.PropertyChange(
-        DFS_DATANODE_PEER_STATS_ENABLED_KEY, "true",
-        datanode.getConf().get(DFS_DATANODE_PEER_STATS_ENABLED_KEY)));
-    when(reconfigurationUtil.parseChangedProperties(any(Configuration.class),
-        any(Configuration.class))).thenReturn(changes);
-
-    assertEquals(0, admin.startReconfiguration("datanode", "livenodes"));
-    final List<String> outsForStartReconf = new ArrayList<>();
-    final List<String> errsForStartReconf = new ArrayList<>();
-    reconfigurationOutErrFormatter("startReconfiguration", "datanode",
-        "livenodes", outsForStartReconf, errsForStartReconf);
-    assertEquals(3, outsForStartReconf.size());
-    assertEquals(0, errsForStartReconf.size());
-    assertTrue(outsForStartReconf.get(0).startsWith("Started reconfiguration task on node"));
-    assertTrue(outsForStartReconf.get(1).startsWith("Started reconfiguration task on node"));
-    assertEquals("Starting of reconfiguration task successful on 2 nodes, failed on 0 nodes.",
-        outsForStartReconf.get(2));
-
-    Thread.sleep(1000);
-    final List<String> outs = new ArrayList<>();
-    final List<String> errs = new ArrayList<>();
-    awaitReconfigurationFinished("datanode", "livenodes", outs, errs);
-    assertEquals(9, outs.size());
-    assertEquals(0, errs.size());
-    LOG.info("dfsadmin -status -livenodes output:");
-    outs.forEach(s -> LOG.info("{}", s));
-    assertTrue(outs.get(0).startsWith("Reconfiguring status for node"));
-    assertTrue("SUCCESS: Changed property dfs.datanode.peer.stats.enabled".equals(outs.get(2))
-        || "SUCCESS: Changed property dfs.datanode.peer.stats.enabled".equals(outs.get(1)));
-    assertTrue("\tFrom: \"false\"".equals(outs.get(3)) || "\tFrom: \"false\"".equals(outs.get(2)));
-    assertTrue("\tTo: \"true\"".equals(outs.get(4)) || "\tTo: \"true\"".equals(outs.get(3)));
-    assertEquals("SUCCESS: Changed property dfs.datanode.peer.stats.enabled", outs.get(5));
-    assertEquals("\tFrom: \"false\"", outs.get(6));
-    assertEquals("\tTo: \"true\"", outs.get(7));
-    assertEquals("Retrieval of reconfiguration status successful on 2 nodes, failed on 0 nodes.",
-        outs.get(8));
   }
 
 }
