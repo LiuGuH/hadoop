@@ -93,7 +93,8 @@ public class TestInterDatanodeProtocol {
     }
 
     @Override
-    public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param, long receiveTime)
+    public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param, long receiveTime,
+                         String ip, String user)
         throws IOException {
       if (sleep) {
         // sleep a bit

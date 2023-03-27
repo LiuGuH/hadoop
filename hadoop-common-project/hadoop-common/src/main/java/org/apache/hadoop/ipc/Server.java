@@ -1065,7 +1065,7 @@ public abstract class Server {
 
       try {
         value = call(
-            rpcKind, connection.protocolName, rpcRequest, timestampNanos);
+            rpcKind, connection.protocolName, rpcRequest, timestampNanos, connection.getHostAddress(), connection.user.getShortUserName());
       } catch (Throwable e) {
         populateResponseParamsOnError(e, responseParams);
       }
@@ -3626,17 +3626,16 @@ public abstract class Server {
   
   /** 
    * Called for each call. 
-   * @deprecated Use  {@link #call(RPC.RpcKind, String,
-   *  Writable, long)} instead
+   * @deprecated Use  {@link #call(RPC.RpcKind, String, Writable, long, String, String)} instead
    */
   @Deprecated
   public Writable call(Writable param, long receiveTime) throws Exception {
-    return call(RPC.RpcKind.RPC_BUILTIN, null, param, receiveTime);
+    return call(RPC.RpcKind.RPC_BUILTIN, null, param, receiveTime, null, null);
   }
   
   /** Called for each call. */
   public abstract Writable call(RPC.RpcKind rpcKind, String protocol,
-      Writable param, long receiveTime) throws Exception;
+      Writable param, long receiveTime, String ip, String user) throws Exception;
   
   /**
    * Authorize the incoming client connection.

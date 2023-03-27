@@ -91,7 +91,7 @@ public class TestIPCServerResponder {
 
     @Override
     public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param,
-        long receiveTime) throws IOException {
+        long receiveTime, String ip, String user) throws IOException {
       if (sleep) {
         try {
           Thread.sleep(RANDOM.nextInt(20)); // sleep a bit
@@ -201,7 +201,7 @@ public class TestIPCServerResponder {
     Server server = new Server(ADDRESS, 0, IntWritable.class, 1, conf){
       @Override
       public Writable call(RPC.RpcKind rpcKind, String protocol,
-          Writable waitCount, long receiveTime) throws IOException {
+          Writable waitCount, long receiveTime, String ip, String user) throws IOException {
         Call call = Server.getCurCall().get();
         int wait = ((IntWritable)waitCount).get();
         while (wait-- > 0) {

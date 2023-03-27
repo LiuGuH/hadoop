@@ -539,7 +539,7 @@ public class ProtobufRpcEngine2 implements RpcEngine {
        * </ol>
        */
       public Writable call(RPC.Server server, String connectionProtocolName,
-          Writable writableRequest, long receiveTime) throws Exception {
+          Writable writableRequest, long receiveTime, String ip, String user) throws Exception {
         RpcProtobufRequest request = (RpcProtobufRequest) writableRequest;
         RequestHeaderProto rpcRequest = request.getRequestHeader();
         String methodName = rpcRequest.getMethodName();
@@ -563,6 +563,9 @@ public class ProtobufRpcEngine2 implements RpcEngine {
         String declaringClassProtoName =
             rpcRequest.getDeclaringClassProtocolName();
         long clientVersion = rpcRequest.getClientProtocolVersion();
+
+        RpcRateLimiter.getInstance()
+            .rateLimit(connectionProtocolName, methodName, ip, user);
         return call(server, connectionProtocolName, request, receiveTime,
             methodName, declaringClassProtoName, clientVersion);
       }

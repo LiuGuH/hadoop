@@ -142,7 +142,7 @@ public class TestServer {
       @Override
       public Writable call(
           RPC.RpcKind rpcKind, String protocol, Writable param,
-          long receiveTime) throws Exception {
+          long receiveTime, String ip, String user) throws Exception {
         return null;
       }
     };
@@ -197,7 +197,7 @@ public class TestServer {
       @Override
       public Writable call(
               RPC.RpcKind rpcKind, String protocol, Writable param,
-              long receiveTime) throws Exception {
+              long receiveTime, String ip, String user) throws Exception {
         return null;
       }
     };
