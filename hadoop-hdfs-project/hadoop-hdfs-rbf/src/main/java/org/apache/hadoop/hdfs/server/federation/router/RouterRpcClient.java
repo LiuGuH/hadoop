@@ -94,12 +94,14 @@ import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTest
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import static org.apache.hadoop.hdfs.server.federation.fairness.AbstractRouterRpcFairnessPolicyController.combineNsIdUser;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_NS_HANDLER_CONFIG;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT;
 import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_CONFIG;
 import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT;
 
 /**
  * A client proxy for Router to NN communication using the NN ClientProtocol.
@@ -236,26 +238,31 @@ public class RouterRpcClient {
     @Override
     public void run() {
       LOG.info("RefreshFairnessPolicyControllerThread start.");
-      String oldValue = null;
+      String userHandlerOld = BzlDynamicConfiguration.getInstance()
+          .get(DFS_ROUTER_FAIR_USER_HANDLER_CONFIG,
+              DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT);
+      String nsHandlerOld = BzlDynamicConfiguration.getInstance()
+          .get(DFS_ROUTER_FAIR_NS_HANDLER_CONFIG,
+              DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT);;
 
       while (true) {
         if (BzlDynamicConfiguration.getInstance()
-            .getBoolean(DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE,
-                DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT)) {
-          if (oldValue == null) {
-            oldValue = BzlDynamicConfiguration.getInstance()
-                .get(DFS_ROUTER_FAIR_USER_HANDLER_CONFIG,
-                    DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT);
-          }
-          String newValue = BzlDynamicConfiguration.getInstance()
+            .getBoolean(DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE,
+                DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT)) {
+          String userHandlerNew = BzlDynamicConfiguration.getInstance()
               .get(DFS_ROUTER_FAIR_USER_HANDLER_CONFIG,
                   DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT);
 
+          String nsHandlerNew = BzlDynamicConfiguration.getInstance()
+              .get(DFS_ROUTER_FAIR_NS_HANDLER_CONFIG,
+                  DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT);
+
           try {
-            if (!oldValue.equals(newValue)) {
-              LOG.info(" Refreshes/changes the fairness policy controller implementation.");
+            if (!userHandlerOld.equals(userHandlerNew) || !nsHandlerOld.equals(nsHandlerNew)) {
+              LOG.info("Refreshes/changes the fairness policy controller implementation.");
               routerRpcClient.refreshFairnessPolicyController(conf);
-              oldValue = newValue;
+              userHandlerOld = userHandlerNew;
+              nsHandlerOld = nsHandlerNew;
             }
           } catch (Exception e) {
             LOG.warn("RefreshFairnessPolicyControllerThread catch exception. The detail is {}.",
@@ -265,8 +272,8 @@ public class RouterRpcClient {
 
         try {
           Thread.sleep(BzlDynamicConfiguration.getInstance()
-              .getLong(DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD,
-                  DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT));
+              .getLong(DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD,
+                  DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT));
         } catch (InterruptedException e) {
           LOG.warn(
               "RefreshFairnessPolicyControllerThread interruptedException. The detail is {}.",
