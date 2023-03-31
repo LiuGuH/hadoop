@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.hdfs.server.namenode.metrics.BzlProtectedDirectoriesMetrics;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -17,10 +18,13 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES;
 
 public class BzlProtectedDirectoriesUpdater {
   static final Logger LOG = LoggerFactory.getLogger(BzlProtectedDirectoriesUpdater.class);
@@ -28,14 +32,19 @@ public class BzlProtectedDirectoriesUpdater {
   private static class ProtectedDirectoriesUpdateThread extends Thread {
     private long updatePeriod;
     private String protectedDirectoriesBzlRemoteUrl;
+    private BzlProtectedDirectoriesMetrics bzlProtectedDirectoriesMetrics;
+    private List<String> protectedDirectoriesListInCoresite;
 
     private ProtectedDirectoriesUpdateThread(Configuration conf) {
+      bzlProtectedDirectoriesMetrics = BzlProtectedDirectoriesMetrics.create();
       this.updatePeriod = conf.getLong(
           CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_PERIOD,
           60 * 1000);
       this.protectedDirectoriesBzlRemoteUrl = conf
           .get(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_URL, "");
       this.setDaemon(true);
+      this.protectedDirectoriesListInCoresite =
+          (List<String>) conf.getStringCollection(FS_PROTECTED_DIRECTORIES);
     }
 
     @Override
@@ -77,12 +86,15 @@ public class BzlProtectedDirectoriesUpdater {
 
         if (httpResponse.getStatusLine().getStatusCode() == 200) {
           resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
+          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchSuccesses();
         }
       } catch (IOException e) {
         LOG.warn("IOException error! The detail message is {}.", e.getMessage());
+        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
         return null;
       } catch (URISyntaxException e) {
         LOG.warn("URISyntaxException error! The detail message is {}.", e.getMessage());
+        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
         return null;
       } finally {
         try {
@@ -108,11 +120,24 @@ public class BzlProtectedDirectoriesUpdater {
       Gson gson = new Gson();
       Map<String, Map<String, List<String>>> rs = gson.fromJson(json, Map.class);
       Map<String, List<String>> allData = rs.get("data");
+      int remoteProtectedDirectoriesNums = 0;
       if (allData != null) {
+          List<String> remoteProtectedDirectoriesList = new ArrayList<>();
         for (Map.Entry<String, List<String>> item : allData.entrySet()) {
-          remoteProtectedDirectories.addAll(item.getValue());
+          List<String> itemList = item.getValue();
+          remoteProtectedDirectoriesNums += itemList.size();
+          remoteProtectedDirectoriesList.addAll(itemList);
         }
+
+        if (!remoteProtectedDirectoriesList.containsAll(protectedDirectoriesListInCoresite)) {
+          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckFailures();
+          return remoteProtectedDirectories;
+        }
+
+        remoteProtectedDirectories.addAll(remoteProtectedDirectoriesList);
       }
+      bzlProtectedDirectoriesMetrics.setBzlProtectedDirectoriesNums(remoteProtectedDirectoriesNums);
+      bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckSuccesses();
       return remoteProtectedDirectories;
     }
   }
