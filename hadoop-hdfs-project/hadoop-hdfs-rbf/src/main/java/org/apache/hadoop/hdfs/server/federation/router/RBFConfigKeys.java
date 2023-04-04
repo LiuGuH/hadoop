@@ -356,12 +356,15 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final long   DFS_ROUTER_FAIRNESS_ACQUIRE_TIMEOUT_DEFAULT =
       TimeUnit.SECONDS.toMillis(1);
 
+  //单条格式（user:handlercount），多条之间以逗号进行分隔
   public static final String DFS_ROUTER_FAIR_USER_HANDLER_CONFIG =
       FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.config";
 
   public static final String DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT =
       "trino:10000,other:10000";
 
+  //单条格式（nameservice:handlercount），多条之间以逗号进行分隔
+  //如果nameservice是无效的值，则不会占用handler数
   public static final String DFS_ROUTER_FAIR_NS_HANDLER_CONFIG =
       FEDERATION_ROUTER_FAIRNESS_PREFIX + "ns.handler.config";
   public static final String DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT =
