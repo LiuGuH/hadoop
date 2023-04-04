@@ -362,15 +362,20 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final String DFS_ROUTER_FAIR_USER_HANDLER_CONFIG_DEFAULT =
       "trino:10000,other:10000";
 
-  public static final String DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE =
-      FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.dynamic.update.enable";
+  public static final String DFS_ROUTER_FAIR_NS_HANDLER_CONFIG =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "ns.handler.config";
+  public static final String DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT =
+      "nsPlaceholder:0";
 
-  public static final Boolean DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT =
+  public static final String DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "handler.dynamic.update.enable";
+
+  public static final Boolean DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_ENABLE_DEFAULT =
       false;
 
-  public static final String DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD =
-      FEDERATION_ROUTER_FAIRNESS_PREFIX + "user.handler.dynamic.update.period";
+  public static final String DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD =
+      FEDERATION_ROUTER_FAIRNESS_PREFIX + "handler.dynamic.update.period";
 
-  public static final Long DFS_ROUTER_FAIR_USER_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT =
+  public static final Long DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT =
       30000l;
 }

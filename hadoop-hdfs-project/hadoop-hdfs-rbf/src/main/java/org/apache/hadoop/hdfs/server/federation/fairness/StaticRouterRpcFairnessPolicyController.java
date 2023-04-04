@@ -18,18 +18,22 @@
 
 package org.apache.hadoop.hdfs.server.federation.fairness;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.federation.router.FederationUtil;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Set;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Set;
 
 import static org.apache.hadoop.hdfs.server.federation.fairness.RouterRpcFairnessConstants.CONCURRENT_NS;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_HANDLER_COUNT_KEY;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_NS_HANDLER_CONFIG;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT;
 import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_HANDLER_COUNT_DEFAULT;
-import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_FAIR_HANDLER_COUNT_KEY_PREFIX;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_HANDLER_COUNT_KEY;
 
 /**
  * Static fairness policy extending @AbstractRouterRpcFairnessPolicyController
@@ -46,12 +50,15 @@ public class StaticRouterRpcFairnessPolicyController extends
       + DFS_ROUTER_HANDLER_COUNT_KEY + '='
       + " %d is less than the minimum required handlers %d";
 
+  private HashMap<String, Integer> nsHandlerCount = new HashMap<>();
+
   public StaticRouterRpcFairnessPolicyController(Configuration conf) {
     init(conf);
   }
 
   public void init(Configuration conf) throws IllegalArgumentException {
     super.init(conf);
+    initNsHandlerCount();
     // Total handlers configured to process all incoming Rpc.
     int handlerCount = conf.getInt(DFS_ROUTER_HANDLER_COUNT_KEY, DFS_ROUTER_HANDLER_COUNT_DEFAULT);
 
@@ -66,9 +73,9 @@ public class StaticRouterRpcFairnessPolicyController extends
 
     // Insert the concurrent nameservice into the set to process together
     allConfiguredNS.add(CONCURRENT_NS);
-    validateHandlersCount(conf, handlerCount, allConfiguredNS);
+    validateHandlersCount(handlerCount, allConfiguredNS);
     for (String nsId : allConfiguredNS) {
-      int dedicatedHandlers = conf.getInt(DFS_ROUTER_FAIR_HANDLER_COUNT_KEY_PREFIX + nsId, 0);
+      int dedicatedHandlers = nsHandlerCount.getOrDefault(nsId, 0);
       LOG.info("Dedicated handlers {} for ns {} ", dedicatedHandlers, nsId);
       if (dedicatedHandlers > 0) {
         handlerCount -= dedicatedHandlers;
@@ -102,15 +109,40 @@ public class StaticRouterRpcFairnessPolicyController extends
     LOG.info("Final permit allocation for concurrent ns: {}", getAvailablePermits(CONCURRENT_NS));
   }
 
+  private void initNsHandlerCount() {
+    String configNsHandler =
+        BzlDynamicConfiguration.getInstance().get(DFS_ROUTER_FAIR_NS_HANDLER_CONFIG,
+            DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT);
+    if (StringUtils.isEmpty(configNsHandler)) {
+      LOG.error(
+          "The config key: {} is incorrect! The value is empty.",
+          DFS_ROUTER_FAIR_NS_HANDLER_CONFIG);
+      configNsHandler = DFS_ROUTER_FAIR_NS_HANDLER_CONFIG_DEFAULT;
+    }
+
+    String nsHandlers[] = configNsHandler.split(",");
+    for (String nsHandlerInfo : nsHandlers) {
+      String nsHandlerItems[] = nsHandlerInfo.split(":");
+
+      if (nsHandlerItems.length != 2 || StringUtils.isBlank(nsHandlerItems[0]) ||
+          !StringUtils.isNumeric(nsHandlerItems[1])) {
+        LOG.error("The config key: {} is incorrect! The value is {}.",
+            DFS_ROUTER_FAIR_NS_HANDLER_CONFIG, nsHandlerInfo);
+        continue;
+      }
+      nsHandlerCount.put(nsHandlerItems[0], Integer.parseInt(nsHandlerItems[1]));
+    }
+  }
+
   private static void logAssignment(String nsId, int count) {
     LOG.info("Assigned {} handlers to nsId {} ", count, nsId);
   }
 
-  private void validateHandlersCount(Configuration conf,
+  private void validateHandlersCount(
       int handlerCount, Set<String> allConfiguredNS) {
     int totalDedicatedHandlers = 0;
     for (String nsId : allConfiguredNS) {
-      int dedicatedHandlers = conf.getInt(DFS_ROUTER_FAIR_HANDLER_COUNT_KEY_PREFIX + nsId, 0);
+      int dedicatedHandlers = nsHandlerCount.getOrDefault(nsId, 0);
       if (dedicatedHandlers > 0) {
         // Total handlers should not be less than sum of dedicated handlers.
         totalDedicatedHandlers += dedicatedHandlers;
