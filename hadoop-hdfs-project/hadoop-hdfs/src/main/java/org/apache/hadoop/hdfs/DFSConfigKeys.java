@@ -445,6 +445,9 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.datanode.processcommands.threshold";
   public static final long DFS_DATANODE_PROCESS_COMMANDS_THRESHOLD_DEFAULT =
       TimeUnit.SECONDS.toMillis(2);
+  public static final String DFS_DATANODE_NETWORKERRORS_DISPLAY_TOPCOUNT =
+      "dfs.datanode.networkerrors.display.topcount";
+  public static final int DFS_DATANODE_NETWORKERRORS_DISPLAY_TOPCOUNT_DEFAULT = 10;
 
   public static final String DFS_NAMENODE_DATANODE_REGISTRATION_IP_HOSTNAME_CHECK_KEY = "dfs.namenode.datanode.registration.ip-hostname-check";
   public static final boolean DFS_NAMENODE_DATANODE_REGISTRATION_IP_HOSTNAME_CHECK_DEFAULT = true;
