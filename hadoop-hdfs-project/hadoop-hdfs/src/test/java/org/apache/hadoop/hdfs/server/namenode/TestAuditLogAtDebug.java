@@ -69,7 +69,7 @@ public class TestAuditLogAtDebug {
     logger.logAuditEvent(true, "",
                          Inet4Address.getLoopbackAddress(), 0,
                          command, "", "",
-                         null, null, null, null);
+                         null, null, null, null, -1234L);
   }
 
   @Test

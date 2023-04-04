@@ -83,7 +83,7 @@ public abstract class DefaultAuditLogger extends HdfsAuditLogger {
 
   public abstract void logAuditEvent(boolean succeeded, String userName,
       InetAddress addr, int port, String cmd, String src, String dst, FileStatus status,
-      UserGroupInformation ugi, DelegationTokenSecretManager dtSecretManager);
+      UserGroupInformation ugi, DelegationTokenSecretManager dtSecretManager, long totalRpcTime);
 
   public abstract void logAuditEvent(boolean succeeded, String userName,
       InetAddress addr, int port, String cmd, String src, String dst, FileStatus status,

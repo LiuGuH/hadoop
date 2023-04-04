@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.namenode.top;
 
 import java.net.InetAddress;
 
+import org.apache.hadoop.hdfs.server.namenode.ExtensionInfo;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
@@ -66,9 +67,10 @@ public class TopAuditLogger implements AuditLogger {
 
   @Override
   public void logAuditEvent(boolean succeeded, String userName,
-      InetAddress addr, int port, String cmd, String src, String dst, FileStatus status) {
+      InetAddress addr, int port, String cmd, String src, String dst, FileStatus status,
+      ExtensionInfo extensionInfo) {
     try {
-      topMetrics.report(succeeded, userName, addr, cmd, src, dst, status);
+      topMetrics.report(succeeded, userName, addr, cmd, src, dst, status, extensionInfo);
     } catch (Throwable t) {
       LOG.error("An error occurred while reflecting the event in top service, "
           + "event: (cmd={},userName={})", cmd, userName);
@@ -90,6 +92,10 @@ public class TopAuditLogger implements AuditLogger {
         sb.append(status.getOwner()).append(":");
         sb.append(status.getGroup()).append(":");
         sb.append(status.getPermission());
+      }
+      if (extensionInfo != null) {
+        sb.append("\t").append("extentsionInfo=");
+        sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
       }
       LOG.debug("------------------- logged event for top service: " + sb);
     }

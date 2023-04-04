@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.namenode.metrics;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.server.namenode.ExtensionInfo;
 import org.apache.hadoop.hdfs.server.namenode.top.TopConf;
 import org.apache.hadoop.hdfs.server.namenode.top.metrics.TopMetrics;
 import org.apache.hadoop.metrics2.MetricsCollector;
@@ -41,9 +42,9 @@ public class TestTopMetrics {
     TopMetrics topMetrics = new TopMetrics(conf,
         topConf.nntopReportingPeriodsMs);
     // Dummy command
-    topMetrics.report("test", "listStatus");
-    topMetrics.report("test", "listStatus");
-    topMetrics.report("test", "listStatus");
+    topMetrics.report("test", "listStatus",null);
+    topMetrics.report("test", "listStatus", null);
+    topMetrics.report("test", "listStatus", null);
 
     MetricsRecordBuilder rb = getMetrics(topMetrics);
     MetricsCollector mc = rb.parent();

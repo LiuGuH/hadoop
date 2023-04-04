@@ -222,6 +222,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.tools.proto.GetUserMappingsProtocolProtos.GetUserMappingsProtocolService;
 import org.apache.hadoop.tools.protocolPB.GetUserMappingsProtocolPB;
 import org.apache.hadoop.tools.protocolPB.GetUserMappingsProtocolServerSideTranslatorPB;
+import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.util.VersionUtil;
 import org.slf4j.Logger;
@@ -1770,6 +1771,7 @@ public class NameNodeRpcServer implements NamenodeProtocols {
 
   @Override // RefreshAuthorizationPolicyProtocol
   public void refreshServiceAcl() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkNNStartup();
     if (!serviceAuthEnabled) {
       throw new AuthorizationException("Service Level Authorization not enabled!");
@@ -1779,27 +1781,30 @@ public class NameNodeRpcServer implements NamenodeProtocols {
     if (this.serviceRpcServer != null) {
       this.serviceRpcServer.refreshServiceAcl(new Configuration(), new HDFSPolicyProvider());
     }
-    namesystem.logAuditEvent(true, "refreshServiceAcl", null);
+    namesystem.logAuditEvent(true, "refreshServiceAcl", null, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override // RefreshAuthorizationPolicyProtocol
   public void refreshUserToGroupsMappings() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     LOG.info("Refreshing all user-to-groups mappings. Requested by user: " +
         getRemoteUser().getShortUserName());
     Groups.getUserToGroupsMappingService().refresh();
-    namesystem.logAuditEvent(true, "refreshUserToGroupsMappings", null);
+    namesystem.logAuditEvent(true, "refreshUserToGroupsMappings", null, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override // RefreshAuthorizationPolicyProtocol
   public void refreshSuperUserGroupsConfiguration() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     LOG.info("Refreshing SuperUser proxy group mapping list ");
 
     ProxyUsers.refreshSuperUserGroupsConfiguration();
-    namesystem.logAuditEvent(true, "refreshSuperUserGroupsConfiguration", null);
+    namesystem.logAuditEvent(true, "refreshSuperUserGroupsConfiguration", null, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override // RefreshCallQueueProtocol
   public void refreshCallQueue() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     LOG.info("Refreshing call queue.");
 
     Configuration conf = new Configuration();
@@ -1807,7 +1812,7 @@ public class NameNodeRpcServer implements NamenodeProtocols {
     if (this.serviceRpcServer != null) {
       serviceRpcServer.refreshCallQueue(conf);
     }
-    namesystem.logAuditEvent(true, "refreshCallQueue", null);
+    namesystem.logAuditEvent(true, "refreshCallQueue", null, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override // GenericRefreshProtocol
@@ -2628,31 +2633,34 @@ public class NameNodeRpcServer implements NamenodeProtocols {
 
   @Override // ReconfigurationProtocol
   public void startReconfiguration() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkNNStartup();
     String operationName = "startNamenodeReconfiguration";
     namesystem.checkSuperuserPrivilege(operationName);
     nn.startReconfigurationTask();
-    namesystem.logAuditEvent(true, operationName, null);
+    namesystem.logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override // ReconfigurationProtocol
   public ReconfigurationTaskStatus getReconfigurationStatus()
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkNNStartup();
     String operationName = "getNamenodeReconfigurationStatus";
     namesystem.checkSuperuserPrivilege(operationName);
     ReconfigurationTaskStatus status = nn.getReconfigurationTaskStatus();
-    namesystem.logAuditEvent(true, operationName, null);
+    namesystem.logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return status;
   }
 
   @Override // ReconfigurationProtocol
   public List<String> listReconfigurableProperties() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkNNStartup();
     String operationName = "listNamenodeReconfigurableProperties";
     namesystem.checkSuperuserPrivilege(operationName);
     List<String> result = Lists.newArrayList(nn.getReconfigurableProperties());
-    namesystem.logAuditEvent(true, operationName, null);
+    namesystem.logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return result;
   }
 

@@ -32,6 +32,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.DatanodeReportType;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.util.Time;
 
 /**
  * This class is used in Namesystem's web server to do fsck on namenode.
@@ -45,6 +46,7 @@ public class FsckServlet extends DfsServlet {
   @Override
   public void doGet(HttpServletRequest request, HttpServletResponse response
       ) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     @SuppressWarnings("unchecked")
     final Map<String,String[]> pmap = request.getParameterMap();
     final PrintWriter out = response.getWriter();
@@ -72,7 +74,8 @@ public class FsckServlet extends DfsServlet {
           fsck.fsck();
           success = true;
         } finally {
-          namesystem.logFsckEvent(success, auditSource, remoteAddress, remotePort);
+          namesystem.logFsckEvent(success, auditSource, remoteAddress, remotePort,
+              Time.monotonicNowNanos() - startNanos);
         }
         return null;
       });

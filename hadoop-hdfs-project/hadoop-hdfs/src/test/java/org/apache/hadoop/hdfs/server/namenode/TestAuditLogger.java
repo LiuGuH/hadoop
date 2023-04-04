@@ -95,16 +95,17 @@ public class TestAuditLogger {
       ".*allowed=.*?\\s" +
       "ugi=.*?\\s" +
       "ip=/\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s" +
+      "port=\\d+\\s" +
       "cmd=.*?\\ssrc=.*?\\sdst=null\\s" +
-      "perm=.*?");
+      "perm=.*?\\s" + "totalTime=\\d+");
   private static final Pattern AUDIT_WITH_PORT_PATTERN = Pattern.compile(
       ".*allowed=.*?\\s" +
       "ugi=.*?\\s" +
-      "ip=/\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s" +
+      "ip=/\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\s" + "port=\\d+\\s" +
       "cmd=.*?\\ssrc=.*?\\sdst=null\\s" +
       "perm=.*?" +
       "proto=.*?" +
-      "callerContext=.*?clientPort\\:(\\d{0,9}).*?");
+      "callerContext=.*?clientPort\\:(\\d{0,9}).*?" + "totalTime=\\d+");
 
   @Before
   public void setup() {
@@ -162,7 +163,7 @@ public class TestAuditLogger {
       cluster.shutdown();
     }
   }
-
+  // we disabled webhdfs, so this UT can not pass.
   @Test
   public void testWebHdfsAuditLogger() throws IOException, URISyntaxException {
     Configuration conf = new HdfsConfiguration();
@@ -272,8 +273,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.setTimes(p, time, time);
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setTimes%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setTimes")));
       auditlog.clearOutput();
 
       // context with signature
@@ -283,8 +284,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.setTimes(p, time, time);
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setTimes:L%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setTimes:L")));
       auditlog.clearOutput();
 
       // long context is truncated
@@ -295,8 +296,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.setTimes(p, time, time);
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=%s:L%n", longContext.substring(0, 128))));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=%s:L", longContext.substring(0, 128))));
       auditlog.clearOutput();
 
       // empty context is ignored
@@ -332,8 +333,8 @@ public class TestAuditLogger {
       } catch (InterruptedException ignored) {
         // Ignore
       }
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setTimes:L%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setTimes:L")));
       auditlog.clearOutput();
 
       // caller context is overridden in child thread
@@ -360,8 +361,8 @@ public class TestAuditLogger {
       } catch (InterruptedException ignored) {
         // Ignore
       }
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setPermission:L%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setPermission:L")));
       auditlog.clearOutput();
 
       // reuse the current context's signature
@@ -370,8 +371,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.mkdirs(new Path("/reuse-context-signature"));
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=mkdirs:L%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=mkdirs:L")));
       auditlog.clearOutput();
 
       // too long signature is ignored
@@ -381,8 +382,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.setTimes(p, time, time);
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setTimes%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setTimes")));
       auditlog.clearOutput();
 
       // null signature is ignored
@@ -391,8 +392,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.setTimes(p, time, time);
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=setTimes%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=setTimes")));
       auditlog.clearOutput();
 
       // empty signature is ignored
@@ -402,8 +403,8 @@ public class TestAuditLogger {
       CallerContext.setCurrent(context);
       LOG.info("Set current caller context as {}", CallerContext.getCurrent());
       fs.mkdirs(new Path("/empty-signature"));
-      assertTrue(auditlog.getOutput().endsWith(
-          String.format("callerContext=mkdirs%n")));
+      assertTrue(auditlog.getOutput().contains(
+          String.format("callerContext=mkdirs")));
       auditlog.clearOutput();
 
       // invalid context is not passed to the rpc
@@ -619,7 +620,7 @@ public class TestAuditLogger {
 
     public void logAuditEvent(boolean succeeded, String userName,
         InetAddress addr, int port, String cmd, String src, String dst,
-        FileStatus stat) {
+        FileStatus stat, ExtensionInfo extensionInfo) {
       remoteAddr = addr.getHostAddress();
       logCount++;
       if (!succeeded) {
@@ -645,7 +646,7 @@ public class TestAuditLogger {
 
     public void logAuditEvent(boolean succeeded, String userName,
         InetAddress addr, int port, String cmd, String src, String dst,
-        FileStatus stat) {
+        FileStatus stat, ExtensionInfo extensionInfo) {
       if (!cmd.equals("datanodeReport")) {
         throw new RuntimeException("uh oh");
       }

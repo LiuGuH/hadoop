@@ -400,23 +400,36 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         && !auditLoggers.isEmpty();
   }
 
-  void logAuditEvent(boolean succeeded, String cmd, String src)
+  void logAuditEvent(boolean succeeded, String cmd, String src, long totalRpcTime)
       throws IOException {
-    logAuditEvent(succeeded, cmd, src, null, null);
+    logAuditEvent(succeeded, cmd, src, null, null, totalRpcTime);
   }
-  
+
+  void logAuditEvent(boolean succeeded, String cmd, String src, long totalRpcTime, ExtensionInfo extensionInfo)
+      throws IOException {
+    logAuditEvent(succeeded, cmd, src, null, null, totalRpcTime, extensionInfo);
+  }
+
   private void logAuditEvent(boolean succeeded, String cmd, String src,
-      String dst, FileStatus stat) throws IOException {
+       String dst, FileStatus stat, long totalRpcTime) throws IOException {
     long start = Time.monotonicNowNanos();
     if (isAuditEnabled() && isExternalInvocation()) {
       logAuditEvent(succeeded, Server.getRemoteUser(), Server.getRemoteIp(), Server.getRemotePort(),
-          cmd, src, dst, stat);
+          cmd, src, dst, stat, totalRpcTime);
     }
     logAuditEventProcessingTime.add(Time.monotonicNowNanos() - start);
   }
 
   private void logAuditEvent(boolean succeeded, String cmd, String src,
-      HdfsFileStatus stat) throws IOException {
+       String dst, FileStatus stat, long totalRpcTime, ExtensionInfo extensionInfo) throws IOException {
+    if (isAuditEnabled() && isExternalInvocation()) {
+      logAuditEvent(succeeded, Server.getRemoteUser(), Server.getRemoteIp(), Server.getRemotePort(),
+          cmd, src, dst, stat, totalRpcTime, extensionInfo);
+    }
+  }
+
+  private void logAuditEvent(boolean succeeded, String cmd, String src,
+                             HdfsFileStatus stat, long totalRpcTime) throws IOException {
     if (!isAuditEnabled() || !isExternalInvocation()) {
       return;
     }
@@ -432,12 +445,18 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           stat.getAccessTime(), stat.getPermission(), stat.getOwner(),
           stat.getGroup(), symlink, path);
     }
-    logAuditEvent(succeeded, cmd, src, null, status);
+    logAuditEvent(succeeded, cmd, src, null, status, totalRpcTime);
+  }
+
+  private void logAuditEvent(boolean succeeded,
+       UserGroupInformation ugi, InetAddress addr, int port, String cmd, String src,
+       String dst, FileStatus status, long totalRpcTime) {
+    logAuditEvent(succeeded, ugi, addr, port, cmd, src, dst, status, totalRpcTime, null);
   }
 
   private void logAuditEvent(boolean succeeded,
       UserGroupInformation ugi, InetAddress addr, int port, String cmd, String src,
-      String dst, FileStatus status) {
+      String dst, FileStatus status, long totalRpcTime, ExtensionInfo extensionInfo) {
     final String ugiStr = ugi.toString();
     for (AuditLogger logger : auditLoggers) {
       if (logger instanceof HdfsAuditLogger) {
@@ -446,9 +465,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           appendClientPortToCallerContextIfAbsent();
         }
         hdfsLogger.logAuditEvent(succeeded, ugiStr, addr, port, cmd, src, dst,
-            status, CallerContext.getCurrent(), ugi, dtSecretManager);
+            status, CallerContext.getCurrent(), ugi, dtSecretManager, totalRpcTime, extensionInfo);
       } else {
-        logger.logAuditEvent(succeeded, ugiStr, addr, port, cmd, src, dst, status);
+        logger.logAuditEvent(succeeded, ugiStr, addr, port, cmd, src, dst, status, extensionInfo);
       }
     }
   }
@@ -1921,6 +1940,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @param filename
    */
   void metaSave(String filename) throws IOException {
+    long start = Time.monotonicNowNanos();
     String operationName = "metaSave";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.READ);
@@ -1939,7 +1959,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - start);
   }
 
   private void metaSave(PrintWriter out) {
@@ -1967,6 +1987,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   BatchedListEntries<OpenFileEntry> listOpenFiles(long prevId,
       EnumSet<OpenFilesType> openFilesTypes, String path) throws IOException {
+    long start = Time.monotonicNowNanos();
     INode.checkAbsolutePath(path);
     final String operationName = "listOpenFiles";
     checkSuperuserPrivilege();
@@ -1992,10 +2013,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, null);
+      logAuditEvent(false, operationName, null, Time.monotonicNowNanos() - start);
       throw e;
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - start);
     return batchedListEntries;
   }
 
@@ -2073,6 +2094,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws IOException
    */
   void setPermission(String src, FsPermission permission) throws IOException {
+    long start = Time.monotonicNowNanos();
     final String operationName = "setPermission";
     FileStatus auditStat;
     checkOperation(OperationCategory.WRITE);
@@ -2088,11 +2110,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - start);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - start);
   }
 
   /**
@@ -2104,6 +2126,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void setOwner(String src, String username, String group)
       throws IOException {
+    long start = Time.monotonicNowNanos();
     final String operationName = "setOwner";
     FileStatus auditStat;
     checkOperation(OperationCategory.WRITE);
@@ -2119,11 +2142,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - start);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - start);
   }
 
   /**
@@ -2132,6 +2155,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   LocatedBlocks getBlockLocations(String clientMachine, String srcArg,
       long offset, long length) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "open";
     checkOperation(OperationCategory.READ);
     GetBlockLocationsResult res = null;
@@ -2173,11 +2197,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, srcArg);
+      logAuditEvent(false, operationName, srcArg, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
 
-    logAuditEvent(true, operationName, srcArg);
+    logAuditEvent(true, operationName, srcArg, Time.monotonicNowNanos() - startNanos);
 
     if (!isInSafeMode() && res.updateAccessTime()) {
       String src = srcArg;
@@ -2244,6 +2268,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void concat(String target, String [] srcs, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "concat";
     FileStatus stat = null;
     final FSPermissionChecker pc = getPermissionChecker();
@@ -2260,11 +2285,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, Arrays.toString(srcs),
-          target, stat);
+          target, stat, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, Arrays.toString(srcs), target, stat);
+    logAuditEvent(true, operationName, Arrays.toString(srcs), target, stat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -2273,6 +2298,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * written to the edits log but is not flushed.
    */
   void setTimes(String src, long mtime, long atime) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setTimes";
     FileStatus auditStat;
     checkOperation(OperationCategory.WRITE);
@@ -2288,11 +2314,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -2307,7 +2333,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   boolean truncate(String src, long newLength, String clientName,
       String clientMachine, long mtime) throws IOException,
       UnresolvedLinkException {
-
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "truncate";
     requireEffectiveLayoutVersionForFeature(Feature.TRUNCATE);
     final FSDirTruncateOp.TruncateResult r;
@@ -2336,9 +2362,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         blockManager.addBLocksToMarkedDeleteQueue(
             toRemoveBlocks.getToDeleteList());
       }
-      logAuditEvent(true, operationName, src, null, r.getFileStatus());
+      logAuditEvent(true, operationName, src, null, r.getFileStatus(), Time.monotonicNowNanos() - startNanos);
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     return r.getResult();
@@ -2350,6 +2376,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void createSymlink(String target, String link,
       PermissionStatus dirPerms, boolean createParent, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "createSymlink";
     if (!FileSystem.areSymlinksEnabled()) {
       throw new UnsupportedOperationException("Symlinks not supported");
@@ -2368,11 +2395,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, link, target, null);
+      logAuditEvent(false, operationName, link, target, null, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, link, target, auditStat);
+    logAuditEvent(true, operationName, link, target, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -2391,6 +2418,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean setReplication(final String src, final short replication)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setReplication";
     boolean success = false;
     checkOperation(OperationCategory.WRITE);
@@ -2407,12 +2435,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     if (success) {
       getEditLog().logSync();
-      logAuditEvent(true, operationName, src);
+      logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     }
     return success;
   }
@@ -2446,6 +2474,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws  IOException
    */
   void setStoragePolicy(String src, String policyName) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setStoragePolicy";
     checkOperation(OperationCategory.WRITE);
     checkStoragePolicyEnabled("set storage policy", true);
@@ -2463,11 +2492,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -2478,6 +2507,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void satisfyStoragePolicy(String src, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "satisfyStoragePolicy";
     checkOperation(OperationCategory.WRITE);
     // make sure storage policy is enabled, otherwise
@@ -2496,11 +2526,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   private void validateStoragePolicySatisfy()
@@ -2526,6 +2556,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws  IOException
    */
   void unsetStoragePolicy(String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "unsetStoragePolicy";
     checkOperation(OperationCategory.WRITE);
     checkStoragePolicyEnabled("unset storage policy", true);
@@ -2542,11 +2573,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
   /**
    * Get the storage policy for a file or a directory.
@@ -2646,17 +2677,17 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       boolean createParent, short replication, long blockSize,
       CryptoProtocolVersion[] supportedVersions, String ecPolicyName,
       String storagePolicy, boolean logRetryCache) throws IOException {
-
+    long startNanos = Time.monotonicNowNanos();
     HdfsFileStatus status;
     try {
       status = startFileInt(src, permissions, holder, clientMachine, flag,
           createParent, replication, blockSize, supportedVersions, ecPolicyName,
           storagePolicy, logRetryCache);
     } catch (AccessControlException e) {
-      logAuditEvent(false, "create", src);
+      logAuditEvent(false, "create", src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, "create", src, status);
+    logAuditEvent(true, "create", src, status, Time.monotonicNowNanos() - startNanos);
     return status;
   }
 
@@ -2926,6 +2957,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   LastBlockWithStatus appendFile(String srcArg, String holder,
       String clientMachine, EnumSet<CreateFlag> flag, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "append";
     boolean newBlock = flag.contains(CreateFlag.NEW_BLOCK);
     if (newBlock) {
@@ -2958,10 +2990,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           getEditLog().logSync();
         }
       }
-      logAuditEvent(true, operationName, srcArg);
+      logAuditEvent(true, operationName, srcArg, Time.monotonicNowNanos() - startNanos);
       return lbs;
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, srcArg);
+      logAuditEvent(false, operationName, srcArg, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
   }
@@ -2989,6 +3021,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       String src, long fileId, String clientName, ExtendedBlock previous,
       DatanodeInfo[] excludedNodes, String[] favoredNodes,
       EnumSet<AddBlockFlag> flags) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getAdditionalBlock";
     NameNode.stateChangeLog.debug("BLOCK* getAdditionalBlock: {}  inodeId {}" +
         " for {}", src, fileId, clientName);
@@ -3027,7 +3060,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return lb;
   }
 
@@ -3240,6 +3273,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   @Deprecated
   boolean renameTo(String src, String dst, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "rename";
     FSDirRenameOp.RenameResult ret = null;
     checkOperation(OperationCategory.WRITE);
@@ -3255,13 +3289,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e)  {
-      logAuditEvent(false, operationName, src, dst, null);
+      logAuditEvent(false, operationName, src, dst, null, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     boolean success = ret.success;
     if (success) {
       getEditLog().logSync();
-      logAuditEvent(true, operationName, src, dst, ret.auditStat);
+      logAuditEvent(true, operationName, src, dst, ret.auditStat, Time.monotonicNowNanos() - startNanos);
     }
     return success;
   }
@@ -3269,6 +3303,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void renameTo(final String src, final String dst,
                 boolean logRetryCache, Options.Rename... options)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "rename";
     FSDirRenameOp.RenameResult res = null;
     checkOperation(OperationCategory.WRITE);
@@ -3286,7 +3321,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException e) {
       logAuditEvent(false, operationName + " (options=" +
-          Arrays.toString(options) + ")", src, dst, null);
+          Arrays.toString(options) + ")", src, dst, null, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
@@ -3298,7 +3333,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
 
     logAuditEvent(true, operationName + " (options=" +
-        Arrays.toString(options) + ")", src, dst, res.auditStat);
+        Arrays.toString(options) + ")", src, dst, res.auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -3309,6 +3344,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean delete(String src, boolean recursive, boolean logRetryCache)
       throws IOException {
+    long start = Time.monotonicNowNanos();
     final String operationName = "delete";
     BlocksMapUpdateInfo toRemovedBlocks = null;
     checkOperation(OperationCategory.WRITE);
@@ -3327,11 +3363,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - start);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(ret, operationName, src);
+    int toRemovedBlocksNum = 0;
+    if (toRemovedBlocks != null) {
+      toRemovedBlocksNum = toRemovedBlocks.getToDeleteList().size();
+    }
+    logAuditEvent(ret, operationName, src, Time.monotonicNowNanos() - start, new ExtensionInfo(toRemovedBlocksNum));
     if (toRemovedBlocks != null) {
       blockManager.addBLocksToMarkedDeleteQueue(
           toRemovedBlocks.getToDeleteList());
@@ -3392,6 +3432,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   HdfsFileStatus getFileInfo(final String src, boolean resolveLink,
       boolean needLocation, boolean needBlockToken) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     // if the client requests block tokens, then it can read data blocks
     // and should appear in the audit log as if getBlockLocations had been
     // called
@@ -3410,10 +3451,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return stat;
   }
 
@@ -3421,6 +3462,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * Returns true if the file is closed
    */
   boolean isFileClosed(final String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "isFileClosed";
     checkOperation(OperationCategory.READ);
     final FSPermissionChecker pc = getPermissionChecker();
@@ -3435,11 +3477,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     if (success) {
-      logAuditEvent(true, operationName, src);
+      logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     }
     return success;
   }
@@ -3449,6 +3491,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean mkdirs(String src, PermissionStatus permissions,
       boolean createParent) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "mkdirs";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -3465,11 +3508,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
     return true;
   }
 
@@ -3489,6 +3532,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   ContentSummary getContentSummary(final String src) throws IOException {
     checkOperation(OperationCategory.READ);
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "contentSummary";
     ContentSummary cs;
     final FSPermissionChecker pc = getPermissionChecker();
@@ -3502,10 +3546,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return cs;
   }
 
@@ -3524,6 +3568,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    *         or null if file not found
    */
   QuotaUsage getQuotaUsage(final String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.READ);
     final String operationName = "quotaUsage";
     QuotaUsage quotaUsage;
@@ -3538,10 +3583,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return quotaUsage;
   }
 
@@ -3554,6 +3599,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void setQuota(String src, long nsQuota, long ssQuota, StorageType type)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     if (type != null) {
       requireEffectiveLayoutVersionForFeature(Feature.QUOTA_BY_STORAGE_TYPE);
     }
@@ -3575,11 +3621,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
   }
 
   /** Persist all metadata about this file.
@@ -4094,6 +4140,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   DirectoryListing getListing(String src, byte[] startAfter,
       boolean needLocation) 
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.READ);
     final String operationName = "listStatus";
     DirectoryListing dl = null;
@@ -4108,10 +4155,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return dl;
   }
 
@@ -4128,7 +4175,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
   BatchedDirectoryListing getBatchedListing(String[] srcs, byte[] startAfter,
       boolean needLocation) throws IOException {
-
+    long startNanos = Time.monotonicNowNanos();
     if (srcs.length > this.batchedListingLimit) {
       String msg = String.format("Too many source paths (%d > %d)",
           srcs.length, batchedListingLimit);
@@ -4188,7 +4235,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           lastListing = dirListing;
         } catch (Exception e) {
           if (e instanceof AccessControlException) {
-            logAuditEvent(false, operationName, src);
+            logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
           }
           listing = new HdfsPartialListing(
               srcsIndex,
@@ -4252,8 +4299,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
+    long totalRpcTime = Time.monotonicNowNanos() - startNanos;
     for (int i = startSrcsIndex; i < srcsIndex; i++) {
-      logAuditEvent(true, operationName, srcs[i]);
+      logAuditEvent(true, operationName, srcs[i], totalRpcTime);
     }
     return bdl;
   }
@@ -4836,6 +4884,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
   DatanodeInfo[] datanodeReport(final DatanodeReportType type)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "datanodeReport";
     DatanodeInfo[] arr;
     checkSuperuserPrivilege(operationName);
@@ -4854,12 +4903,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return arr;
   }
 
   DatanodeStorageReport[] getDatanodeStorageReport(final DatanodeReportType type
       ) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "getDatanodeStorageReport";
     DatanodeStorageReport[] reports;
     checkSuperuserPrivilege(operationName);
@@ -4872,7 +4922,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return reports;
   }
 
@@ -4883,6 +4933,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean saveNamespace(final long timeWindow, final long txGap)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "saveNamespace";
     checkOperation(OperationCategory.UNCHECKED);
     checkSuperuserPrivilege(operationName);
@@ -4905,7 +4956,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     if (saved) {
       LOG.info("New namespace image has been created");
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return saved;
   }
   
@@ -4916,6 +4967,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws AccessControlException if superuser privilege is violated.
    */
   boolean restoreFailedStorage(String arg) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = getFailedStorageCommand(arg);
     boolean val = false;
     checkSuperuserPrivilege(operationName);
@@ -4936,7 +4988,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
       cpUnlock();
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return val;
   }
 
@@ -4945,6 +4997,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
     
   void finalizeUpgrade() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "finalizeUpgrade";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.UNCHECKED);
@@ -4957,18 +5010,20 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
       cpUnlock();
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
 
   void refreshNodes() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "refreshNodes";
     checkOperation(OperationCategory.UNCHECKED);
     checkSuperuserPrivilege(operationName);
     getBlockManager().getDatanodeManager().refreshNodes(new HdfsConfiguration());
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
   
   public void refreshTopology() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "refreshTopology";
     checkOperation(OperationCategory.UNCHECKED);
     checkSuperuserPrivilege(operationName);
@@ -4979,18 +5034,20 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       writeUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
 
   void setBalancerBandwidth(long bandwidth) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "setBalancerBandwidth";
     checkOperation(OperationCategory.WRITE);
     checkSuperuserPrivilege(operationName);
     getBlockManager().getDatanodeManager().setBalancerBandwidth(bandwidth);
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
 
   boolean setSafeMode(SafeModeAction action) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = action.toString().toLowerCase();
     boolean error = false;
     if (action != SafeModeAction.SAFEMODE_GET) {
@@ -5011,7 +5068,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     }
     if (!error) {
-      logAuditEvent(true, operationName, null);
+      logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     }
     return isInSafeMode();
   }
@@ -5148,6 +5205,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   CheckpointSignature rollEditLog() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "rollEditLog";
     CheckpointSignature result = null;
     checkSuperuserPrivilege(operationName);
@@ -5163,7 +5221,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       writeUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return result;
   }
 
@@ -6113,6 +6171,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   Token<DelegationTokenIdentifier> getDelegationToken(Text renewer)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getDelegationToken";
     final String tokenId;
     Token<DelegationTokenIdentifier> token;
@@ -6148,7 +6207,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, tokenId);
+    logAuditEvent(true, operationName, tokenId, Time.monotonicNowNanos() - startNanos);
     return token;
   }
 
@@ -6161,6 +6220,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   long renewDelegationToken(Token<DelegationTokenIdentifier> token)
       throws InvalidToken, IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "renewDelegationToken";
     String tokenId;
     long expiryTime;
@@ -6188,11 +6248,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } catch (AccessControlException ace) {
       final DelegationTokenIdentifier id = DFSUtil.decodeDelegationToken(token);
       tokenId = id.toStringStable();
-      logAuditEvent(false, operationName, tokenId);
+      logAuditEvent(false, operationName, tokenId, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, tokenId);
+    logAuditEvent(true, operationName, tokenId, Time.monotonicNowNanos() - startNanos);
     return expiryTime;
   }
 
@@ -6203,6 +6263,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void cancelDelegationToken(Token<DelegationTokenIdentifier> token)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "cancelDelegationToken";
     String tokenId;
     checkOperation(OperationCategory.WRITE);
@@ -6222,11 +6283,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } catch (AccessControlException ace) {
       final DelegationTokenIdentifier id = DFSUtil.decodeDelegationToken(token);
       tokenId = id.toStringStable();
-      logAuditEvent(false, operationName, tokenId);
+      logAuditEvent(false, operationName, tokenId, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, tokenId);
+    logAuditEvent(true, operationName, tokenId, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -6348,12 +6409,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @param remoteAddress Remote address of the request.
    * @throws IOException if {@link #getRemoteUser()} fails.
    */
-  void logFsckEvent(boolean succeeded, String src, InetAddress remoteAddress, int remotePort)
+  void logFsckEvent(boolean succeeded, String src, InetAddress remoteAddress, int remotePort, long totalRpcTime)
       throws IOException {
     if (isAuditEnabled()) {
       logAuditEvent(succeeded, getRemoteUser(),
                     remoteAddress, remotePort,
-                    "fsck", src, null, null);
+                    "fsck", src, null, null, totalRpcTime);
     }
   }
 
@@ -6932,6 +6993,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   
   /** Allow snapshot on a directory. */
   void allowSnapshot(String path) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.WRITE);
     final String operationName = "allowSnapshot";
     checkSuperuserPrivilege(operationName);
@@ -6944,11 +7006,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, path, null, null);
+    logAuditEvent(true, operationName, path, null, null, Time.monotonicNowNanos() - startNanos);
   }
   
   /** Disallow snapshot on a directory. */
   void disallowSnapshot(String path) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.WRITE);
     final String operationName = "disallowSnapshot";
     checkSuperuserPrivilege(operationName);
@@ -6961,7 +7024,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, path, null, null);
+    logAuditEvent(true, operationName, path, null, null, Time.monotonicNowNanos() - startNanos);
   }
   
   /**
@@ -6971,6 +7034,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   String createSnapshot(String snapshotRoot, String snapshotName,
                         boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.WRITE);
     final String operationName = "createSnapshot";
     String snapshotPath = null;
@@ -6987,12 +7051,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, snapshotRoot);
+      logAuditEvent(false, operationName, snapshotRoot, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
     logAuditEvent(true, operationName, snapshotRoot,
-        snapshotPath, null);
+        snapshotPath, null, Time.monotonicNowNanos() - startNanos);
     return snapshotPath;
   }
   
@@ -7007,6 +7071,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void renameSnapshot(
       String path, String snapshotOldName, String snapshotNewName,
       boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     checkOperation(OperationCategory.WRITE);
     final String operationName = "renameSnapshot";
     String oldSnapshotRoot = Snapshot.getSnapshotPath(path, snapshotOldName);
@@ -7025,12 +7090,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, oldSnapshotRoot,
-          newSnapshotRoot, null);
+          newSnapshotRoot, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
     logAuditEvent(true, operationName, oldSnapshotRoot,
-        newSnapshotRoot, null);
+        newSnapshotRoot, null, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -7042,6 +7107,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   public SnapshottableDirectoryStatus[] getSnapshottableDirListing()
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listSnapshottableDirectory";
     SnapshottableDirectoryStatus[] status = null;
     checkOperation(OperationCategory.READ);
@@ -7057,10 +7123,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, null, null, null);
+      logAuditEvent(false, operationName, null, null, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, null, null, null);
+    logAuditEvent(true, operationName, null, null, null, Time.monotonicNowNanos() - startNanos);
     return status;
   }
   
@@ -7103,7 +7169,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, fromSnapshotRoot,
-          toSnapshotRoot, null);
+          toSnapshotRoot, null, Time.monotonicNowNanos() - begTime);
       throw ace;
     }
     if (diffs != null) {
@@ -7123,7 +7189,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
 
     logAuditEvent(true, operationName, fromSnapshotRoot,
-        toSnapshotRoot, null);
+        toSnapshotRoot, null, Time.monotonicNowNanos() - begTime);
     return diffs;
   }
 
@@ -7154,6 +7220,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   SnapshotDiffReportListing getSnapshotDiffReportListing(String path,
       String fromSnapshot, String toSnapshot, byte[] startPath, int index)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "computeSnapshotDiff";
     SnapshotDiffReportListing diffs = null;
     checkOperation(OperationCategory.READ);
@@ -7178,11 +7245,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, fromSnapshotRoot, toSnapshotRoot,
-          null);
+          null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     logAuditEvent(true, operationName, fromSnapshotRoot, toSnapshotRoot,
-        null);
+        null, Time.monotonicNowNanos() - startNanos);
     return diffs;
   }
   
@@ -7195,6 +7262,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void deleteSnapshot(String snapshotRoot, String snapshotName,
       boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "deleteSnapshot";
     String rootPath = null;
     BlocksMapUpdateInfo blocksToBeDeleted = null;
@@ -7213,7 +7281,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, rootPath, null, null);
+      logAuditEvent(false, operationName, rootPath, null, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
@@ -7224,7 +7292,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       blockManager.addBLocksToMarkedDeleteQueue(
           blocksToBeDeleted.getToDeleteList());
     }
-    logAuditEvent(true, operationName, rootPath, null, null);
+    logAuditEvent(true, operationName, rootPath, null, null, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -7238,6 +7306,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   RollingUpgradeInfo queryRollingUpgrade() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "queryRollingUpgrade";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.READ);
@@ -7253,11 +7322,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
-    logAuditEvent(true, operationName, null, null, null);
+    logAuditEvent(true, operationName, null, null, null, Time.monotonicNowNanos() - startNanos);
     return rollingUpgradeInfo;
   }
 
   RollingUpgradeInfo startRollingUpgrade() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "startRollingUpgrade";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.WRITE);
@@ -7285,7 +7355,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
 
     getEditLog().logSync();
-    logAuditEvent(true, operationName, null, null, null);
+    logAuditEvent(true, operationName, null, null, null, Time.monotonicNowNanos() - startNanos);
     return rollingUpgradeInfo;
   }
 
@@ -7449,6 +7519,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   RollingUpgradeInfo finalizeRollingUpgrade() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "finalizeRollingUpgrade";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.WRITE);
@@ -7477,7 +7548,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       // Sync not needed for ha since the edit was rolled after logging.
       getEditLog().logSync();
     }
-    logAuditEvent(true, operationName, null, null, null);
+    logAuditEvent(true, operationName, null, null, null, Time.monotonicNowNanos() - startNanos);
     return rollingUpgradeInfo;
   }
 
@@ -7489,6 +7560,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   long addCacheDirective(CacheDirectiveInfo directive,
                          EnumSet<CacheFlag> flags, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "addCacheDirective";
     CacheDirectiveInfo effectiveDirective = null;
     String effectiveDirectiveStr;
@@ -7508,17 +7580,18 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, null);
+      logAuditEvent(false, operationName, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
     effectiveDirectiveStr = effectiveDirective.toString();
-    logAuditEvent(true, operationName, effectiveDirectiveStr);
+    logAuditEvent(true, operationName, effectiveDirectiveStr, Time.monotonicNowNanos() - startNanos);
     return effectiveDirective.getId();
   }
 
   void modifyCacheDirective(CacheDirectiveInfo directive,
       EnumSet<CacheFlag> flags, boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "modifyCacheDirective";
     final String idStr = "{id: " + directive.getId() + "}";
     if (!flags.contains(CacheFlag.FORCE)) {
@@ -7538,15 +7611,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, idStr,
-          directive.toString(), null);
+          directive.toString(), null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
     logAuditEvent(true, operationName, idStr,
-        directive.toString(), null);
+        directive.toString(), null, Time.monotonicNowNanos() - startNanos);
   }
 
   void removeCacheDirective(long id, boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeCacheDirective";
     String idStr = "{id: " + Long.toString(id) + "}";
     checkOperation(OperationCategory.WRITE);
@@ -7562,15 +7636,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, idStr, null, null);
+      logAuditEvent(false, operationName, idStr, null, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, idStr, null, null);
+    logAuditEvent(true, operationName, idStr, null, null, Time.monotonicNowNanos() - startNanos);
   }
 
   BatchedListEntries<CacheDirectiveEntry> listCacheDirectives(
       long startId, CacheDirectiveInfo filter) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listCacheDirectives";
     checkOperation(OperationCategory.READ);
     FSPermissionChecker.setOperationType(operationName);
@@ -7586,15 +7661,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, filter.toString());
+      logAuditEvent(false, operationName, filter.toString(), Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, filter.toString());
+    logAuditEvent(true, operationName, filter.toString(), Time.monotonicNowNanos() - startNanos);
     return results;
   }
 
   void addCachePool(CachePoolInfo req, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "addCachePool";
     checkOperation(OperationCategory.WRITE);
     String poolInfoStr = null;
@@ -7612,15 +7688,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, poolInfoStr);
+      logAuditEvent(false, operationName, poolInfoStr, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, poolInfoStr);
+    logAuditEvent(true, operationName, poolInfoStr, Time.monotonicNowNanos() - startNanos);
   }
 
   void modifyCachePool(CachePoolInfo req, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "modifyCachePool";
     checkOperation(OperationCategory.WRITE);
     String poolNameStr = "{poolName: " +
@@ -7638,16 +7715,17 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     } catch (AccessControlException ace) {
       logAuditEvent(false, operationName, poolNameStr,
-          req == null ? null : req.toString(), null);
+          req == null ? null : req.toString(), null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
     logAuditEvent(true, operationName, poolNameStr,
-        req == null ? null : req.toString(), null);
+        req == null ? null : req.toString(), null, Time.monotonicNowNanos() - startNanos);
   }
 
   void removeCachePool(String cachePoolName, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeCachePool";
     checkOperation(OperationCategory.WRITE);
     String poolNameStr = "{poolName: " + cachePoolName + "}";
@@ -7663,15 +7741,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, poolNameStr);
+      logAuditEvent(false, operationName, poolNameStr, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, poolNameStr);
+    logAuditEvent(true, operationName, poolNameStr, Time.monotonicNowNanos() - startNanos);
   }
 
   BatchedListEntries<CachePoolEntry> listCachePools(String prevKey)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listCachePools";
     BatchedListEntries<CachePoolEntry> results;
     checkOperation(OperationCategory.READ);
@@ -7686,15 +7765,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, null);
+      logAuditEvent(false, operationName, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return results;
   }
 
   void modifyAclEntries(final String src, List<AclEntry> aclSpec)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "modifyAclEntries";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -7710,15 +7790,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   void removeAclEntries(final String src, List<AclEntry> aclSpec)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeAclEntries";
     checkOperation(OperationCategory.WRITE);
     FileStatus auditStat = null;
@@ -7734,14 +7815,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   void removeDefaultAcl(final String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeDefaultAcl";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -7757,14 +7839,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   void removeAcl(final String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeAcl";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -7780,14 +7863,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   void setAcl(final String src, List<AclEntry> aclSpec) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setAcl";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -7803,14 +7887,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   AclStatus getAclStatus(String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getAclStatus";
     checkOperation(OperationCategory.READ);
     final AclStatus ret;
@@ -7825,10 +7910,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch(AccessControlException ace) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return ret;
   }
 
@@ -7846,6 +7931,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void createEncryptionZone(final String src, final String keyName,
       boolean logRetryCache) throws IOException, UnresolvedLinkException,
           SafeModeException, AccessControlException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "createEncryptionZone";
     final FileStatus resultingStat;
     try {
@@ -7865,11 +7951,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, resultingStat);
+    logAuditEvent(true, operationName, src, null, resultingStat,
+        Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -7882,6 +7969,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   EncryptionZone getEZForPath(final String srcArg)
     throws AccessControlException, UnresolvedLinkException, IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getEZForPath";
     FileStatus resultingStat = null;
     EncryptionZone encryptionZone;
@@ -7900,15 +7988,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, srcArg, null, resultingStat);
+      logAuditEvent(false, operationName, srcArg, null, resultingStat, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
-    logAuditEvent(true, operationName, srcArg, null, resultingStat);
+    logAuditEvent(true, operationName, srcArg, null, resultingStat, Time.monotonicNowNanos() - startNanos);
     return encryptionZone;
   }
 
   BatchedListEntries<EncryptionZone> listEncryptionZones(long prevId)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listEncryptionZones";
     boolean success = false;
     checkOperation(OperationCategory.READ);
@@ -7924,12 +8013,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return ret;
     } finally {
       readUnlock(operationName);
-      logAuditEvent(success, operationName, null);
+      logAuditEvent(success, operationName, null, Time.monotonicNowNanos() - startNanos);
     }
   }
 
   void reencryptEncryptionZone(final String zone, final ReencryptAction action,
       final boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     boolean success = false;
     try {
       Preconditions.checkNotNull(zone, "zone is null.");
@@ -7941,12 +8031,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       reencryptEncryptionZoneInt(pc, zone, action, logRetryCache);
       success = true;
     } finally {
-      logAuditEvent(success, action + "reencryption", zone, null, null);
+      logAuditEvent(success, action + "reencryption", zone, null, null, Time.monotonicNowNanos() - startNanos);
     }
   }
 
   BatchedListEntries<ZoneReencryptionStatus> listReencryptionStatus(
       final long prevId) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listReencryptionStatus";
     boolean success = false;
     checkOperation(OperationCategory.READ);
@@ -7962,7 +8053,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return ret;
     } finally {
       readUnlock(operationName);
-      logAuditEvent(success, operationName, null);
+      logAuditEvent(success, operationName, null, Time.monotonicNowNanos() - startNanos);
     }
   }
 
@@ -8033,6 +8124,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void setErasureCodingPolicy(final String srcArg, final String ecPolicyName,
       final boolean logRetryCache) throws IOException,
       UnresolvedLinkException, SafeModeException, AccessControlException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setErasureCodingPolicy";
     checkOperation(OperationCategory.WRITE);
     checkErasureCodingSupported(operationName);
@@ -8046,13 +8138,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       resultingStat = FSDirErasureCodingOp.setErasureCodingPolicy(this,
           srcArg, ecPolicyName, pc, logRetryCache);
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, srcArg);
+      logAuditEvent(false, operationName, srcArg, Time.monotonicNowNanos() - startNanos);
       throw ace;
     } finally {
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, srcArg, null, resultingStat);
+    logAuditEvent(true, operationName, srcArg, null, resultingStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -8065,6 +8157,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   AddErasureCodingPolicyResponse[] addErasureCodingPolicies(
       ErasureCodingPolicy[] policies, final boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "addErasureCodingPolicies";
     List<String> addECPolicyNames = new ArrayList<>(policies.length);
     checkOperation(OperationCategory.WRITE);
@@ -8090,7 +8183,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, addECPolicyNames.toString());
+    logAuditEvent(true, operationName, addECPolicyNames.toString(), Time.monotonicNowNanos() - startNanos);
     return responses.toArray(new AddErasureCodingPolicyResponse[0]);
   }
 
@@ -8103,6 +8196,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void removeErasureCodingPolicy(String ecPolicyName,
       final boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeErasureCodingPolicy";
     checkOperation(OperationCategory.WRITE);
     checkErasureCodingSupported(operationName);
@@ -8117,7 +8211,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, ecPolicyName, null, null);
+    logAuditEvent(true, operationName, ecPolicyName, null, null, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -8130,6 +8224,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean enableErasureCodingPolicy(String ecPolicyName,
       final boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "enableErasureCodingPolicy";
     checkOperation(OperationCategory.WRITE);
     checkErasureCodingSupported(operationName);
@@ -8146,12 +8241,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, ecPolicyName);
+      logAuditEvent(false, operationName, ecPolicyName, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     if (success) {
       getEditLog().logSync();
-      logAuditEvent(true, operationName, ecPolicyName);
+      logAuditEvent(true, operationName, ecPolicyName, Time.monotonicNowNanos() - startNanos);
     }
     return success;
   }
@@ -8165,6 +8260,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean disableErasureCodingPolicy(String ecPolicyName,
       final boolean logRetryCache) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "disableErasureCodingPolicy";
     checkOperation(OperationCategory.WRITE);
     checkErasureCodingSupported(operationName);
@@ -8181,12 +8277,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, ecPolicyName);
+      logAuditEvent(false, operationName, ecPolicyName, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
     if (success) {
       getEditLog().logSync();
-      logAuditEvent(true, operationName, ecPolicyName);
+      logAuditEvent(true, operationName, ecPolicyName, Time.monotonicNowNanos() - startNanos);
     }
     return success;
   }
@@ -8201,6 +8297,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void unsetErasureCodingPolicy(final String srcArg,
       final boolean logRetryCache) throws IOException,
       UnresolvedLinkException, SafeModeException, AccessControlException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "unsetErasureCodingPolicy";
     checkOperation(OperationCategory.WRITE);
     checkErasureCodingSupported(operationName);
@@ -8217,7 +8314,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(operationName);
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, srcArg, null, resultingStat);
+    logAuditEvent(true, operationName, srcArg, null, resultingStat, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -8229,6 +8326,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   public ECTopologyVerifierResult getECTopologyResultForPolicies(
       String[] policyNames) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     String operationName = "getECTopologyResultForPolicies";
     checkSuperuserPrivilege(operationName);
     checkOperation(OperationCategory.UNCHECKED);
@@ -8258,7 +8356,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock();
     }
-    logAuditEvent(true, operationName, null);
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
     return result;
   }
 
@@ -8267,6 +8365,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   ErasureCodingPolicy getErasureCodingPolicy(String src)
       throws AccessControlException, UnresolvedLinkException, IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getErasureCodingPolicy";
     boolean success = false;
     checkOperation(OperationCategory.READ);
@@ -8282,7 +8381,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return ret;
     } finally {
       readUnlock(operationName);
-      logAuditEvent(success, operationName, src);
+      logAuditEvent(success, operationName, src, Time.monotonicNowNanos() - startNanos);
     }
   }
 
@@ -8290,6 +8389,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * Get all erasure coding polices.
    */
   ErasureCodingPolicyInfo[] getErasureCodingPolicies() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getErasureCodingPolicies";
     boolean success = false;
     checkOperation(OperationCategory.READ);
@@ -8303,7 +8403,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return ret;
     } finally {
       readUnlock(operationName);
-      logAuditEvent(success, operationName, null);
+      logAuditEvent(success, operationName, null, Time.monotonicNowNanos() - startNanos);
     }
   }
 
@@ -8311,6 +8411,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * Get available erasure coding codecs and corresponding coders.
    */
   Map<String, String> getErasureCodingCodecs() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getErasureCodingCodecs";
     boolean success = false;
     checkOperation(OperationCategory.READ);
@@ -8324,13 +8425,14 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return ret;
     } finally {
       readUnlock(operationName);
-      logAuditEvent(success, operationName, null);
+      logAuditEvent(success, operationName, null, Time.monotonicNowNanos() - startNanos);
     }
   }
 
   void setXAttr(String src, XAttr xAttr, EnumSet<XAttrSetFlag> flag,
                 boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "setXAttr";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -8347,15 +8449,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   List<XAttr> getXAttrs(final String src, List<XAttr> xAttrs)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "getXAttrs";
     checkOperation(OperationCategory.READ);
     List<XAttr> fsXattrs;
@@ -8370,14 +8473,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return fsXattrs;
   }
 
   List<XAttr> listXAttrs(String src) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "listXAttrs";
     checkOperation(OperationCategory.READ);
     List<XAttr> fsXattrs;
@@ -8392,15 +8496,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
     return fsXattrs;
   }
 
   void removeXAttr(String src, XAttr xAttr, boolean logRetryCache)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "removeXAttr";
     FileStatus auditStat = null;
     checkOperation(OperationCategory.WRITE);
@@ -8417,11 +8522,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         writeUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
     getEditLog().logSync();
-    logAuditEvent(true, operationName, src, null, auditStat);
+    logAuditEvent(true, operationName, src, null, auditStat, Time.monotonicNowNanos() - startNanos);
   }
 
   @Override
@@ -8448,6 +8553,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   void checkAccess(String src, FsAction mode) throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     final String operationName = "checkAccess";
     checkOperation(OperationCategory.READ);
     final FSPermissionChecker pc = getPermissionChecker();
@@ -8469,10 +8575,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         readUnlock(operationName);
       }
     } catch (AccessControlException e) {
-      logAuditEvent(false, operationName, src);
+      logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src);
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
@@ -8507,7 +8613,24 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus status, CallerContext callerContext, UserGroupInformation ugi,
         DelegationTokenSecretManager dtSecretManager) {
+      this.logAuditEvent(succeeded, userName, addr, port, cmd, src, dst, status, callerContext,
+          ugi, dtSecretManager, -1L, null);
+    }
 
+    public void logAuditEvent(boolean succeeded, String userName,
+         InetAddress addr, int port, String cmd, String src, String dst,
+         FileStatus status, CallerContext callerContext, UserGroupInformation ugi,
+         DelegationTokenSecretManager dtSecretManager, long totalRpcTime) {
+      this.logAuditEvent(succeeded, userName, addr, port, cmd, src, dst, status, callerContext,
+          ugi, dtSecretManager, totalRpcTime, null);
+    }
+
+    @Override
+    public void logAuditEvent(boolean succeeded, String userName,
+        InetAddress addr, int port, String cmd, String src, String dst,
+        FileStatus status, CallerContext callerContext, UserGroupInformation ugi,
+        DelegationTokenSecretManager dtSecretManager, long totalTime,
+        ExtensionInfo extensionInfo) {
       if (auditLog.isDebugEnabled() ||
           (auditLog.isInfoEnabled() && !debugCmdSet.contains(cmd))) {
         final StringBuilder sb = STRING_BUILDER.get();
@@ -8562,8 +8685,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
               callerContext.getSignature().length <= callerSignatureMaxLen) {
             sb.append(":")
                 .append(new String(callerContext.getSignature(),
-                CallerContext.SIGNATURE_ENCODING));
+                    CallerContext.SIGNATURE_ENCODING));
           }
+        }
+        sb.append("\t").append("totalTime=").append(totalTime);
+        if (extensionInfo != null) {
+          sb.append("\t").append("extensionInfo=");
+          sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
         }
         logAuditMessage(sb.toString());
       }
@@ -8573,9 +8701,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     public void logAuditEvent(boolean succeeded, String userName,
         InetAddress addr, int port, String cmd, String src, String dst,
         FileStatus status, UserGroupInformation ugi,
-        DelegationTokenSecretManager dtSecretManager) {
+        DelegationTokenSecretManager dtSecretManager, long totalRpcTime) {
       this.logAuditEvent(succeeded, userName, addr, port, cmd, src, dst, status,
-              null /*CallerContext*/, ugi, dtSecretManager);
+              null /*CallerContext*/, ugi, dtSecretManager, totalRpcTime);
     }
 
     public void logAuditMessage(String message) {
@@ -8707,10 +8835,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   // It should be called without holding FSN lock.
   void checkSuperuserPrivilege(String operationName)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
     try {
       checkSuperuserPrivilege();
     } catch (AccessControlException ace) {
-      logAuditEvent(false, operationName, null);
+      logAuditEvent(false, operationName, null, Time.monotonicNowNanos() - startNanos);
       throw ace;
     }
   }
