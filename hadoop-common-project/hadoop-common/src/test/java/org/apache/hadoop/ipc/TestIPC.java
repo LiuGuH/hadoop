@@ -218,7 +218,7 @@ public class TestIPC {
 
     @Override
     public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param,
-        long receiveTime) throws IOException {
+        long receiveTime, String ip, String user) throws IOException {
       if (sleep) {
         // sleep a bit
         try {
@@ -781,7 +781,7 @@ public class TestIPC {
 
     @Override
     public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param,
-        long receiveTime) throws IOException {
+        long receiveTime, String ip, String user) throws IOException {
       firstCallLatch.countDown();
       try {
         callBlockLatch.await();

@@ -63,7 +63,7 @@ public class TestRpcServerHandoff {
 
     @Override
     public Writable call(RPC.RpcKind rpcKind, String protocol, Writable param,
-                         long receiveTime) throws Exception {
+                         long receiveTime, String ip, String user) throws Exception {
       request = param;
       deferredCall = Server.getCurCall().get();
       Server.getCurCall().get().deferResponse();

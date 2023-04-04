@@ -504,7 +504,7 @@ public class WritableRpcEngine implements RpcEngine {
 
      @Override
       public Writable call(org.apache.hadoop.ipc.RPC.Server server,
-          String protocolName, Writable rpcRequest, long receivedTime)
+          String protocolName, Writable rpcRequest, long receivedTime, String ip, String user)
           throws IOException, RPC.VersionMismatch {
 
         Invocation call = (Invocation)rpcRequest;

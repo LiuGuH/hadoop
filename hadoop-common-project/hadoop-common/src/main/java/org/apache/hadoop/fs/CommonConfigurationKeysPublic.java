@@ -507,6 +507,23 @@ public class CommonConfigurationKeysPublic {
     "ipc.server.purge.interval";
   public static final int IPC_SERVER_PURGE_INTERVAL_MINUTES_DEFAULT = 15;
 
+  public static final String IPC_SERVER_RATE_LIMIT_ENABLE =
+      "ipc.server.rate.limit.enable";
+  public static final boolean IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT = false;
+  public static final String IPC_SERVER_RATE_LIMIT_RULES =
+      "ipc.server.rate.limit.rules";
+  //格式：protocolname,methodname,subnet,user:qps 多条之间以分号作为分割符号
+  public static final String IPC_SERVER_RATE_LIMIT_RULES_DEFAULT =
+      "*,*,0.0.0.0/0,*:*";
+
+  public static final String IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD =
+      "ipc.server.rate.limit.rules.dynamic.update.period";
+  public static final long IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD_DEFAULT = 30000l;
+
+  public static final String IPC_SERVER_RATE_LIMIT_TRYACQUIRE_TIMEOUT =
+      "ipc.server.rate.limit.tryacquire.timeout";
+  public static final long IPC_SERVER_RATE_LIMIT_TRYACQUIRE_TIMEOUT_DEFAULT = 10;
+
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">
