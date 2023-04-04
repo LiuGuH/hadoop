@@ -829,7 +829,13 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
 
   @Override // ClientProtocol
   public void renewLease(String clientName) throws IOException {
-    clientProto.renewLease(clientName);
+    renewLease(clientName, null);
+  }
+
+  @Override // ClientProtocol
+  public void renewLease(String clientName, List<String> namespaces)
+      throws IOException {
+    clientProto.renewLease(clientName, namespaces);
   }
 
   @Override // ClientProtocol
