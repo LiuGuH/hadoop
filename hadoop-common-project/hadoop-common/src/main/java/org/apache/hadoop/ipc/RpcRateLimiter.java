@@ -18,6 +18,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD;
@@ -27,6 +29,9 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE
 
 public class RpcRateLimiter {
   private static final Logger LOG = LoggerFactory.getLogger(RpcRateLimiter.class);
+  private static final Logger
+      LOG_MISMATCH = LoggerFactory.getLogger(RpcRateLimiter.class + ".mismatch");
+
   private static final RpcRateLimiter INSTANCE = new RpcRateLimiter();
   List<LimitCondition> conditionList = new CopyOnWriteArrayList<>();
   RpcRateLimiterMetrics rpcRateLimiterMetrics;
@@ -52,6 +57,15 @@ public class RpcRateLimiter {
     try {
       LimitCondition limitCondition = matchLimitCondition(protocolName, methodName, ip, user);
       if (limitCondition == null) {
+        rpcRateLimiterMetrics.incrRpcRateLimitMismatchNum();
+        LOG_MISMATCH.debug("{},{},{},{}", ip, user,
+            protocolName, methodName);
+        if (BzlDynamicConfiguration.getInstance()
+            .getBoolean(IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT,
+                IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT)) {
+          throw new RpcServerException("The request is refused for security reasons.");
+        }
+
         return;
       }
       limitCondition.tryAcquire();
