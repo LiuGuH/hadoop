@@ -510,6 +510,10 @@ public class CommonConfigurationKeysPublic {
   public static final String IPC_SERVER_RATE_LIMIT_ENABLE =
       "ipc.server.rate.limit.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT = false;
+  public static final String IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT =
+      "ipc.server.rate.limit.mismatch.reject";
+  public static final boolean IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT =
+      false;
   public static final String IPC_SERVER_RATE_LIMIT_RULES =
       "ipc.server.rate.limit.rules";
   //格式：protocolname,methodname,subnet,user:qps 多条之间以分号作为分割符号

@@ -17,6 +17,8 @@ public class RpcRateLimiterMetrics {
   MutableCounterLong rpcRateLimitSuppressedNum;
   @Metric("Number of rpcRatelimit refused Num")
   MutableCounterLong rpcRateLimitRefusedNum;
+  @Metric("Number of rpcRatelimit rules mismatching Num")
+  MutableCounterLong rpcRateLimitMismatchNum;
 
   public RpcRateLimiterMetrics() {
     registry = new MetricsRegistry("ratelimter");
@@ -42,5 +44,9 @@ public class RpcRateLimiterMetrics {
 
   public void incrRpcRateLimitRefusedNum() {
     rpcRateLimitRefusedNum.incr();
+  }
+
+  public void incrRpcRateLimitMismatchNum() {
+    rpcRateLimitMismatchNum.incr();
   }
 }
