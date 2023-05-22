@@ -13,8 +13,9 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT;
@@ -30,15 +31,35 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE
 public class RpcRateLimiter {
   private static final Logger LOG = LoggerFactory.getLogger(RpcRateLimiter.class);
   private static final Logger
-      LOG_MISMATCH = LoggerFactory.getLogger(RpcRateLimiter.class + ".mismatch");
+      LOG_MISMATCH = LoggerFactory.getLogger(RpcRateLimiter.class.getName() + ".mismatch");
 
   private static final RpcRateLimiter INSTANCE = new RpcRateLimiter();
-  List<LimitCondition> conditionList = new CopyOnWriteArrayList<>();
+  List<LimitCondition> conditionList = new ArrayList<>();
+  private final ReentrantReadWriteLock mReadWriteLock =
+      new ReentrantReadWriteLock();
+  private final Lock mReadLock  = mReadWriteLock.readLock();
+  private final Lock mWriteLock = mReadWriteLock.writeLock();
   RpcRateLimiterMetrics rpcRateLimiterMetrics;
 
   private RpcRateLimiter() {
     rpcRateLimiterMetrics = RpcRateLimiterMetrics.create();
     new RefreshRpcRateLimitThread().start();
+  }
+
+  void readLock() {
+    mReadLock.lock();
+  }
+
+  void readUnlock() {
+    mReadLock.unlock();
+  }
+
+  void writeLock() {
+    mWriteLock.lock();
+  }
+
+  void writeUnlock() {
+    mWriteLock.unlock();
   }
 
   public static RpcRateLimiter getInstance() {
@@ -55,7 +76,16 @@ public class RpcRateLimiter {
     long start = Time.monotonicNowNanos();
 
     try {
-      LimitCondition limitCondition = matchLimitCondition(protocolName, methodName, ip, user);
+      LimitCondition limitCondition;
+      readLock();
+      try {
+        if (conditionList.size() == 0) {
+          return;
+        }
+        limitCondition = matchLimitCondition(protocolName, methodName, ip, user);
+      } finally {
+        readUnlock();
+      }
       if (limitCondition == null) {
         rpcRateLimiterMetrics.incrRpcRateLimitMismatchNum();
         LOG_MISMATCH.debug("{},{},{},{}", ip, user,
@@ -215,8 +245,13 @@ public class RpcRateLimiter {
             try {
               List<LimitCondition> list = getRateLimitList(newValue);
               if (list.size() > 0) {
-                conditionList.clear();
-                conditionList.addAll(list);
+                writeLock();
+                try {
+                  conditionList.clear();
+                  conditionList.addAll(list);
+                } finally {
+                  writeUnlock();
+                }
                 LOG.info(
                     "The {} has changed. Details is {}", IPC_SERVER_RATE_LIMIT_RULES,
                     list);
