@@ -85,20 +85,27 @@ public class RpcRateLimiter {
         limitCondition = matchLimitCondition(protocolName, methodName, ip, user);
       } finally {
         readUnlock();
+        rpcRateLimiterMetrics.addRpcLimitConditionReadLock(Time.monotonicNowNanos() - start);
       }
       if (limitCondition == null) {
-        rpcRateLimiterMetrics.incrRpcRateLimitMismatchNum();
+        long limitConditionNullStart = Time.monotonicNowNanos();
         LOG_MISMATCH.debug("{},{},{},{}", ip, user,
             protocolName, methodName);
         if (BzlDynamicConfiguration.getInstance()
             .getBoolean(IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT,
                 IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT)) {
+          rpcRateLimiterMetrics.addRpcRateLimitMismatch(
+              Time.monotonicNowNanos() - limitConditionNullStart);
           throw new RpcServerException("The request is refused for security reasons.");
         }
-
+        rpcRateLimiterMetrics.addRpcRateLimitMismatch(
+            Time.monotonicNowNanos() - limitConditionNullStart);
         return;
       }
+
+      long tryAcquireStart = Time.monotonicNowNanos();
       limitCondition.tryAcquire();
+      rpcRateLimiterMetrics.addRpcRateLimitTryAcquire(Time.monotonicNowNanos() - tryAcquireStart);
     } finally {
       rpcRateLimiterMetrics.addRpcRateLimit(Time.monotonicNowNanos() - start);
     }
@@ -245,12 +252,15 @@ public class RpcRateLimiter {
             try {
               List<LimitCondition> list = getRateLimitList(newValue);
               if (list.size() > 0) {
+                long start = Time.monotonicNowNanos();
                 writeLock();
                 try {
                   conditionList.clear();
                   conditionList.addAll(list);
                 } finally {
                   writeUnlock();
+                  rpcRateLimiterMetrics.addRpcLimitConditionWriteLock(
+                      Time.monotonicNowNanos() - start);
                 }
                 LOG.info(
                     "The {} has changed. Details is {}", IPC_SERVER_RATE_LIMIT_RULES,

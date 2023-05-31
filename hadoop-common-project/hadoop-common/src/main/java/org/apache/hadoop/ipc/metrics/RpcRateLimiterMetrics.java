@@ -17,8 +17,14 @@ public class RpcRateLimiterMetrics {
   MutableCounterLong rpcRateLimitSuppressedNum;
   @Metric("Number of rpcRatelimit refused Num")
   MutableCounterLong rpcRateLimitRefusedNum;
-  @Metric("Number of rpcRatelimit rules mismatching Num")
-  MutableCounterLong rpcRateLimitMismatchNum;
+  @Metric("rpcRateLimitMismatch time")
+  MutableRate rpcRateLimitMismatch;
+  @Metric("rpcLimitConditionReadLock time")
+  MutableRate rpcLimitConditionReadLock;
+  @Metric("rpcLimitConditionWriteLock time")
+  MutableRate rpcLimitConditionWriteLock;
+  @Metric("rpcRateLimitTryAcquire time")
+  MutableRate rpcRateLimitTryAcquire;
 
   public RpcRateLimiterMetrics() {
     registry = new MetricsRegistry("ratelimter");
@@ -46,7 +52,19 @@ public class RpcRateLimiterMetrics {
     rpcRateLimitRefusedNum.incr();
   }
 
-  public void incrRpcRateLimitMismatchNum() {
-    rpcRateLimitMismatchNum.incr();
+  public void addRpcLimitConditionReadLock(long time) {
+    rpcLimitConditionReadLock.add(time);
+  }
+
+  public void addRpcLimitConditionWriteLock(long time) {
+    rpcLimitConditionWriteLock.add(time);
+  }
+
+  public void addRpcRateLimitTryAcquire(long time) {
+    rpcRateLimitTryAcquire.add(time);
+  }
+
+  public void addRpcRateLimitMismatch(long time) {
+    rpcRateLimitMismatch.add(time);
   }
 }
