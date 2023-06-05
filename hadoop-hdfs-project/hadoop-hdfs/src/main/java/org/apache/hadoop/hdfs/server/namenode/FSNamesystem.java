@@ -3371,7 +3371,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     if (toRemovedBlocks != null) {
       toRemovedBlocksNum = toRemovedBlocks.getToDeleteList().size();
     }
-    logAuditEvent(ret, operationName, src, Time.monotonicNowNanos() - start, new ExtensionInfo(toRemovedBlocksNum));
+    logAuditEvent(ret, operationName, src, Time.monotonicNowNanos() - start,
+        new ExtensionInfo.Builder().blocksCount(toRemovedBlocksNum).build());
     if (toRemovedBlocks != null) {
       blockManager.addBLocksToMarkedDeleteQueue(
           toRemovedBlocks.getToDeleteList());
@@ -4158,7 +4159,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       logAuditEvent(false, operationName, src, Time.monotonicNowNanos() - startNanos);
       throw e;
     }
-    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
+    int filesInGetListing = 0;
+    if (dl != null) {
+      filesInGetListing = dl.getPartialListing().length;
+    }
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos,
+        new ExtensionInfo.Builder().filesCount(filesInGetListing).build());
     return dl;
   }
 
@@ -4204,6 +4210,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
     }
     final int startSrcsIndex = srcsIndex;
+    int[] fileInPartialList = new int[srcs.length - srcsIndex];
+    long[] processTimeInPartialList = new long[srcs.length - srcsIndex];
     final String operationName = "listStatus";
     final FSPermissionChecker pc = getPermissionChecker();
 
@@ -4231,6 +4239,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           }
           listing = new HdfsPartialListing(
               srcsIndex, Lists.newArrayList(dirListing.getPartialListing()));
+          fileInPartialList[srcsIndex - startSrcsIndex] = listing.getPartialListing().size();
+          processTimeInPartialList[srcsIndex - startSrcsIndex] = Time.monotonicNowNanos() - startNanos;
+          startNanos = Time.monotonicNowNanos();
           numEntries += listing.getPartialListing().size();
           lastListing = dirListing;
         } catch (Exception e) {
@@ -4299,9 +4310,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } finally {
       readUnlock(operationName);
     }
-    long totalRpcTime = Time.monotonicNowNanos() - startNanos;
     for (int i = startSrcsIndex; i < srcsIndex; i++) {
-      logAuditEvent(true, operationName, srcs[i], totalRpcTime);
+      logAuditEvent(true, operationName, srcs[i], processTimeInPartialList[i - startSrcsIndex],
+          new ExtensionInfo.Builder().filesCount(fileInPartialList[i - startSrcsIndex]).build());
     }
     return bdl;
   }
@@ -8690,8 +8701,17 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         }
         sb.append("\t").append("totalTime=").append(totalTime);
         if (extensionInfo != null) {
-          sb.append("\t").append("extensionInfo=");
-          sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
+          if (extensionInfo.isValid()) {
+            sb.append("\t").append("extensionInfo=");
+            if (extensionInfo.getNumBlocks() > 0) {
+              sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
+              sb.append(",");
+            }
+            if (extensionInfo.getNumFiles() > 0) {
+              sb.append("numFiles:").append(extensionInfo.getNumFiles());
+              sb.append(",");
+            }
+          }
         }
         logAuditMessage(sb.toString());
       }
