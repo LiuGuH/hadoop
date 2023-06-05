@@ -649,10 +649,10 @@ public class RouterRpcClient {
         }
       }
     }
+
     if (this.rpcMonitor != null) {
       this.rpcMonitor.proxyOpComplete(false, null);
     }
-
     // All namenodes were unavailable or in standby
     String msg = "No namenode available to invoke " + method.getName() + " " +
         Arrays.deepToString(params) + " in " + namenodes + " from " +
