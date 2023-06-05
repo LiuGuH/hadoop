@@ -140,12 +140,17 @@ public class TopMetrics implements MetricsSource {
   }
 
   public void report(long currTime, String userName, String cmd, ExtensionInfo extensionInfo) {
-    int numBlocks = extensionInfo == null ? 1 : extensionInfo.getNumBlocks() > 0 ? extensionInfo.getNumBlocks() : 1;
+    int value = 1;
+    if (extensionInfo == null) {
+      value = 1;
+    } else {
+      value = extensionInfo.getValueForCmd(cmd);
+    }
     LOG.debug("a metric is reported: cmd: {} user: {}", cmd, userName);
     userName = UserGroupInformation.trimLoginMethod(userName);
     for (RollingWindowManager rollingWindowManager : rollingWindowManagers
         .values()) {
-      rollingWindowManager.recordMetric(currTime, cmd, userName, numBlocks);
+      rollingWindowManager.recordMetric(currTime, cmd, userName, value);
     }
   }
 

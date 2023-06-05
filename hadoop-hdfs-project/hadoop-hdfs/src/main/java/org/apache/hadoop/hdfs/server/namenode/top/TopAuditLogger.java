@@ -94,8 +94,17 @@ public class TopAuditLogger implements AuditLogger {
         sb.append(status.getPermission());
       }
       if (extensionInfo != null) {
-        sb.append("\t").append("extentsionInfo=");
-        sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
+        if (extensionInfo.isValid()) {
+          sb.append("\t").append("extensionInfo=");
+          if (extensionInfo.getNumBlocks() > 0) {
+            sb.append("numBlocks:").append(extensionInfo.getNumBlocks());
+            sb.append(",");
+          }
+          if (extensionInfo.getNumFiles() > 0) {
+            sb.append("numFiles:").append(extensionInfo.getNumFiles());
+            sb.append(",");
+          }
+        }
       }
       LOG.debug("------------------- logged event for top service: " + sb);
     }
