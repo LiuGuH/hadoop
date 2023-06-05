@@ -1960,18 +1960,20 @@ public class BlockManager implements BlockStatsMXBean {
     List<List<BlockInfo>> blocksToReconstruct = null;
     namesystem.writeLock();
     try {
-      boolean reset = false;
-      if (replQueueResetToHeadThreshold > 0) {
-        if (replQueueCallsSinceReset >= replQueueResetToHeadThreshold) {
-          reset = true;
-          replQueueCallsSinceReset = 0;
-        } else {
-          replQueueCallsSinceReset++;
+      if (pendingReconstruction.size() < blocksToProcess) {
+        boolean reset = false;
+        if (replQueueResetToHeadThreshold > 0) {
+          if (replQueueCallsSinceReset >= replQueueResetToHeadThreshold) {
+            reset = true;
+            replQueueCallsSinceReset = 0;
+          } else {
+            replQueueCallsSinceReset++;
+          }
         }
-      }
         // Choose the blocks to be reconstructed
-      blocksToReconstruct = neededReconstruction
-          .chooseLowRedundancyBlocks(blocksToProcess, reset);
+        blocksToReconstruct = neededReconstruction
+            .chooseLowRedundancyBlocks(blocksToProcess, reset);
+      }
     } finally {
       namesystem.writeUnlock("computeBlockReconstructionWork");
     }
@@ -1989,6 +1991,9 @@ public class BlockManager implements BlockStatsMXBean {
   int computeReconstructionWorkForBlocks(
       List<List<BlockInfo>> blocksToReconstruct) {
     int scheduledWork = 0;
+    if (blocksToReconstruct == null) {
+      return scheduledWork;
+    }
     List<BlockReconstructionWork> reconWork = new ArrayList<>();
 
     // Step 1: categorize at-risk blocks into replication and EC tasks
