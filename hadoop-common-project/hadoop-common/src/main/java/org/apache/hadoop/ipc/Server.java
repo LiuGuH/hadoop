@@ -2617,28 +2617,12 @@ public abstract class Server {
                     clientUser));
       }
 
-
-      if (bzlTokenUser.equals(clientUser) ||
-          (clientRealUser != null && clientRealUser.equals(bzlTokenUser))) {
+      //clientRealUser不为空的情况下，hdfs原生会进行proxy权限校验
+      if (clientRealUser != null || bzlTokenUser.equals(clientUser)) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthSuccesses();
         long end = System.currentTimeMillis();
         rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
         return;
-      }
-
-      if (clientRealUser != null && !clientRealUser.equals(bzlTokenUser)) {
-        rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
-        LOG.info(
-            "[Warning] BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientInfo is {}:{}. CallerContext is {}.",
-            bzlTokenUser, clientUser, clientRealUser, base64EncodeBzlToken.substring(0, 6),
-            base64EncodeBzlToken.substring(base64EncodeBzlToken.length() - 6),
-            this.getHostAddress(), this.getRemotePort(), callerContext);
-        long end = System.currentTimeMillis();
-        rpcBzlTokenAuthMetrics.addRpcBzlTokenAuthTime(end - start);
-        throw new FatalRpcServerException(RpcErrorCodeProto.FATAL_UNAUTHORIZED,
-            new AccessControlException(
-                "BzlAuth Failed because of token mismatch. BzltokenUser is " + bzlTokenUser +
-                    ", clientRealUser is " + clientRealUser));
       }
 
       try {
