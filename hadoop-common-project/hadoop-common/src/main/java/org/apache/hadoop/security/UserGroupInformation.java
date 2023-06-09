@@ -451,6 +451,10 @@ public class UserGroupInformation {
     return this.user.getBzltoken();
   }
 
+  public void setSubjectBzltoken(String bzlToken) {
+    this.user.setBzltoken(bzlToken);
+  }
+
   /* Return the OS login module class name */
   /* For IBM JDK, use the common OS login module class name for all platforms */
   private static String getOSLoginModuleName() {
