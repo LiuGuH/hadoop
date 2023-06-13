@@ -157,6 +157,7 @@ public abstract class ProtoUtil {
     }
     if (ugi != null && userInfo.hasBzltoken()) {
       ugi.setBzlTokenFromClient(userInfo.getBzltoken());
+      ugi.setSubjectBzltoken(userInfo.getBzltoken());
       if (LOG.isDebugEnabled()) {
         LOG.debug("server ugi is not null and token is " + userInfo.getBzltoken());
       }
