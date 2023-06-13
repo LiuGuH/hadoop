@@ -1672,7 +1672,7 @@ public class Client implements AutoCloseable {
       }
     }
     long endNanos = Time.monotonicNow();
-    if (endNanos - startNanos > TimeUnit.SECONDS.toNanos(2L)) {
+    if (endNanos - startNanos > TimeUnit.SECONDS.toNanos(1L)) {
       LOG.debug("Client#getConnection costs {} ms.", (endNanos - startNanos) / 1000);
     }
 
