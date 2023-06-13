@@ -1645,7 +1645,7 @@ public class Client implements AutoCloseable {
         }
       }
     };
-
+    long startNanos = Time.monotonicNowNanos();
     Connection connection;
     /* we could avoid this allocation for each RPC by having a  
      * connectionsId object and with set() method. We need to manage the
@@ -1670,6 +1670,10 @@ public class Client implements AutoCloseable {
         // remove this closedConnection.
         removeMethod.accept(connection);
       }
+    }
+    long endNanos = Time.monotonicNow();
+    if (endNanos - startNanos > TimeUnit.SECONDS.toNanos(2L)) {
+      LOG.debug("Client#getConnection costs {} ms.", (endNanos - startNanos) / 1000);
     }
 
     // If the server happens to be slow, the method below will take longer to
