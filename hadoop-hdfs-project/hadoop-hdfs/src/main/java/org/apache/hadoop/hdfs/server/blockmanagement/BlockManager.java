@@ -160,9 +160,12 @@ import org.slf4j.LoggerFactory;
  */
 @InterfaceAudience.Private
 public class BlockManager implements BlockStatsMXBean {
+  class BlockReportLogger {
 
+  }
   public static final Logger LOG = LoggerFactory.getLogger(BlockManager.class);
   public static final Logger blockLog = NameNode.blockStateChangeLog;
+  public static final Logger BLOCK_REPORT_LOG = LoggerFactory.getLogger(BlockReportLogger.class);
 
   private static final String QUEUE_REASON_CORRUPT_STATE =
     "it has the wrong state or generation stamp";
@@ -2887,33 +2890,44 @@ public class BlockManager implements BlockStatsMXBean {
     Collection<Block> toInvalidate = new ArrayList<>();
     Collection<BlockToMarkCorrupt> toCorrupt = new ArrayList<>();
     Collection<StatefulBlockInfo> toUC = new ArrayList<>();
+    long startNanos = Time.monotonicNowNanos();
     reportDiff(storageInfo, report,
                  toAdd, toRemove, toInvalidate, toCorrupt, toUC);
-
+    BLOCK_REPORT_LOG.debug("reportDiff costs {} ns", Time.monotonicNowNanos() - startNanos);
     DatanodeDescriptor node = storageInfo.getDatanodeDescriptor();
+    startNanos = Time.monotonicNowNanos();
     // Process the blocks on each queue
     for (StatefulBlockInfo b : toUC) { 
       addStoredBlockUnderConstruction(b, storageInfo);
     }
+    BLOCK_REPORT_LOG.debug("addStoredBlockUnderConstruction costs {} ns", Time.monotonicNowNanos() - startNanos);
+    startNanos = Time.monotonicNowNanos();
     for (BlockInfo b : toRemove) {
       removeStoredBlock(b, node);
     }
+    BLOCK_REPORT_LOG.debug("removeStoredBlock costs {} ns", Time.monotonicNowNanos() - startNanos);
     int numBlocksLogged = 0;
+    startNanos = Time.monotonicNowNanos();
     for (BlockInfoToAdd b : toAdd) {
       addStoredBlock(b.stored, b.reported, storageInfo, null,
           numBlocksLogged < maxNumBlocksToLog);
       numBlocksLogged++;
     }
+    BLOCK_REPORT_LOG.debug("addStoredBlock costs {} ns", Time.monotonicNowNanos() - startNanos);
     if (numBlocksLogged > maxNumBlocksToLog) {
       blockLog.info("BLOCK* processReport: logged info for {} of {} " +
           "reported.", maxNumBlocksToLog, numBlocksLogged);
     }
+    startNanos = Time.monotonicNowNanos();
     for (Block b : toInvalidate) {
       addToInvalidates(b, node);
     }
+    BLOCK_REPORT_LOG.debug("addToInvalidates costs {} ns", Time.monotonicNowNanos() - startNanos);
+    startNanos = Time.monotonicNowNanos();
     for (BlockToMarkCorrupt b : toCorrupt) {
       markBlockAsCorrupt(b, storageInfo, node);
     }
+    BLOCK_REPORT_LOG.debug("markBlockAsCorrupt costs {} ns", Time.monotonicNowNanos() - startNanos);
 
     return toInvalidate;
   }
