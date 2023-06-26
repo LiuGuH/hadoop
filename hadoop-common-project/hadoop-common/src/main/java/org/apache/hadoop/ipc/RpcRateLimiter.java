@@ -2,10 +2,14 @@ package org.apache.hadoop.ipc;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.net.util.SubnetUtils;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.metrics.RpcRateLimiterMetrics;
+import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.RateLimiter;
+import org.apache.hadoop.top.TopConf;
+import org.apache.hadoop.top.metrics.TopMetrics;
 import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -40,9 +45,29 @@ public class RpcRateLimiter {
   private final Lock mReadLock  = mReadWriteLock.readLock();
   private final Lock mWriteLock = mReadWriteLock.writeLock();
   RpcRateLimiterMetrics rpcRateLimiterMetrics;
+  private final TopMetrics successTopMetrics;
+  private final TopMetrics refusedTopMetrics;
+
 
   private RpcRateLimiter() {
     rpcRateLimiterMetrics = RpcRateLimiterMetrics.create();
+
+    Configuration conf = new Configuration();
+    TopConf topConf = new TopConf(conf);
+    this.successTopMetrics = new TopMetrics(conf, topConf.nntopReportingPeriodsMs);
+    if (DefaultMetricsSystem.instance().getSource(
+        "rpcRateLimiterSuccessTopMetrics") == null) {
+      DefaultMetricsSystem.instance().register("rpcRateLimiterSuccessTopMetrics",
+          "Top N operations by user with Subnet with sucesses", successTopMetrics);
+    }
+
+    this.refusedTopMetrics = new TopMetrics(conf, topConf.nntopReportingPeriodsMs);
+    if (DefaultMetricsSystem.instance().getSource(
+        "rpcRateLimiterRefusedTopMetrics") == null) {
+      DefaultMetricsSystem.instance().register("rpcRateLimiterRefusedTopMetrics",
+          "Top N operations by user with Subnet with refused", refusedTopMetrics);
+    }
+
     new RefreshRpcRateLimitThread().start();
   }
 
@@ -75,8 +100,8 @@ public class RpcRateLimiter {
 
     long start = Time.monotonicNowNanos();
 
+    LimitCondition limitCondition = null;
     try {
-      LimitCondition limitCondition;
       readLock();
       try {
         if (conditionList.size() == 0) {
@@ -104,7 +129,7 @@ public class RpcRateLimiter {
       }
 
       long tryAcquireStart = Time.monotonicNowNanos();
-      limitCondition.tryAcquire();
+      limitCondition.tryAcquire(user, methodName);
       rpcRateLimiterMetrics.addRpcRateLimitTryAcquire(Time.monotonicNowNanos() - tryAcquireStart);
     } finally {
       rpcRateLimiterMetrics.addRpcRateLimit(Time.monotonicNowNanos() - start);
@@ -128,7 +153,7 @@ public class RpcRateLimiter {
     private String user;
     private String qps;
     private  SubnetUtils subnetUtils;
-    private RateLimiterExtension rateLimiterExtension;
+    private ConcurrentHashMap<String, RateLimiterExtension> userRateLimiterExtension;
 
     public LimitCondition(String protocolName, String methodName, String subNet, String user,
                           String qps) {
@@ -139,7 +164,7 @@ public class RpcRateLimiter {
       this.subnetUtils.setInclusiveHostCount(true);
       this.user = user;
       this.qps = qps;
-      this.rateLimiterExtension = new RateLimiterExtension(qps);
+      this.userRateLimiterExtension =  new ConcurrentHashMap<>();
     }
 
     public boolean match(String protocolName, String methodName, String ip, String user) {
@@ -159,8 +184,9 @@ public class RpcRateLimiter {
       return false;
     }
 
-    private void tryAcquire() throws Exception {
-      rateLimiterExtension.tryAcquire();
+    private void tryAcquire(String user ,String methodName) throws Exception {
+      userRateLimiterExtension.putIfAbsent(user, new RateLimiterExtension(qps));
+      userRateLimiterExtension.get(user).tryAcquire(this.subNet, user ,methodName);
     }
 
     @Override
@@ -187,7 +213,7 @@ public class RpcRateLimiter {
           ", subNet='" + subNet + '\'' +
           ", user='" + user + '\'' +
           ", qps='" + qps + '\'' +
-          ", rateLimiterExtension=" + rateLimiterExtension +
+          ", userRateLimiterExtension=" + userRateLimiterExtension +
           '}';
     }
   }
@@ -204,12 +230,14 @@ public class RpcRateLimiter {
       }
     }
 
-    private void tryAcquire() throws Exception {
+    private void tryAcquire(String subNet, String user, String methodName) throws Exception {
       if (qps.equals("0")) {
         rpcRateLimiterMetrics.incrRpcRateLimitRefusedNum();
+        refusedTopMetrics.report(subNet + "_" + user, methodName);
         throw new RpcServerException("The request is refused for security reasons.");
       }
       if (qps.equals("*")) {
+        successTopMetrics.report(subNet + "_" + user, methodName);
         return;
       }
 
@@ -218,8 +246,10 @@ public class RpcRateLimiter {
               IPC_SERVER_RATE_LIMIT_TRYACQUIRE_TIMEOUT_DEFAULT), TimeUnit.MICROSECONDS);
       if (!bool) {
         rpcRateLimiterMetrics.incrRpcRateLimitSuppressedNum();
+        refusedTopMetrics.report(subNet + "_" + user, methodName);
         throw new RetriableException("Rpc rate limitation is reached for security reasons.");
       }
+      successTopMetrics.report(subNet + "_" + user, methodName);
     }
 
     @Override
