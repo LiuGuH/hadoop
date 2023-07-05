@@ -111,6 +111,7 @@ import static org.apache.hadoop.ha.HAServiceProtocol.HAServiceState.OBSERVER;
 
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 
+import org.apache.hadoop.metrics2.lib.MutableCounterLong;
 import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
@@ -392,6 +393,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       registry.newRate("checkPermissionProcessingTime");
   @Metric final MutableRate logAuditEventProcessingTime =
       registry.newRate("logAuditEventProcessingTime");
+  @Metric("internal release lease ops") MutableCounterLong internalReleaseLease;
+
+
 
   private final String contextFieldSeparator;
 
@@ -3679,6 +3683,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   boolean internalReleaseLease(Lease lease, String src, INodesInPath iip,
       String recoveryLeaseHolder) throws IOException {
     LOG.info("Recovering " + lease + ", src=" + src);
+    internalReleaseLease.incr();
     assert !isInSafeMode();
     assert hasWriteLock();
 
@@ -3701,7 +3706,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     if(nrCompleteBlocks == nrBlocks) {
       finalizeINodeFileUnderConstruction(src, pendingFile,
           iip.getLatestSnapshotId(), false);
-      NameNode.stateChangeLog.warn("BLOCK*" +
+      NameNode.stateChangeLog.info("[Warning]BLOCK*" +
           " internalReleaseLease: All existing blocks are COMPLETE," +
           " lease removed, file " + src + " closed.");
       return true;  // closed!
@@ -3740,7 +3745,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           blockManager.hasMinStorage(lastBlock)) {
         finalizeINodeFileUnderConstruction(src, pendingFile,
             iip.getLatestSnapshotId(), false);
-        NameNode.stateChangeLog.warn("BLOCK*" +
+        NameNode.stateChangeLog.info("[Warning]BLOCK*" +
             " internalReleaseLease: Committed blocks are minimally" +
             " replicated, lease removed, file" + src + " closed.");
         return true;  // closed!
@@ -3787,7 +3792,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         pendingFile.removeLastBlock(lastBlock);
         finalizeINodeFileUnderConstruction(src, pendingFile,
             iip.getLatestSnapshotId(), false);
-        NameNode.stateChangeLog.warn("BLOCK* internalReleaseLease: "
+        NameNode.stateChangeLog.info("[Warning]BLOCK* internalReleaseLease: "
             + "Removed empty last block and closed file " + src);
         return true;
       }
@@ -3807,8 +3812,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         // Cannot close file right now, since the last block requires recovery.
         // This may potentially cause infinite loop in lease recovery
         // if there are no valid replicas on data-nodes.
-        NameNode.stateChangeLog.warn(
-            "DIR* NameSystem.internalReleaseLease: " +
+        NameNode.stateChangeLog.info(
+            "[Warning]DIR* NameSystem.internalReleaseLease: " +
                 "File " + src + " has not been closed." +
                 " Lease recovery is in progress. " +
                 "RecoveryId = " + blockRecoveryId + " for block " + lastBlock);
