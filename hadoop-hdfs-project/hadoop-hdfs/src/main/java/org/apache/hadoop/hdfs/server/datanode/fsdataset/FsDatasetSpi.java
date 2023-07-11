@@ -679,4 +679,10 @@ public interface FsDatasetSpi<V extends FsVolumeSpi> extends FSDatasetMBean {
    * @throws IOException
    */
   Set<? extends Replica> deepCopyReplica(String bpid) throws IOException;
+
+  /**
+   * Set the last time in milliseconds when the directory scanner successfully ran.
+   * @param time the last time in milliseconds when the directory scanner successfully ran.
+   */
+  default void setLastDirScannerFinishTime(long time) {}
 }

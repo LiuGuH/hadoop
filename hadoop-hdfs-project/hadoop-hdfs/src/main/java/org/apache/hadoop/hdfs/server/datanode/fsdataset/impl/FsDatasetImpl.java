@@ -276,7 +276,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   final InstrumentedReadWriteLock datasetRWLock;
   private final Condition datasetWriteLockCondition;
   private static String blockPoolId = "";
-  
+  private volatile long lastDirScannerFinishTime;
+
   /**
    * An FSDataset has a directory where it loads its data files.
    */
@@ -3430,6 +3431,16 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         }
       }
     }
+  }
+
+  @Override
+  public long getLastDirScannerFinishTime() {
+    return this.lastDirScannerFinishTime;
+  }
+
+  @Override
+  public void setLastDirScannerFinishTime(long time) {
+    this.lastDirScannerFinishTime = time;
   }
 }
 

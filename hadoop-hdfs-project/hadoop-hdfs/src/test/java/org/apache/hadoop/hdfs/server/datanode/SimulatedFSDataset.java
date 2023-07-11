@@ -912,6 +912,11 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
     return 0L;
   }
 
+  @Override
+  public long getLastDirScannerFinishTime() {
+    return 0L;
+  }
+
   /**
    * Get metrics from the metrics source
    *
@@ -1591,6 +1596,11 @@ public class SimulatedFSDataset implements FsDatasetSpi<FsVolumeSpi> {
       replicas.addAll(s.getBlockMap(bpid).values());
     }
     return Collections.unmodifiableSet(replicas);
+  }
+
+  @Override
+  public void setLastDirScannerFinishTime(long time) {
+    throw new UnsupportedOperationException();
   }
 }
 
