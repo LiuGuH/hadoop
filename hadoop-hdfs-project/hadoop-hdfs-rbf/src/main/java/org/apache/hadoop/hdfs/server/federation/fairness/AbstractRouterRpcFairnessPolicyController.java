@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.federation.fairness;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -56,7 +57,7 @@ public class AbstractRouterRpcFairnessPolicyController
 
   public void init(Configuration conf) {
     this.permits = new HashMap<>();
-    this.userPermits = new HashMap<>();
+    this.userPermits = new ConcurrentHashMap<>();
     long timeoutMs = conf.getTimeDuration(DFS_ROUTER_FAIRNESS_ACQUIRE_TIMEOUT,
         DFS_ROUTER_FAIRNESS_ACQUIRE_TIMEOUT_DEFAULT, TimeUnit.MILLISECONDS);
     if (timeoutMs >= 0) {
@@ -142,13 +143,9 @@ public class AbstractRouterRpcFairnessPolicyController
       }
 
       if (this.userPermits.get(combineNsIdUser(nsId, user)) == null) {
-        synchronized (this) {
-          Integer userMax = userMaxPermits.get(user) == null ? userMaxPermits.get("other") :
-              userMaxPermits.get(user);
-          if (this.userPermits.get(combineNsIdUser(nsId, user)) == null) {
-            this.userPermits.put(combineNsIdUser(nsId, user), new Semaphore(userMax));
-          }
-        }
+        Integer userMax = userMaxPermits.get(user) == null ? userMaxPermits.get("other") :
+            userMaxPermits.get(user);
+        this.userPermits.putIfAbsent(combineNsIdUser(nsId, user), new Semaphore(userMax));
       }
       return this.userPermits.get(combineNsIdUser(nsId, user))
           .tryAcquire(acquireTimeoutMs, TimeUnit.MILLISECONDS);
