@@ -465,4 +465,10 @@ public class ExternalDatasetImpl implements FsDatasetSpi<ExternalVolumeImpl> {
       throws IOException {
     return Collections.EMPTY_SET;
   }
+
+  @Override
+  public long getLastDirScannerFinishTime() {
+    return 0L;
+  }
+
 }
