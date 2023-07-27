@@ -72,6 +72,8 @@ public class DirectoryScanner implements Runnable {
   private final long scanPeriodMsecs;
   private final long throttleLimitMsPerSec;
   private final AtomicBoolean shouldRun = new AtomicBoolean();
+  // Method reconcile is executing currently.
+  private final AtomicBoolean reconcileRunning = new AtomicBoolean();
 
   private boolean retainDiffs = false;
 
@@ -325,6 +327,7 @@ public class DirectoryScanner implements Runnable {
    */
   void start() {
     shouldRun.set(true);
+    reconcileRunning.set(false);
     long firstScanTime = ThreadLocalRandom.current().nextLong(scanPeriodMsecs);
 
     LOG.info(
@@ -367,6 +370,11 @@ public class DirectoryScanner implements Runnable {
           "This cycle terminating immediately because 'shouldRun' has been deactivated");
       return;
     }
+    if (reconcileRunning.get()) {
+      // Method reconcile is executing.
+      LOG.warn("This cycle terminating immediately because reconcile is being executed.");
+      return;
+    }
     try {
       reconcile();
       dataset.setLastDirScannerFinishTime(System.currentTimeMillis());
@@ -375,11 +383,13 @@ public class DirectoryScanner implements Runnable {
       LOG.error(
           "Exception during DirectoryScanner execution - will continue next cycle",
           e);
+      reconcileRunning.set(false);
     } catch (Error er) {
       // Non-recoverable error - re-throw after logging the problem
       LOG.error(
           "System Error during DirectoryScanner execution - permanently terminating periodic scanner",
           er);
+      reconcileRunning.set(false);
       throw er;
     }
   }
@@ -394,6 +404,9 @@ public class DirectoryScanner implements Runnable {
     LOG.info("Shutdown has been called");
     if (!shouldRun.getAndSet(false)) {
       LOG.warn("Shutdown has been called, but periodic scanner not started");
+    }
+    if (reconcileRunning.getAndSet(false)) {
+      LOG.warn("Shutdown has been called when directory scanner is running.");
     }
     if (masterThread != null) {
       masterThread.shutdown();
@@ -426,11 +439,13 @@ public class DirectoryScanner implements Runnable {
    * Reconcile differences between disk and in-memory blocks
    */
   @VisibleForTesting
-  public void reconcile() throws IOException {
+  public synchronized void reconcile() throws IOException {
+    reconcileRunning.set(true);
     LOG.debug("reconcile start DirectoryScanning");
+    DataNodeFaultInjector.get().throwIOExceptionWhenReconcile();
     scan();
 
-    // HDFS-14476: run checkAndUpadte with batch to avoid holding the lock too
+    // HDFS-14476: run checkAndUpdate with batch to avoid holding the lock too
     // long
     int loopCount = 0;
     synchronized (diffs) {
@@ -451,6 +466,7 @@ public class DirectoryScanner implements Runnable {
     if (!retainDiffs) {
       clear();
     }
+    reconcileRunning.set(false);
   }
 
   /**
@@ -730,5 +746,31 @@ public class DirectoryScanner implements Runnable {
       timeWaitingMs.getAndAdd(perfTimer.now(TimeUnit.MILLISECONDS));
       perfTimer.reset().start();
     }
+  }
+
+
+  /**
+   * Trigger an instant run of directory scanner if it's not running currently.
+   * @return
+   */
+  public String triggerDirectoryScanner() throws IOException {
+    if (reconcileRunning.get()) {
+      return "Trigger DirectoryScanner failed, because it's running. Please try again later.";
+    }
+    try {
+      reconcile();
+      dataset.setLastDirScannerFinishTime(System.currentTimeMillis());
+    } catch (Exception e) {
+      // Log and reset reconcileRunning.
+      LOG.error(
+          "Exception during trigger DirectoryScanner execution, " +
+              "Try again later.", e);
+      reconcileRunning.set(false);
+      throw e;
+    } catch (Throwable e) {
+      reconcileRunning.set(false);
+      throw e;
+    }
+    return "Trigger DirectoryScanner successfully.";
   }
 }
