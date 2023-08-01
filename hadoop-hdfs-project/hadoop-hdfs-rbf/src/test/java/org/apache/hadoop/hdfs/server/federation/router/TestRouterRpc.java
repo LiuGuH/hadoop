@@ -136,6 +136,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
 
 /**
@@ -2027,5 +2029,44 @@ public class TestRouterRpc {
     // set by client.
     assertFalse(auditLog.getOutput().contains("clientIp:1.1.1.1"));
     assertFalse(auditLog.getOutput().contains("clientPort:1234"));
+  }
+
+  @Test
+  public void testGetListingOrder() throws Exception {
+    String ns1 = getCluster().getNameservices().get(1);
+    String destBasePath =  cluster.getNamenodeTestDirectoryForNS(ns1);
+    final String testPath1 = destBasePath + "/ßtestGetListingOrder";
+    final String testPath2 = destBasePath + "/%testGetListingOrder";
+    final FileSystem fileSystem1 = getCluster().
+        getNamenode(ns1, null).getFileSystem();
+
+    try {
+      // Create the test file in ns1.
+      createFile(fileSystem1, testPath1, 32);
+      createFile(fileSystem1, testPath2, 32);
+
+      NamenodeContext nn = cluster.getNamenode(ns1, null);
+      FileStatus[] fileStatuses =
+          nn.getFileSystem().listStatus(new Path(destBasePath));
+      List<String> requiredPaths = Arrays.stream(fileStatuses)
+          .map(fileStatus -> fileStatus.getPath().getName())
+          .collect(Collectors.toList());
+      Iterator<String> requiredPathsIterator = requiredPaths.iterator();
+
+      // Fetch listing.
+      DirectoryListing listing =
+          routerProtocol.getListing(cluster.getFederatedTestDirectoryForNS(ns1),
+              HdfsFileStatus.EMPTY_NAME, false);
+      assertEquals(requiredPaths.size(), listing.getPartialListing().length);
+      // Match each path returned and verify order returned.
+      for (HdfsFileStatus f : listing.getPartialListing()) {
+        String fileName = requiredPathsIterator.next();
+        String currentFile = f.getFullPath(new Path("/")).getName();
+        assertEquals(currentFile, fileName);
+      }
+    } finally {
+      fileSystem1.delete(new Path(testPath1), true);
+      fileSystem1.delete(new Path(testPath2), true);
+    }
   }
 }
