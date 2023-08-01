@@ -176,6 +176,8 @@ public class DataNodeMetrics {
   private MutableCounterLong numProcessedCommands;
   @Metric("Rate of processed commands of all BPServiceActors")
   private MutableRate processedCommandsOp;
+  @Metric("Count of duplicated striped replicas deleted")
+  private MutableGaugeInt numDeletedDupStripedReplicas;
 
   @Metric MutableCounterLong packetsReceived;
   @Metric MutableCounterLong packetsSlowWriteToMirror;
@@ -652,5 +654,9 @@ public class DataNodeMetrics {
 
   public void incrPacketsSlowWriteToOsCache() {
     packetsSlowWriteToOsCache.incr();
+  }
+
+  public void incrNumDeletedDupStripedReplicas() {
+    numDeletedDupStripedReplicas.incr();
   }
 }

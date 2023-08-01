@@ -1921,4 +1921,6 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE =
       "dfs.datanode.bpofferservice.lock.optimization.enable";
   public static final boolean DFS_DATANODE_BPOFFERSERVICE_LOCK_OPTIMIZATION_ENABLE_DEFAULT = false;
+  public static final String DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE = "dfs.datanode.duplicate.ecreplica.scanmap.maxsize";
+  public static final int DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE_DEFAULT = 1000;
 }

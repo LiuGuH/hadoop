@@ -62,6 +62,7 @@ import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtilClient;
 import org.apache.hadoop.hdfs.ExtendedBlockId;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockIdManager;
 import org.apache.hadoop.hdfs.server.datanode.FileIoProvider;
 import org.apache.hadoop.hdfs.server.datanode.FinalizedReplica;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
@@ -126,6 +127,9 @@ import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE_DEFAULT;
 
 /**************************************************
  * FSDataset manages a set of data blocks.  Each block
@@ -278,6 +282,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   private final Condition datasetWriteLockCondition;
   private static String blockPoolId = "";
   private volatile long lastDirScannerFinishTime;
+  private Map<ScanInfo, Long> duplicatedEcScanInfoMap;
 
   /**
    * An FSDataset has a directory where it loads its data files.
@@ -404,6 +409,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     maxDataLength = conf.getInt(
         CommonConfigurationKeys.IPC_MAXIMUM_DATA_LENGTH,
         CommonConfigurationKeys.IPC_MAXIMUM_DATA_LENGTH_DEFAULT);
+    duplicatedEcScanInfoMap = new HashMap<>();
   }
 
   @Override
@@ -2532,6 +2538,48 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
             if (!fileIoProvider.delete(vol, diskFile)) {
               LOG.warn("Failed to delete " + diskFile);
             }
+          }
+        } else if (BlockIdManager.isStripedBlockID(scanInfo.getBlockId())) {
+          // Reach maxinum size of the map, try to clean stale entries. 
+          if (duplicatedEcScanInfoMap != null && duplicatedEcScanInfoMap.size() == conf.getInt(
+              DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE,
+              DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE_DEFAULT)) {
+            long tempNow = Time.monotonicNow();
+            Iterator<Map.Entry<ScanInfo, Long>> iterator = duplicatedEcScanInfoMap.entrySet().iterator();
+            while (iterator.hasNext()) {
+              Map.Entry<ScanInfo, Long> entry = iterator.next();
+              if (tempNow - entry.getValue() > 3 * conf.getLong(DFSConfigKeys.DFS_BLOCKREPORT_INTERVAL_MSEC_KEY,
+                  DFSConfigKeys.DFS_BLOCKREPORT_INTERVAL_MSEC_DEFAULT)) {
+                iterator.remove();
+              }
+            }
+          }
+
+          // Two ec blocks with same block group id on one datanode.
+          Long lastCheckAndUpdateTime = duplicatedEcScanInfoMap.get(scanInfo);
+          if (lastCheckAndUpdateTime == null) {
+            if (duplicatedEcScanInfoMap.size() < conf.getInt(
+                DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE,
+                DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE_DEFAULT)) {
+              duplicatedEcScanInfoMap.put(scanInfo, Time.monotonicNow());
+            }
+            return;
+          }
+          if ((Time.monotonicNow() - lastCheckAndUpdateTime) >
+              2 * conf.getLong(DFSConfigKeys.DFS_BLOCKREPORT_INTERVAL_MSEC_KEY,
+                  DFSConfigKeys.DFS_BLOCKREPORT_INTERVAL_MSEC_DEFAULT)) {
+            if (fileIoProvider.delete(vol, diskFile)) {
+              volumeMap.remove(bpid, blockId);
+              duplicatedEcScanInfoMap.remove(scanInfo);
+              datanode.getMetrics().incrNumDeletedDupStripedReplicas();
+              LOG.info("Delete duplicated block group EC block {} successfully.",
+                  scanInfo.getBlockId());
+              if (diskMetaFileExists) {
+                fileIoProvider.delete(vol, diskMetaFile);
+              }
+              return;
+            }
+            LOG.warn("Failed to delete duplicated ec block {}", diskFile);
           }
         }
       } else {
