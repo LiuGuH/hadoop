@@ -409,6 +409,18 @@ public interface FsVolumeSpi
         return blockFile + metaFile;
       }
     }
+
+    @Override
+    public String toString() {
+      return "ScanInfo{" +
+          "blockId=" + blockId +
+          ", basePath=" + basePath +
+          ", blockFile='" + blockFile + '\'' +
+          ", metaFile='" + metaFile + '\'' +
+          ", volume=" + volume +
+          ", blockLength=" + blockLength +
+          '}';
+    }
   }
 
   /**

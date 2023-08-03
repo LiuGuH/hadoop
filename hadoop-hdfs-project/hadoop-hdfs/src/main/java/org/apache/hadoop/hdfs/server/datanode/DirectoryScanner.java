@@ -43,6 +43,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockIdManager;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi.ScanInfo;
@@ -536,6 +537,24 @@ public class DirectoryScanner implements Runnable {
           // volumeMap record and on-disk files do not match.
           statsRecord.duplicateBlocks++;
           addDifference(diffRecord, statsRecord, info);
+        } else if (BlockIdManager.isStripedBlockID(info.getBlockId()) && d > 0) {
+          long bgId = BlockIdManager.convertToStripedID(info.getBlockId());
+          boolean isPrevBlockStriped = BlockIdManager.isStripedBlockID(
+              blockpoolReport.get(d - 1).getBlockId());
+          if (isPrevBlockStriped) {
+            long prevBlockBGId = BlockIdManager.convertToStripedID(
+                blockpoolReport.get(d - 1).getBlockId());
+            // Two ec blocks which are in the same block group.
+            if (bgId == prevBlockBGId) {
+              statsRecord.duplicateBlocks++;
+              if (info.getVolume().getStorageID()
+                  .compareTo(blockpoolReport.get(d - 1).getVolume().getStorageID()) <= 0) {
+                addDifference(diffRecord, statsRecord, info);
+              } else {
+                addDifference(diffRecord, statsRecord, blockpoolReport.get(d - 1));
+              }
+            }
+          }
         }
         d++;
 
