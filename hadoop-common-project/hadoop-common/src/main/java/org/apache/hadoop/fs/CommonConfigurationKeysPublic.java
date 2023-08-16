@@ -1081,5 +1081,20 @@ public class CommonConfigurationKeysPublic {
   public static final String HADOOP_HTTP_IDLE_TIMEOUT_MS_KEY =
       "hadoop.http.idle_timeout.ms";
   public static final int HADOOP_HTTP_IDLE_TIMEOUT_MS_DEFAULT = 60000;
+
+  // dfsrouter top Configurations
+  public static final String RPC_RATELIMITER_TOP_ENABLED_KEY =
+      "rpc.ratelimiter.top.enabled";
+  public static final boolean RPC_RATELIMITER_TOP_ENABLED_DEFAULT = false;
+  public static final String RPC_RATELIMITER_TOP_BUCKETS_PER_WINDOW_KEY =
+      "rpc.ratelimiter.top.window.num.buckets";
+  public static final int RPC_RATELIMITER_TOP_BUCKETS_PER_WINDOW_DEFAULT = 10;
+  public static final String RPC_RATELIMITER_TOP_NUM_USERS_KEY =
+      "rpc.ratelimiter.top.num.users";
+  public static final int RPC_RATELIMITER_TOP_NUM_USERS_DEFAULT = 10;
+  // comma separated list of dfsrouter top reporting periods in minutes
+  public static final String RPC_RATELIMITER_TOP_WINDOWS_MINUTES_KEY =
+      "rpc.ratelimiter.top.windows.minutes";
+  public static final String[] RPC_RATELIMITER_TOP_WINDOWS_MINUTES_DEFAULT = {"1", "5", "25"};
 }
 
