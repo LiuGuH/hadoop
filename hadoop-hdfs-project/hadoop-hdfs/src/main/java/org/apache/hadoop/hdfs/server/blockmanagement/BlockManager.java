@@ -160,7 +160,7 @@ import org.slf4j.LoggerFactory;
  */
 @InterfaceAudience.Private
 public class BlockManager implements BlockStatsMXBean {
-  class BlockReportLogger {
+  public class BlockReportLogger {
 
   }
   public static final Logger LOG = LoggerFactory.getLogger(BlockManager.class);
@@ -3075,6 +3075,7 @@ public class BlockManager implements BlockStatsMXBean {
     if (newReport == null) {
       newReport = BlockListAsLongs.EMPTY;
     }
+    long startNanoTime = Time.monotonicNowNanos();
     // scan the report and process newly reported blocks
     for (BlockReportReplica iblk : newReport) {
       ReplicaState iState = iblk.getState();
@@ -3092,7 +3093,8 @@ public class BlockManager implements BlockStatsMXBean {
         }
       }
     }
-
+    BLOCK_REPORT_LOG.debug("Handle newreports costs {} ns", Time.monotonicNowNanos() - startNanoTime);
+    startNanoTime = Time.monotonicNowNanos();
     // collect blocks that have not been reported
     // all of them are next to the delimiter
     Iterator<BlockInfo> it =
@@ -3101,6 +3103,7 @@ public class BlockManager implements BlockStatsMXBean {
       toRemove.add(it.next());
     }
     storageInfo.removeBlock(delimiter);
+    BLOCK_REPORT_LOG.debug("Remove unreported blocks costs {} ns", Time.monotonicNowNanos() - startNanoTime);
   }
 
   /**
