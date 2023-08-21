@@ -101,6 +101,13 @@ public class NetworkTopology {
   private int depthOfAllLeaves = -1;
   /** rack counter */
   protected int numOfRacks = 0;
+  /** empty rack map, rackname->nodenumber. */
+  private HashMap<String, Set<String>> rackMap =
+      new HashMap<String, Set<String>>();
+  /** decommission nodes, contained stoped nodes. */
+  private HashSet<String> decommissionNodes = new HashSet<>();
+  /** empty rack counter. */
+  private int numOfEmptyRacks = 0;
 
   /**
    * Whether or not this cluster has ever consisted of more than 1 rack,
@@ -150,6 +157,7 @@ public class NetworkTopology {
         if (rack == null) {
           incrementRacks();
         }
+        interAddNodeWithEmptyRack(node);
         if (depthOfAllLeaves == -1) {
           depthOfAllLeaves = node.getLevel();
         }
@@ -226,6 +234,7 @@ public class NetworkTopology {
         if (rack == null) {
           numOfRacks--;
         }
+        interRemoveNodeWithEmptyRack(node);
       }
       LOG.debug("NetworkTopology became:\n{}", this);
     } finally {
@@ -488,10 +497,10 @@ public class NetworkTopology {
   protected Node chooseRandom(final String scope, String excludedScope,
       final Collection<Node> excludedNodes) {
     if (excludedScope != null) {
-      if (scope.startsWith(excludedScope)) {
+      if (isChildScope(scope, excludedScope)) {
         return null;
       }
-      if (!excludedScope.startsWith(scope)) {
+      if (!isChildScope(excludedScope, scope)) {
         excludedScope = null;
       }
     }
@@ -670,8 +679,7 @@ public class NetworkTopology {
           if (node == null) {
             continue;
           }
-          if ((NodeBase.getPath(node) + NodeBase.PATH_SEPARATOR_STR)
-              .startsWith(scope + NodeBase.PATH_SEPARATOR_STR)) {
+          if (isNodeInScope(node, scope)) {
             if (node instanceof InnerNode) {
               excludedCountInScope += ((InnerNode) node).getNumOfLeaves();
             } else {
@@ -989,4 +997,138 @@ public class NetworkTopology {
     Preconditions.checkState(idx == activeLen,
         "Sorted the wrong number of nodes!");
   }
+
+  /**
+   * Checks whether one scope is contained in the other scope.
+   * @param parentScope the parent scope to check
+   * @param childScope  the child scope which needs to be checked.
+   * @return true if childScope is contained within the parentScope
+   */
+  protected static boolean isChildScope(final String parentScope,
+      final String childScope) {
+    String pScope = parentScope.endsWith(NodeBase.PATH_SEPARATOR_STR) ?
+        parentScope :  parentScope + NodeBase.PATH_SEPARATOR_STR;
+    String cScope = childScope.endsWith(NodeBase.PATH_SEPARATOR_STR) ?
+        childScope :  childScope + NodeBase.PATH_SEPARATOR_STR;
+    return pScope.startsWith(cScope);
+  }
+
+  /**
+   * Checks whether a node belongs to the scope.
+   * @param node  the node to check.
+   * @param scope scope to check.
+   * @return true if node lies within the scope
+   */
+  protected static boolean isNodeInScope(Node node, String scope) {
+    if (!scope.endsWith(NodeBase.PATH_SEPARATOR_STR)) {
+      scope += NodeBase.PATH_SEPARATOR_STR;
+    }
+    String nodeLocation = NodeBase.getPath(node) + NodeBase.PATH_SEPARATOR_STR;
+    return nodeLocation.startsWith(scope);
+  }
+
+  /** @return the number of nonempty racks */
+  public int getNumOfNonEmptyRacks() {
+    return numOfRacks - numOfEmptyRacks;
+  }
+
+  /**
+   * Update empty rack number when add a node like recommission.
+   * @param node node to be added; can be null
+   */
+  public void recommissionNode(Node node) {
+    if (node == null) {
+      return;
+    }
+    if (node instanceof InnerNode) {
+      throw new IllegalArgumentException(
+          "Not allow to remove an inner node: " + NodeBase.getPath(node));
+    }
+    netlock.writeLock().lock();
+    try {
+      decommissionNodes.remove(node.getName());
+      interAddNodeWithEmptyRack(node);
+    } finally {
+      netlock.writeLock().unlock();
+    }
+  }
+
+  /**
+   * Update empty rack number when remove a node like decommission.
+   * @param node node to be added; can be null
+   */
+  public void decommissionNode(Node node) {
+    if (node == null) {
+      return;
+    }
+    if (node instanceof InnerNode) {
+      throw new IllegalArgumentException(
+          "Not allow to remove an inner node: " + NodeBase.getPath(node));
+    }
+    netlock.writeLock().lock();
+    try {
+      decommissionNodes.add(node.getName());
+      interRemoveNodeWithEmptyRack(node);
+    } finally {
+      netlock.writeLock().unlock();
+    }
+  }
+
+  /**
+   * Internal function for update empty rack number
+   * for add or recommission a node.
+   * @param node node to be added; can be null
+   */
+  private void interAddNodeWithEmptyRack(Node node) {
+    if (node == null) {
+      return;
+    }
+    String rackname = node.getNetworkLocation();
+    Set<String> nodes = rackMap.get(rackname);
+    if (nodes == null) {
+      nodes = new HashSet<String>();
+    }
+    if (!decommissionNodes.contains(node.getName())) {
+      nodes.add(node.getName());
+    }
+    rackMap.put(rackname, nodes);
+    countEmptyRacks();
+  }
+
+  /**
+   * Internal function for update empty rack number
+   * for remove or decommission a node.
+   * @param node node to be removed; can be null
+   */
+  private void interRemoveNodeWithEmptyRack(Node node) {
+    if (node == null) {
+      return;
+    }
+    String rackname = node.getNetworkLocation();
+    Set<String> nodes = rackMap.get(rackname);
+    if (nodes != null) {
+      InnerNode rack = (InnerNode) getNode(node.getNetworkLocation());
+      if (rack == null) {
+        // this node and its rack are both removed.
+        rackMap.remove(rackname);
+      } else if (nodes.contains(node.getName())) {
+        // this node is decommissioned or removed.
+        nodes.remove(node.getName());
+        rackMap.put(rackname, nodes);
+      }
+      countEmptyRacks();
+    }
+  }
+
+  private void countEmptyRacks() {
+    int count = 0;
+    for (Set<String> nodes : rackMap.values()) {
+      if (nodes != null && nodes.isEmpty()) {
+        count++;
+      }
+    }
+    numOfEmptyRacks = count;
+    LOG.debug("Current numOfEmptyRacks is {}", numOfEmptyRacks);
+  }
 }
+

@@ -4573,6 +4573,24 @@
     </description>
   </property>
 
+  <property>
+    <name>dfs.datanode.ec.reconstruct.read.bandwidthPerSec</name>
+    <value>0</value>
+    <description>
+      Specifies the maximum amount of bandwidth that the EC reconstruction can utilize for reading.
+      When the bandwidth value is zero, there is no limit.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.datanode.ec.reconstruct.write.bandwidthPerSec</name>
+    <value>0</value>
+    <description>
+      Specifies the maximum amount of bandwidth that the EC reconstruction can utilize for writing.
+      When the bandwidth value is zero, there is no limit.
+    </description>
+  </property>
+
 <property>
   <name>dfs.datanode.fsdataset.factory</name>
   <value></value>
@@ -5088,7 +5106,9 @@
   <description>
     Normally a file can only be closed with all its blocks are committed.
     When this value is set to a positive integer N, a file can be closed
-    when N blocks are committed and the rest complete.
+    when N blocks are committed and the rest complete. In case of Erasure Coded
+    blocks, the committed block shall be allowed only when the block group is
+    complete. i.e no missing/lost block in the blockgroup.
   </description>
 </property>
 
