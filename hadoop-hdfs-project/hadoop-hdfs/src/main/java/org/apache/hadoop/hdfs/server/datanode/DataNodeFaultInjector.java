@@ -145,4 +145,6 @@ public class DataNodeFaultInjector {
    * into an erasure coding reconstruction.
    */
   public void badDecoding(ByteBuffer[] outputs) {}
+
+  public void throwIOExceptionWhenReconcile() throws IOException {}
 }

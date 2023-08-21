@@ -464,6 +464,7 @@ public class DFSAdmin extends FsShell {
     "\t[-getDatanodeInfo <datanode_host:ipc_port>]\n" +
     "\t[-metasave filename]\n" +
     "\t[-triggerBlockReport [-incremental] <datanode_host:ipc_port> [-namenode <namenode_host:ipc_port>]]\n" +
+    "\t[-triggerDirectoryScanner <datanode_host:ipc_port>\n" +
     "\t[-listOpenFiles [-blockingDecommission] [-path <path>]]\n" +
     "\t[-help [cmd]]\n";
 
@@ -1321,6 +1322,10 @@ public class DFSAdmin extends FsShell {
         + "\tIf 'blockingDecommission' option is specified, it will list the\n"
         + "\topen files only that are blocking the ongoing Decommission.";
 
+    String triggerDirectoryScanner = "-triggerDirectoryScanner <datanode_host:ipc_port>:\n" +
+        "\tTrigger an instant run of directory scanner for the datanode" +
+        "\tif it's not running currently.";
+
     String help = "-help [cmd]: \tDisplays help for the given command or all commands if none\n" +
       "\t\tis specified.\n";
 
@@ -1394,6 +1399,8 @@ public class DFSAdmin extends FsShell {
       System.out.println(triggerBlockReport);
     } else if ("listOpenFiles".equalsIgnoreCase(cmd)) {
       System.out.println(listOpenFiles);
+    } else if ("triggerDirectoryScanner".equalsIgnoreCase(cmd)) {
+      System.out.println(triggerDirectoryScanner);
     } else if ("help".equals(cmd)) {
       System.out.println(help);
     } else {
@@ -1432,6 +1439,7 @@ public class DFSAdmin extends FsShell {
       System.out.println(getDatanodeInfo);
       System.out.println(triggerBlockReport);
       System.out.println(listOpenFiles);
+      System.out.println(triggerDirectoryScanner);
       System.out.println(help);
       System.out.println();
       ToolRunner.printGenericCommandUsage(System.out);
@@ -2230,6 +2238,9 @@ public class DFSAdmin extends FsShell {
     } else if ("-listOpenFiles".equals(cmd)) {
       System.err.println("Usage: hdfs dfsadmin"
           + " [-listOpenFiles [-blockingDecommission] [-path <path>]]");
+    } else if ("-triggerDirectoryScanner".equals(cmd)) {
+      System.err.println("Usage: hdfs dfsadmin"
+          + " [-triggerDirectoryScanner <datanode_host:ipc_port>]");
     } else {
       System.err.println("Usage: hdfs dfsadmin");
       System.err.println("Note: Administrative commands can only be run as the HDFS superuser.");
@@ -2397,6 +2408,11 @@ public class DFSAdmin extends FsShell {
         printUsage(cmd);
         return exitCode;
       }
+    } else if ("-triggerDirectoryScanner".equals(cmd)) {
+      if (argv.length != 2) {
+        printUsage(cmd);
+        return exitCode;
+      }
     }
     
     // initialize DFSAdmin
@@ -2475,6 +2491,8 @@ public class DFSAdmin extends FsShell {
         exitCode = triggerBlockReport(argv);
       } else if ("-listOpenFiles".equals(cmd)) {
         exitCode = listOpenFiles(argv);
+      } else if ("-triggerDirectoryScanner".equals(cmd)){
+        exitCode = triggerDirectoryScanner(argv, i);
       } else if ("-help".equals(cmd)) {
         if (i < argv.length) {
           printHelp(argv[i]);
@@ -2626,6 +2644,18 @@ public class DFSAdmin extends FsShell {
     }
     return 0;
   }
+
+  public int triggerDirectoryScanner(String[] argv, int idx) throws IOException {
+    ClientDatanodeProtocol dnProxy = getDataNodeProxy(argv[idx]);
+    try {
+      String result = dnProxy.triggerDirectoryScanner();
+      System.out.println(result);
+    } catch (IOException ioe) {
+      throw new IOException("Exception during trigger DirectoryScanner execution. " + ioe, ioe);
+    }
+    return 0;
+  }
+
 
   /**
    * main() has some simple utility methods.
