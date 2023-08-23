@@ -63,6 +63,8 @@ import org.apache.hadoop.test.MetricsAsserts;
 import org.apache.hadoop.util.Time;
 import org.junit.Test;
 import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -157,6 +159,67 @@ public class TestDataNodeMetrics {
       assertQuantileGauges("FsyncNanos" + sec, dnMetrics);
     } finally {
       if (cluster != null) {cluster.shutdown();}
+    }
+  }
+
+  @Test
+  public void testReceivePacketSlowMetrics() throws Exception {
+    Configuration conf = new HdfsConfiguration();
+    // This is required to trigger the PacketsSlowWriteToOsCache counter since we are only writing a 1-byte file.
+    BlockReceiver.CACHE_DROP_LAG_BYTES = 0;
+    final int interval = 1;
+    conf.setInt(DFSConfigKeys.DFS_METRICS_PERCENTILES_INTERVALS_KEY, interval);
+    final int NUM_DATANODES = 3;
+    MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(NUM_DATANODES).build();
+    try {
+      cluster.waitActive();
+      DistributedFileSystem fs = cluster.getFileSystem();
+      final DataNodeFaultInjector injector =
+          Mockito.mock(DataNodeFaultInjector.class);
+      Answer answer = new Answer() {
+        @Override
+        public Object answer(InvocationOnMock invocationOnMock)
+            throws Throwable {
+          // make the op taking longer time
+          Thread.sleep(1000);
+          return null;
+        }
+      };
+      Mockito.doAnswer(answer).when(injector).
+          stopSendingPacketDownstream(Mockito.anyString());
+      Mockito.doAnswer(answer).when(injector).delayWriteToOsCache();
+      Mockito.doAnswer(answer).when(injector).delayWriteToDisk();
+      DataNodeFaultInjector.set(injector);
+      Path testFile = new Path("/testFlushNanosMetric.txt");
+      FSDataOutputStream fout = fs.create(testFile);
+      fout.write(new byte[1]);
+      fout.hsync();
+      fout.close();
+      List<DataNode> datanodes = cluster.getDataNodes();
+      long sumPacketsReceived = 0;
+      long sumPacketsSlowWriteToMirror = 0;
+      long sumPacketsSlowWriteToDisk = 0;
+      long sumPacketsSlowWriteToOsCache = 0;
+      for (DataNode datanode : datanodes) {
+        MetricsRecordBuilder dnMetrics = getMetrics(datanode.getMetrics().name());
+        sumPacketsReceived += getLongCounter("PacketsReceived", dnMetrics);
+        sumPacketsSlowWriteToMirror += getLongCounter("PacketsSlowWriteToMirror", dnMetrics);
+        sumPacketsSlowWriteToDisk += getLongCounter("PacketsSlowWriteToDisk", dnMetrics);
+        sumPacketsSlowWriteToOsCache += getLongCounter("PacketsSlowWriteToOsCache", dnMetrics);
+      }
+      assertTrue("At least 3 packets received",
+          sumPacketsReceived >= 3L);
+      assertTrue("At least 2 slow packets to mirror",
+          sumPacketsSlowWriteToMirror >= 2L);
+      assertEquals("Exactly 3 PacketsSlowWriteToDisk",
+          3L, sumPacketsSlowWriteToDisk);
+      assertEquals("Exactly 3 PacketsSlowWriteToOsCache",
+          3L, sumPacketsSlowWriteToOsCache);
+    } finally {
+      if (cluster != null) {
+        cluster.shutdown();
+      }
     }
   }
 

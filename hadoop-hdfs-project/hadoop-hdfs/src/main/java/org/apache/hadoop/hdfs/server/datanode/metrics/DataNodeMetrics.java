@@ -177,6 +177,11 @@ public class DataNodeMetrics {
   @Metric("Rate of processed commands of all BPServiceActors")
   private MutableRate processedCommandsOp;
 
+  @Metric MutableCounterLong packetsReceived;
+  @Metric MutableCounterLong packetsSlowWriteToMirror;
+  @Metric MutableCounterLong packetsSlowWriteToDisk;
+  @Metric MutableCounterLong packetsSlowWriteToOsCache;
+
   final MetricsRegistry registry = new MetricsRegistry("datanode");
   @Metric("Milliseconds spent on calling NN rpc")
   private MutableRatesWithAggregation
@@ -631,5 +636,21 @@ public class DataNodeMetrics {
    */
   public void addNumProcessedCommands(long latency) {
     processedCommandsOp.add(latency);
+  }
+
+  public void incrPacketsReceived() {
+    packetsReceived.incr();
+  }
+
+  public void incrPacketsSlowWriteToMirror() {
+    packetsSlowWriteToMirror.incr();
+  }
+
+  public void incrPacketsSlowWriteToDisk() {
+    packetsSlowWriteToDisk.incr();
+  }
+
+  public void incrPacketsSlowWriteToOsCache() {
+    packetsSlowWriteToOsCache.incr();
   }
 }
