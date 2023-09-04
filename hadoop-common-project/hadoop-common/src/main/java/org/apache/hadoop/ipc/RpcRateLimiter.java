@@ -1,5 +1,6 @@
 package org.apache.hadoop.ipc;
 
+import com.google.gson.Gson;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.net.util.SubnetUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -11,12 +12,20 @@ import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.RateLimite
 import org.apache.hadoop.top.TopConf;
 import org.apache.hadoop.top.metrics.TopMetrics;
 import org.apache.hadoop.util.Time;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -24,12 +33,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_URL;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_TRYACQUIRE_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_TRYACQUIRE_TIMEOUT_DEFAULT;
 
@@ -275,8 +287,15 @@ public class RpcRateLimiter {
       while (true) {
         if (BzlDynamicConfiguration.getInstance()
             .getBoolean(IPC_SERVER_RATE_LIMIT_ENABLE, IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT)) {
-          String newValue = BzlDynamicConfiguration.getInstance()
-              .get(IPC_SERVER_RATE_LIMIT_RULES, IPC_SERVER_RATE_LIMIT_RULES_DEFAULT);
+          String newValue = null;
+          if (BzlDynamicConfiguration.getInstance()
+              .getBoolean(IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE,
+                  IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE_DEFAULT)) {
+            newValue = BzlDynamicConfiguration.getInstance()
+                .get(IPC_SERVER_RATE_LIMIT_RULES, IPC_SERVER_RATE_LIMIT_RULES_DEFAULT);
+          } else {
+            newValue = getRateLimterRules();
+          }
 
           if ((oldValue == null) || (newValue != null && !oldValue.equals(newValue))) {
             try {
@@ -326,6 +345,7 @@ public class RpcRateLimiter {
         if (rateLimit.length != 2) {
           LOG.error("Wrong config for {}. Detail is {}", IPC_SERVER_RATE_LIMIT_RULES,
               rateLimits[i]);
+          rpcRateLimiterMetrics.addRpcRateLimitParsingFormatFailures();
           continue;
         }
 
@@ -338,10 +358,12 @@ public class RpcRateLimiter {
             !checkQpsFormat(qps)) {
           LOG.error("Wrong config for {}. Detail is {}", IPC_SERVER_RATE_LIMIT_RULES,
               rateLimits[i]);
+          rpcRateLimiterMetrics.addRpcRateLimitParsingFormatFailures();
           continue;
         }
 
         list.add(new LimitCondition(limitKeys[0], limitKeys[1], limitKeys[2], limitKeys[3], qps));
+        rpcRateLimiterMetrics.addRpcRateLimitParsingFormatSuccesses();
       }
       Collections.sort(list);
       return list;
@@ -380,5 +402,68 @@ public class RpcRateLimiter {
       return StringUtils.isNotBlank(qps) && ((StringUtils.isNumeric(qps) &&
           Double.parseDouble(qps) >= 1.0) || qps.equals("*") || qps.equals("0"));
     }
+
+    private String getRateLimterRules() {
+      String json = doGetHttp(BzlDynamicConfiguration.getInstance()
+          .get(IPC_SERVER_RATE_LIMIT_RULES_URL, ""));
+      String rpcRateLimiterRules = parseJson(json);
+      if (rpcRateLimiterRules == null) {
+        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
+      }
+      return rpcRateLimiterRules;
+    }
+
+    private String doGetHttp(String rpcRateLimiterUrl) {
+      if (rpcRateLimiterUrl == null) {
+        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
+        return null;
+      }
+      
+      String resStr = null;
+      CloseableHttpClient httpClient = null;
+      CloseableHttpResponse httpResponse = null;
+      try {
+        URI uri = new URIBuilder(rpcRateLimiterUrl).build();
+        httpClient = HttpClients.createDefault();
+        HttpGet httpGet = new HttpGet(uri);
+        httpResponse = httpClient.execute(httpGet);
+
+        if (httpResponse.getStatusLine().getStatusCode() == 200) {
+          resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
+          rpcRateLimiterMetrics.addRpcRateLimitFetchSuccesses();
+        }
+      } catch (java.io.IOException e) {
+        LOG.warn("IOException error! The detail message is {}.", e.getMessage());
+        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
+        return null;
+      } catch (java.net.URISyntaxException e) {
+        LOG.warn("URISyntaxException error! The detail message is {}.", e.getMessage());
+        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
+        return null;
+      } finally {
+        try {
+          if (httpClient != null) {
+            httpClient.close();
+          }
+          if (httpResponse != null) {
+            httpResponse.close();
+          }
+        } catch (java.io.IOException e) {
+          LOG.warn("Close error! The detail message is {}.", e.getMessage());
+        }
+      }
+      return resStr;
+    }
+
+    private String parseJson(String json) {
+      if (json == null) {
+        return null;
+      }
+      Gson gson = new Gson();
+      Map<String, String>
+          rs = gson.fromJson(json, Map.class);
+      return rs.get("data");
+    }
+    
   }
 }

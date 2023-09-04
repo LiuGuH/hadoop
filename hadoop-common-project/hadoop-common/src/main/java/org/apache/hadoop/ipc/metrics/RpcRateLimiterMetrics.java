@@ -26,6 +26,15 @@ public class RpcRateLimiterMetrics {
   @Metric("rpcRateLimitTryAcquire time")
   MutableRate rpcRateLimitTryAcquire;
 
+  @Metric("Number of rpcRateLimit fetch successes")
+  MutableCounterLong rpcRateLimitFetchSuccesses;
+  @Metric("Number of rpcRateLimit fetch failures")
+  MutableCounterLong rpcRateLimitFetchFailures;
+  @Metric("Number of rpcRateLimit parsingFormat successes")
+  MutableCounterLong rpcRateLimitParsingFormatSuccesses;
+  @Metric("Number of rpcRateLimit parsingFormat failures")
+  MutableCounterLong rpcRateLimitParsingFormatFailures;
+
   public RpcRateLimiterMetrics() {
     registry = new MetricsRegistry("ratelimter");
     name = "ratelimter";
@@ -67,4 +76,21 @@ public class RpcRateLimiterMetrics {
   public void addRpcRateLimitMismatch(long time) {
     rpcRateLimitMismatch.add(time);
   }
+
+  public void addRpcRateLimitFetchSuccesses() {
+    rpcRateLimitFetchSuccesses.incr();
+  }
+
+  public void addRpcRateLimitFetchFailures() {
+    rpcRateLimitFetchFailures.incr();
+  }
+
+  public void addRpcRateLimitParsingFormatSuccesses() {
+    rpcRateLimitParsingFormatSuccesses.incr();
+  }
+
+  public void addRpcRateLimitParsingFormatFailures() {
+    rpcRateLimitParsingFormatFailures.incr();
+  }
+
 }
