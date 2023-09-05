@@ -184,6 +184,29 @@ public class DataNodeMetrics {
   @Metric MutableCounterLong packetsSlowWriteToDisk;
   @Metric MutableCounterLong packetsSlowWriteToOsCache;
 
+  // FsDatasetImpl local file process hold lock metrics.
+  @Metric private MutableRate createRbwHoldLock;
+  @Metric private MutableRate recoverRbwPerLoopHoldLock;
+  @Metric private MutableRate convertTemporaryToRbwHoldLock;
+  @Metric private MutableRate createTemporaryPerLoopHoldLock;
+  @Metric private MutableRate createTemporaryNonLoopHoldLock;
+  @Metric private MutableRate finalizeBlockHoldLock;
+  @Metric private MutableRate unfinalizeBlockHoldLock;
+  @Metric private MutableRate checkAndUpdateHoldLock;
+  @Metric private MutableRate updateReplicaUnderRecoveryHoldLock;
+  @Metric private MutableRate appendHoldLock;
+
+  // FsDatasetImpl local file process metrics.
+  @Metric private MutableRate createRbwOp;
+  @Metric private MutableRate recoverRbwOp;
+  @Metric private MutableRate convertTemporaryToRbwOp;
+  @Metric private MutableRate createTemporaryOp;
+  @Metric private MutableRate finalizeBlockOp;
+  @Metric private MutableRate unfinalizeBlockOp;
+  @Metric private MutableRate checkAndUpdateOp;
+  @Metric private MutableRate updateReplicaUnderRecoveryOp;
+  @Metric private MutableRate appendOp;
+
   final MetricsRegistry registry = new MetricsRegistry("datanode");
   @Metric("Milliseconds spent on calling NN rpc")
   private MutableRatesWithAggregation
@@ -658,5 +681,157 @@ public class DataNodeMetrics {
 
   public void incrNumDeletedDupStripedReplicas() {
     numDeletedDupStripedReplicas.incr();
+  }
+
+  /**
+   * Add CreateRbwHoldLock metrics.
+   * @param latency milliseconds of create RBW file operation lock hold.
+   */
+  public void addCreateRbwHoldLock(long latency) {
+    createRbwHoldLock.add(latency);
+  }
+
+  /**
+   * Add CreateRbwOp metrics.
+   * @param latency milliseconds of create RBW file
+   */
+  public void addCreateRbwOp(long latency) {
+    createRbwOp.add(latency);
+  }
+
+  /**
+   * Add RecoverRbwLock metrics.
+   * @param latency milliseconds of recovery RBW file operation lock hold.
+   */
+  public void addRecoverRbwPerLoopHoldLock(long latency) {
+    recoverRbwPerLoopHoldLock.add(latency);
+  }
+
+  /**
+   * Add RecoverRbwOp metrics.
+   * @param latency milliseconds of recovery RBW file
+   */
+  public void addRecoverRbwOp(long latency) {
+    recoverRbwOp.add(latency);
+  }
+
+  /**
+   * Add ConvertTemporaryToRbwLock metrics.
+   * @param latency milliseconds of convert temporary to RBW file operation lock hold.
+   */
+  public void addConvertTemporaryToRbwHoldLock(long latency) {
+    convertTemporaryToRbwHoldLock.add(latency);
+  }
+
+  /**
+   * Add ConvertTemporaryToRbwOp metrics.
+   * @param latency milliseconds of convert temporary to RBW file
+   */
+  public void addConvertTemporaryToRbwOp(long latency) {
+    convertTemporaryToRbwOp.add(latency);
+  }
+
+  /**
+   * Add CreateTemporaryPerLoopHoldLock metrics.
+   * @param latency milliseconds of create temporary block file operation lock hold.
+   */
+  public void addCreateTemporaryPerLoopHoldLock(long latency) {
+    createTemporaryPerLoopHoldLock.add(latency);
+  }
+
+  /**
+   * Add CreateTemporaryNonLoopHoldLock metrics.
+   * @param latency milliseconds of create temporary block file operation lock hold.
+   */
+  public void addCreateTemporaryNonLoopHoldLock(long latency) {
+    createTemporaryNonLoopHoldLock.add(latency);
+  }
+
+  /**
+   * Add CreateTemporaryOp metrics.
+   * @param latency milliseconds of create temporary block file
+   */
+  public void addCreateTemporaryOp(long latency) {
+    createTemporaryOp.add(latency);
+  }
+
+  /**
+   * Add FinalizeBlockHoldLock metrics.
+   * @param latency milliseconds of finalize block operation lock hold.
+   */
+  public void addFinalizeBlockHoldLock(long latency) {
+    finalizeBlockHoldLock.add(latency);
+  }
+
+  /**
+   * Add FinalizeBlockOp metrics.
+   * @param latency milliseconds of finalize block
+   */
+  public void addFinalizeBlockOp(long latency) {
+    finalizeBlockOp.add(latency);
+  }
+
+  /**
+   * Add UnfinalizeBlockHoldLock metrics.
+   * @param latency milliseconds of un-finalize block file operation lock hold.
+   */
+  public void addUnfinalizeBlockHoldLock(long latency) {
+    unfinalizeBlockHoldLock.add(latency);
+  }
+
+  /**
+   * Add UnfinalizeBlockOp metrics.
+   * @param latency milliseconds of un-finalize block file
+   */
+  public void addUnfinalizeBlockOp(long latency) {
+    unfinalizeBlockOp.add(latency);
+  }
+
+  /**
+   * Add CheckAndUpdateHoldLock metrics.
+   * @param latency milliseconds of check and update block file operation lock hold.
+   */
+  public void addCheckAndUpdateHoldLock(long latency) {
+    checkAndUpdateHoldLock.add(latency);
+  }
+
+  /**
+   * Add CheckAndUpdateOp metrics.
+   * @param latency milliseconds of check and update block file
+   */
+  public void addCheckAndUpdateOp(long latency) {
+    checkAndUpdateOp.add(latency);
+  }
+
+  /**
+   * Add UpdateReplicaUnderRecoveryHoldLock metrics.
+   * @param latency milliseconds of update and replica under recovery block file operation lock hold.
+   */
+  public void addUpdateReplicaUnderRecoveryHoldLock(long latency) {
+    updateReplicaUnderRecoveryHoldLock.add(latency);
+  }
+
+  /**
+   * Add UpdateReplicaUnderRecoveryOp metrics.
+   * @param latency milliseconds of update and replica under recovery block file
+   */
+  public void addUpdateReplicaUnderRecoveryOp(long latency) {
+    updateReplicaUnderRecoveryOp.add(latency);
+  }
+
+  /**
+   * Add AppendHoldLock metrics.
+   * @param latency milliseconds of update and replica under recovery block file operation lock hold.
+   */
+  public void addAppendHoldLock(long latency) {
+    appendHoldLock.add(latency);
+  }
+
+  /**
+   * Add AppendOp metrics.
+   * @param latency milliseconds of update and replica under recovery block file
+   */
+  public void addAppendOp(long latency) {
+    appendOp.add(latency);
   }
 }

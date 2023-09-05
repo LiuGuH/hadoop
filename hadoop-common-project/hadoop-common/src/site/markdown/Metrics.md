@@ -463,6 +463,42 @@ Each metrics record contains tags such as SessionId and Hostname as additional i
 | `PacketsSlowWriteToMirror` | Total number of packets whose write to other Datanodes in the pipeline takes more than a certain time (300ms by default) |
 | `PacketsSlowWriteToDisk` | Total number of packets whose write to disk takes more than a certain time (300ms by default) |
 | `PacketsSlowWriteToOsCache` | Total number of packets whose write to os cache takes more than a certain time (300ms by default) |
+| `CreateRbwHoldLockNumOps` | Total number of create rbw lock operations |
+| `CreateRbwHoldLockAvgTime` | Average lock hold time of create rbw operations in milliseconds |
+| `RecoverRbwPerLoopHoldLockNumOps` | Total number of recovery rbw lock operations |
+| `RecoverRbwPerLoopHoldLockAvgTime` | Average lock hold time of recovery rbw operations in milliseconds |
+| `ConvertTemporaryToRbwHoldLockNumOps` | Total number of convert temporary to rbw lockoperations |
+| `ConvertTemporaryToRbwHoldLockAvgTime` | Average lock hold time of convert temporary to rbw operations in milliseconds |
+| `CreateTemporaryHoldLockNumOps` | Total number of create temporary lock operations |
+| `CreateTemporaryHoldLockAvgTime` | Average lock hold time of create temporary operations in milliseconds |
+| `FinalizeBlockHoldLockNumOps` | Total number of finalize block lock operations |
+| `FinalizeBlockHoldLockAvgTime` | Average lock hold time of finalize block operations in milliseconds |
+| `UnfinalizeBlockHoldLockNumOps` | Total number of un-finalize block lock operations |
+| `UnfinalizeBlockHoldLockAvgTime` | Average lock hold time of un-finalize block operations in milliseconds |
+| `CheckAndUpdateHoldLockNumOps` | Total number of check and update lock operations |
+| `CheckAndUpdateHoldLockAvgTime` | Average lock hold time of check and update operations in milliseconds |
+| `UpdateReplicaUnderRecoveryHoldLockNumOps` | Total number of update replica under recovery lock operations |
+| `UpdateReplicaUnderRecoveryHoldLockAvgTime` | Average time lock hold of update replica under recovery operations in milliseconds |
+| `AppendHoldLockNumOps` | Total number of append lock operations |
+| `AppendHoldLockAvgTime` | Average lock time of append operations in milliseconds |
+| `CreateRbwOpNumOps` | Total number of create rbw operations |
+| `CreateRbwOpAvgTime` | Average time of create rbw operations in milliseconds |
+| `RecoverRbwOpNumOps` | Total number of recovery rbw operations |
+| `RecoverRbwOpAvgTime` | Average time of recovery rbw operations in milliseconds |
+| `ConvertTemporaryToRbwOpNumOps` | Total number of convert temporary to rbw operations |
+| `ConvertTemporaryToRbwOpAvgTime` | Average time of convert temporary to rbw operations in milliseconds |
+| `CreateTemporaryOpNumOps` | Total number of create temporary operations |
+| `CreateTemporaryOpAvgTime` | Average time of create temporary operations in milliseconds |
+| `FinalizeBlockOpNumOps` | Total number of finalize block operations |
+| `FinalizeBlockOpAvgTime` | Average time of finalize block operations in milliseconds |
+| `UnfinalizeBlockOpNumOps` | Total number of un-finalize block operations |
+| `UnfinalizeBlockOpAvgTime` | Average time of un-finalize block operations in milliseconds |
+| `CheckAndUpdateOpNumOps` | Total number of check and update operations |
+| `CheckAndUpdateOpAvgTime` | Average time of check and update operations in milliseconds |
+| `UpdateReplicaUnderRecoveryOpNumOps` | Total number of update replica under recovery operations |
+| `UpdateReplicaUnderRecoveryOpAvgTime` | Average time of update replica under recovery operations in milliseconds |
+| `AppendOpNumOps` | Total number of append operations |
+| `AppendOpAvgTime` | Average time of append operations in milliseconds |
 
 FsVolume
 --------
