@@ -510,6 +510,9 @@ public class CommonConfigurationKeysPublic {
   public static final String IPC_SERVER_RATE_LIMIT_ENABLE =
       "ipc.server.rate.limit.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT = false;
+  public static final String IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE =
+          "ipc.server.rate.limit.local.config.enable";
+  public static final boolean IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE_DEFAULT = false;
   public static final String IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT =
       "ipc.server.rate.limit.mismatch.reject";
   public static final boolean IPC_SERVER_RATE_LIMIT_MISMATCH_REJECT_DEFAULT =
@@ -519,7 +522,8 @@ public class CommonConfigurationKeysPublic {
   //格式：protocolname,methodname,subnet,user:qps 多条之间以分号作为分割符号
   public static final String IPC_SERVER_RATE_LIMIT_RULES_DEFAULT =
       "*,*,0.0.0.0/0,*:*";
-
+  public static final String IPC_SERVER_RATE_LIMIT_RULES_URL =
+      "ipc.server.rate.limit.rules.url";
   public static final String IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD =
       "ipc.server.rate.limit.rules.dynamic.update.period";
   public static final long IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD_DEFAULT = 30000l;
