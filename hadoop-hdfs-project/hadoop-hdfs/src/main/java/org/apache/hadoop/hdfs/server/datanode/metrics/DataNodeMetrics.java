@@ -211,6 +211,10 @@ public class DataNodeMetrics {
   @Metric("Milliseconds spent on calling NN rpc")
   private MutableRatesWithAggregation
       nnRpcLatency = registry.newRatesWithAggregation("nnRpcLatency");
+  @Metric("Nanoseconds spent on acquire dataset write lock")
+  private MutableRate acquireDatasetWriteLock;
+  @Metric("Nanoseconds spent on acquire dataset read lock")
+  private MutableRate acquireDatasetReadLock;
 
   final String name;
   JvmMetrics jvmMetrics = null;
@@ -833,5 +837,13 @@ public class DataNodeMetrics {
    */
   public void addAppendOp(long latency) {
     appendOp.add(latency);
+  }
+
+  public void addAcquireDataSetWriteLock(long latency) {
+    acquireDatasetWriteLock.add(latency);
+  }
+
+  public void addAcquireDataSetReadLock(long latency) {
+    acquireDatasetReadLock.add(latency);
   }
 }

@@ -19,14 +19,19 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReadWriteLock;
 
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.hdfs.protocol.Block;
+import org.apache.hadoop.hdfs.server.common.AutoCloseDataSetLock;
+import org.apache.hadoop.hdfs.server.common.DataNodeLockManager;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
-import org.apache.hadoop.util.LightWeightResizableGSet;
+import org.apache.hadoop.util.ConcurrentLightWeightResizableGSet;
 import org.apache.hadoop.util.AutoCloseableLock;
+import org.apache.hadoop.util.LightWeightResizableGSet;
 
 /**
  * Maintains the replica map. 
@@ -37,7 +42,7 @@ class ReplicaMap {
   private final AutoCloseableLock writeLock;
   
   // Map of block pool Id to another map of block Id to ReplicaInfo.
-  private final Map<String, LightWeightResizableGSet<Block, ReplicaInfo>> map =
+  private final Map<String, ConcurrentLightWeightResizableGSet<Block, ReplicaInfo>> map =
       new HashMap<>();
 
   ReplicaMap(AutoCloseableLock readLock, AutoCloseableLock writeLock) {
@@ -101,7 +106,7 @@ class ReplicaMap {
   ReplicaInfo get(String bpid, long blockId) {
     checkBlockPool(bpid);
     try (AutoCloseableLock l = readLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       return m != null ? m.get(new Block(blockId)) : null;
     }
   }
@@ -118,10 +123,10 @@ class ReplicaMap {
     checkBlockPool(bpid);
     checkBlock(replicaInfo);
     try (AutoCloseableLock l = writeLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       if (m == null) {
         // Add an entry for block pool if it does not exist already
-        m = new LightWeightResizableGSet<Block, ReplicaInfo>();
+        m = new ConcurrentLightWeightResizableGSet<>();
         map.put(bpid, m);
       }
       return  m.put(replicaInfo);
@@ -136,10 +141,10 @@ class ReplicaMap {
     checkBlockPool(bpid);
     checkBlock(replicaInfo);
     try (AutoCloseableLock l = writeLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       if (m == null) {
         // Add an entry for block pool if it does not exist already
-        m = new LightWeightResizableGSet<Block, ReplicaInfo>();
+        m = new ConcurrentLightWeightResizableGSet<Block, ReplicaInfo>();
         map.put(bpid, m);
       }
       ReplicaInfo oldReplicaInfo = m.get(replicaInfo);
@@ -164,13 +169,28 @@ class ReplicaMap {
    * Merge all entries from the given replica map into the local replica map.
    */
   void mergeAll(ReplicaMap other) {
-    other.map.forEach(
-        (bp, replicaInfos) -> {
-          replicaInfos.forEach(
-              replicaInfo -> add(bp, replicaInfo)
-          );
+    Set<String> bplist = other.map.keySet();
+    for (String bp : bplist) {
+      checkBlockPool(bp);
+      try (AutoCloseableLock l = writeLock.acquire()) {
+        ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> replicaInfos = other.map.get(bp);
+        ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> curSet = map.get(bp);
+        HashSet<ReplicaInfo> replicaSet = new HashSet<>();
+        //Can't add to GSet while in another GSet iterator may cause endlessLoop
+        for (ReplicaInfo replicaInfo : replicaInfos.getLightWeightResizableGSet()) {
+          replicaSet.add(replicaInfo);
         }
-    );
+        if (curSet == null && !replicaSet.isEmpty()) {
+          // Add an entry for block pool if it does not exist already
+          curSet = new ConcurrentLightWeightResizableGSet<>();
+          map.put(bp, curSet);
+        }
+        for (ReplicaInfo replicaInfo : replicaSet) {
+          checkBlock(replicaInfo);
+          curSet.put(replicaInfo);
+        }
+      }
+    }
   }
   
   /**
@@ -185,7 +205,7 @@ class ReplicaMap {
     checkBlockPool(bpid);
     checkBlock(block);
     try (AutoCloseableLock l = writeLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       if (m != null) {
         ReplicaInfo replicaInfo = m.get(block);
         if (replicaInfo != null &&
@@ -207,7 +227,7 @@ class ReplicaMap {
   ReplicaInfo remove(String bpid, long blockId) {
     checkBlockPool(bpid);
     try (AutoCloseableLock l = writeLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       if (m != null) {
         return m.remove(new Block(blockId));
       }
@@ -222,7 +242,7 @@ class ReplicaMap {
    */
   int size(String bpid) {
     try (AutoCloseableLock l = readLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       return m != null ? m.size() : 0;
     }
   }
@@ -238,7 +258,7 @@ class ReplicaMap {
    * @return a collection of the replicas belonging to the block pool
    */
   Collection<ReplicaInfo> replicas(String bpid) {
-    LightWeightResizableGSet<Block, ReplicaInfo> m = null;
+    ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = null;
     m = map.get(bpid);
     return m != null ? m.values() : null;
   }
@@ -246,10 +266,10 @@ class ReplicaMap {
   void initBlockPool(String bpid) {
     checkBlockPool(bpid);
     try (AutoCloseableLock l = writeLock.acquire()) {
-      LightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
+      ConcurrentLightWeightResizableGSet<Block, ReplicaInfo> m = map.get(bpid);
       if (m == null) {
         // Add an entry for block pool if it does not exist already
-        m = new LightWeightResizableGSet<Block, ReplicaInfo>();
+        m = new ConcurrentLightWeightResizableGSet<Block, ReplicaInfo>();
         map.put(bpid, m);
       }
     }
