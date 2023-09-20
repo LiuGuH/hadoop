@@ -18,7 +18,6 @@
 package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -32,10 +31,8 @@ import org.apache.hadoop.hdfs.server.common.AutoCloseDataSetLock;
 import org.apache.hadoop.hdfs.server.common.DataNodeLockManager;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 import org.apache.hadoop.util.ConcurrentLightWeightResizableGSet;
-import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.hdfs.server.common.DataNodeLockManager.LockLevel;
 import org.apache.hadoop.hdfs.server.common.NoLockManager;
-import org.apache.hadoop.util.LightWeightResizableGSet;
 
 /**
  * Maintains the replica map. 
@@ -46,7 +43,7 @@ class ReplicaMap {
 
   // Map of block pool Id to another map of block Id to ReplicaInfo.
   private final Map<String, ConcurrentLightWeightResizableGSet<Block, ReplicaInfo>> map =
-      new HashMap<>();
+      new ConcurrentHashMap<>();
   
 
   ReplicaMap(DataNodeLockManager<AutoCloseDataSetLock> manager) {
@@ -131,7 +128,7 @@ class ReplicaMap {
         map.putIfAbsent(bpid, new ConcurrentLightWeightResizableGSet<Block, ReplicaInfo>());
         m = map.get(bpid);
       }
-      return  m.put(replicaInfo);
+      return m.put(replicaInfo);
     }
   }
 

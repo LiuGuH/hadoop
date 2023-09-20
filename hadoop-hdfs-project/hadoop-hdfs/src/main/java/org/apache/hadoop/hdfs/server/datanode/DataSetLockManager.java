@@ -23,7 +23,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.common.AutoCloseDataSetLock;
 import org.apache.hadoop.hdfs.server.common.DataNodeLockManager;
-import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.util.Time;
 
 import java.util.HashMap;
@@ -44,7 +43,7 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
   private final LockMap lockMap = new LockMap();
   private DataNode datanode;
   private boolean isFair = true;
-  private volatile boolean openLockTrace;
+  private final boolean openLockTrace;
   private Exception lastException;
 
   /**
@@ -57,7 +56,6 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
     public synchronized void addLock(String name, ReentrantReadWriteLock lock) {
       AutoCloseDataSetLock readLock = new AutoCloseDataSetLock(lock.readLock());
       AutoCloseDataSetLock writeLock = new AutoCloseDataSetLock(lock.writeLock());
-      refreshOpenLockTraceSwitch();
       if (openLockTrace) {
         readLock.setDataNodeLockManager(DataSetLockManager.this);
         writeLock.setDataNodeLockManager(DataSetLockManager.this);
@@ -147,7 +145,7 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
     this.isFair = conf.getBoolean(
         DFS_DATANODE_LOCK_FAIR_KEY,
         DFS_DATANODE_LOCK_FAIR_DEFAULT);
-    this.openLockTrace = BzlDynamicConfiguration.getInstance().getBoolean(
+    this.openLockTrace = conf.getBoolean(
         DFS_DATANODE_LOCKMANAGER_TRACE,
         DFS_DATANODE_LOCKMANAGER_TRACE_DEFAULT);
     this.datanode = dn;
@@ -165,9 +163,8 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
       AutoCloseDataSetLock bpLock = getReadLock(LockLevel.BLOCK_POOl, resources[0]);
       AutoCloseDataSetLock volLock = getReadLock(level, resources);
       volLock.setParentLock(bpLock);
-      refreshOpenLockTraceSwitch();
       if (openLockTrace) {
-        LOG.info("Sub lock " + resources[0] + resources[1] + " parent lock " +
+        LOG.debug("Sub lock " + resources[0] + resources[1] + " parent lock " +
             resources[0]);
       }
       return volLock;
@@ -182,9 +179,8 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
       AutoCloseDataSetLock bpLock = getReadLock(LockLevel.BLOCK_POOl, resources[0]);
       AutoCloseDataSetLock volLock = getWriteLock(level, resources);
       volLock.setParentLock(bpLock);
-      refreshOpenLockTraceSwitch();
       if (openLockTrace) {
-        LOG.info("Sub lock " + resources[0] + resources[1] + " parent lock " +
+        LOG.debug("Sub lock " + resources[0] + resources[1] + " parent lock " +
             resources[0]);
       }
       return volLock;
@@ -205,7 +201,6 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
       lock = lockMap.getReadLock(lockName);
     }
     lock.lock();
-    refreshOpenLockTraceSwitch();
     if (openLockTrace) {
       putThreadName(getThreadName());
     }
@@ -229,7 +224,6 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
       lock = lockMap.getWriteLock(lockName);
     }
     lock.lock();
-    refreshOpenLockTraceSwitch();
     if (openLockTrace) {
       putThreadName(getThreadName());
     }
@@ -261,7 +255,6 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
 
   @Override
   public void hook() {
-    refreshOpenLockTraceSwitch();
     if (openLockTrace) {
       removeThreadName(getThreadName());
     }
@@ -315,11 +308,5 @@ public class DataSetLockManager implements DataNodeLockManager<AutoCloseDataSetL
 
   private String getThreadName() {
     return Thread.currentThread().getName() + Thread.currentThread().getId();
-  }
-  
-  private void refreshOpenLockTraceSwitch() {
-    openLockTrace = BzlDynamicConfiguration.getInstance().getBoolean(
-        DFS_DATANODE_LOCKMANAGER_TRACE,
-        DFS_DATANODE_LOCKMANAGER_TRACE_DEFAULT);
   }
 }

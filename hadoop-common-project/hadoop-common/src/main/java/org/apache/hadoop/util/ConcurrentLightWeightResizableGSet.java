@@ -43,6 +43,11 @@ public class ConcurrentLightWeightResizableGSet<K, E extends K>{
     lightWeightResizableGSet.expandIfNecessary();
   }
 
+  /**
+   * Not thread-safe!
+   * This method must be only used by 
+   * {@link org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReplicaMap#replicas(java.lang.String)}
+   */
   public Collection<E> values() {
     return lightWeightResizableGSet.values();
   }
