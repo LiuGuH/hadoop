@@ -1447,7 +1447,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       StorageType storageType, String storageId, ExtendedBlock b,
       boolean allowLazyPersist) throws IOException {
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.readLock(LockLevel.BLOCK_POOl,
         b.getBlockPoolId())) {
       ReplicaInfo replicaInfo = volumeMap.get(b.getBlockPoolId(),
@@ -1629,7 +1629,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   public ReplicaInPipeline convertTemporaryToRbw(
       final ExtendedBlock b) throws IOException {
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
         b.getBlockPoolId(), getStorageUuidForLock(b))) {
       startHoldLockTimeMs = Time.monotonicNow();
@@ -1709,7 +1709,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       String storageId, ExtendedBlock b, boolean isTransfer)
       throws IOException {
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     long writerStopTimeoutMs = datanode.getDnConf().getXceiverStopTimeout();
     ReplicaInfo lastFoundReplicaInfo = null;
     boolean isInPipeline = false;
@@ -1836,7 +1836,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     ReplicaInfo replicaInfo = null;
     ReplicaInfo finalizedReplicaInfo = null;
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
         b.getBlockPoolId(), getStorageUuidForLock(b))) {
       startHoldLockTimeMs = Time.monotonicNow();
@@ -1924,7 +1924,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public void unfinalizeBlock(ExtendedBlock b) throws IOException {
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
         b.getBlockPoolId(), getStorageUuidForLock(b))) {
       startHoldLockTimeMs = Time.monotonicNow();
@@ -2513,7 +2513,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     Block corruptBlock = null;
     ReplicaInfo memBlockInfo;
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME, bpid,
         vol.getStorageID())) {
       startHoldLockTimeMs = Time.monotonicNow();
@@ -2901,7 +2901,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
                                     final long newBlockId,
                                     final long newlength) throws IOException {
     long startTimeMs = Time.monotonicNow();
-    long startHoldLockTimeMs = 0;
+    long startHoldLockTimeMs = startTimeMs;
     try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
         oldBlock.getBlockPoolId(), getStorageUuidForLock(oldBlock))) {
       startHoldLockTimeMs = Time.monotonicNow();
