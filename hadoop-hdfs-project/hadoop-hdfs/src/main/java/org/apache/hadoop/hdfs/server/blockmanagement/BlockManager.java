@@ -4081,6 +4081,12 @@ public class BlockManager implements BlockStatsMXBean {
       storage2index.put(storage, index);
     }
 
+    if (duplicated.isEmpty()) {
+      LOG.debug("Found no duplicated internal blocks for {}. Maybe it's " +
+          "because there are stale storages.", storedBlock);
+      return;
+    }
+
     // use delHint only if delHint is duplicated
     final DatanodeStorageInfo delStorageHint =
         DatanodeStorageInfo.getDatanodeStorageInfo(nonExcess, delNodeHint);
