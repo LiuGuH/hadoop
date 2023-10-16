@@ -170,6 +170,7 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.MsyncR
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.OpenFilesBatchResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RecoverLeaseRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshNodesRequestProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshDecomDeadDataNodesRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshTopologyRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RemoveCacheDirectiveRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RemoveCachePoolRequestProto;
@@ -286,6 +287,9 @@ public class ClientNamenodeProtocolTranslatorPB implements
 
   private final static RefreshNodesRequestProto VOID_REFRESH_NODES_REQUEST =
       RefreshNodesRequestProto.newBuilder().build();
+
+  private final static RefreshDecomDeadDataNodesRequestProto VOID_REFRESH_DECOMDEADDATANODES_REQUEST =
+      RefreshDecomDeadDataNodesRequestProto.newBuilder().build();
 
   private final static RefreshTopologyRequestProto VOID_REFRESH_TOPOLOGY_REQUEST =
       RefreshTopologyRequestProto.newBuilder().build();
@@ -900,6 +904,15 @@ public class ClientNamenodeProtocolTranslatorPB implements
   public void refreshNodes() throws IOException {
     try {
       rpcProxy.refreshNodes(null, VOID_REFRESH_NODES_REQUEST);
+    } catch (ServiceException e) {
+      throw ProtobufHelper.getRemoteException(e);
+    }
+  }
+
+  @Override
+  public void refreshDecomDeadDataNodes() throws IOException {
+    try {
+      rpcProxy.refreshDecomDeadDataNodes(null, VOID_REFRESH_DECOMDEADDATANODES_REQUEST);
     } catch (ServiceException e) {
       throw ProtobufHelper.getRemoteException(e);
     }

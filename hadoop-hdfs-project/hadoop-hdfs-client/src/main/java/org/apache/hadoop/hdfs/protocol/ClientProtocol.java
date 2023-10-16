@@ -997,6 +997,13 @@ public interface ClientProtocol {
   void refreshNodes() throws IOException;
 
   /**
+   * Tells the namenode to remove datanodes which is dead and decommissioned.
+   * @throws IOException
+   */
+  @Idempotent
+  void refreshDecomDeadDataNodes() throws IOException;
+
+  /**
    * Tells the namenode to refresh the network topology info
    *
    * @throws IOException

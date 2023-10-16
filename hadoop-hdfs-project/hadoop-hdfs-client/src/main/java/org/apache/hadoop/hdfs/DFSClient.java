@@ -2424,6 +2424,13 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     }
   }
 
+  public void refreshDecomDeadDataNodes() throws IOException {
+    checkOpen();
+    try (TraceScope ignored = tracer.newScope("refreshDecomDeadNodes")) {
+      namenode.refreshDecomDeadDataNodes();
+    }
+  }
+
   public void refreshTopology() throws IOException{
     checkOpen();
     try (TraceScope ignored = tracer.newScope("refreshTopology")) {

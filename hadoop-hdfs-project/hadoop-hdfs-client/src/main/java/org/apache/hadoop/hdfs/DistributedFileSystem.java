@@ -1692,7 +1692,11 @@ public class DistributedFileSystem extends FileSystem
   public void refreshNodes() throws IOException {
     dfs.refreshNodes();
   }
-  
+
+  public void refreshDecomDeadDataNodes() throws IOException {
+    dfs.refreshDecomDeadDataNodes();
+  }
+
   public void refreshTopology() throws IOException{
     dfs.refreshTopology();
   }

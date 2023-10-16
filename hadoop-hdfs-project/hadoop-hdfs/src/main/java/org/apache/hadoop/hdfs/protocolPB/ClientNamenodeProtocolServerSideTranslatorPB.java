@@ -193,6 +193,8 @@ import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.MsyncR
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.MsyncResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RecoverLeaseRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RecoverLeaseResponseProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshDecomDeadDataNodesRequestProto;
+import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshDecomDeadDataNodesResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshNodesRequestProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RefreshNodesResponseProto;
 import org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos.RemoveCacheDirectiveRequestProto;
@@ -369,6 +371,10 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
 
   private static final RefreshNodesResponseProto VOID_REFRESHNODES_RESPONSE =
   RefreshNodesResponseProto.newBuilder().build();
+
+  private static final RefreshDecomDeadDataNodesResponseProto
+      VOID_REFRESHDECOMDEADDATANODES_RESPONSE =
+      RefreshDecomDeadDataNodesResponseProto.newBuilder().build();
 
   private static final RefreshTopologyResponseProto VOID_REFRESHTOPOLOGY_RESPONSE =
       RefreshTopologyResponseProto.newBuilder().build();
@@ -965,6 +971,18 @@ public class ClientNamenodeProtocolServerSideTranslatorPB implements
     try {
       server.refreshNodes();
       return VOID_REFRESHNODES_RESPONSE;
+    } catch (IOException e) {
+      throw new ServiceException(e);
+    }
+
+  }
+
+  @Override
+  public RefreshDecomDeadDataNodesResponseProto refreshDecomDeadDataNodes(RpcController controller,
+       RefreshDecomDeadDataNodesRequestProto req) throws ServiceException {
+    try {
+      server.refreshDecomDeadDataNodes();
+      return VOID_REFRESHDECOMDEADDATANODES_RESPONSE;
     } catch (IOException e) {
       throw new ServiceException(e);
     }

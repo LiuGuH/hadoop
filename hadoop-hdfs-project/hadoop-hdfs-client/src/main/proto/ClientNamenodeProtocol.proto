@@ -463,6 +463,12 @@ message RefreshNodesRequestProto { // no parameters
 message RefreshNodesResponseProto { // void response
 }
 
+message RefreshDecomDeadDataNodesRequestProto { // no parameters
+}
+
+message RefreshDecomDeadDataNodesResponseProto { // void response
+}
+
 message RefreshTopologyRequestProto { // no parameters
 }
 
@@ -930,6 +936,7 @@ service ClientNamenodeProtocol {
   rpc restoreFailedStorage(RestoreFailedStorageRequestProto)
       returns(RestoreFailedStorageResponseProto);
   rpc refreshNodes(RefreshNodesRequestProto) returns(RefreshNodesResponseProto);
+  rpc refreshDecomDeadDataNodes(RefreshDecomDeadDataNodesRequestProto) returns(RefreshDecomDeadDataNodesResponseProto);
   rpc refreshTopology(RefreshTopologyRequestProto) returns(RefreshTopologyResponseProto);
   rpc finalizeUpgrade(FinalizeUpgradeRequestProto)
       returns(FinalizeUpgradeResponseProto);

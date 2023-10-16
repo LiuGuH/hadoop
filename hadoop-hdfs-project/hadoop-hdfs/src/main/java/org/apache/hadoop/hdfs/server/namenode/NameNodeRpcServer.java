@@ -1342,6 +1342,12 @@ public class NameNodeRpcServer implements NamenodeProtocols {
   }
 
   @Override // ClientProtocol
+  public void refreshDecomDeadDataNodes() throws IOException {
+    checkNNStartup();
+    namesystem.refreshDecomDeadDataNodes();
+  }
+
+  @Override // ClientProtocol
   public void refreshTopology() throws IOException {
     checkNNStartup();
     namesystem.refreshTopology();
