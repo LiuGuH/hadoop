@@ -288,7 +288,7 @@ class PendingReconstructionBlocks {
             synchronized (timedOutItems) {
               timedOutItems.add(block);
             }
-            LOG.warn("PendingReconstructionMonitor timed out " + block);
+            LOG.info("[Warning] PendingReconstructionMonitor timed out " + block);
             NameNode.getNameNodeMetrics().incTimeoutReReplications();
             iter.remove();
           }
