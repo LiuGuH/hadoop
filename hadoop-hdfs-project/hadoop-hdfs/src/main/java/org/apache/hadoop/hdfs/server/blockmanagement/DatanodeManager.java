@@ -1297,7 +1297,11 @@ public class DatanodeManager {
   public void refreshTopology() throws IOException {
     long start = System.currentTimeMillis();
     int datanodeNums = 0;
-    Set<String> storageIds = datanodeMap.keySet();
+    final Map<String, DatanodeDescriptor> copy;
+    synchronized (this) {
+      copy = new HashMap<>(datanodeMap);
+    }
+    Set<String> storageIds = copy.keySet();
     Set<String> forIterations = new HashSet<>();
     List<String> datanodeIpAddrs = new ArrayList<>();
     List<DatanodeDescriptor> datanodeDescriptors = new ArrayList<>();
@@ -1305,7 +1309,7 @@ public class DatanodeManager {
     forIterations.addAll(storageIds);
     
     for (String storageId : forIterations) {
-      DatanodeDescriptor dnDescriptor = datanodeMap.get(storageId);
+      DatanodeDescriptor dnDescriptor = copy.get(storageId);
       String ipAddr = dnDescriptor.getIpAddr();
       datanodeIpAddrs.add(ipAddr);
       datanodeDescriptors.add(dnDescriptor);
