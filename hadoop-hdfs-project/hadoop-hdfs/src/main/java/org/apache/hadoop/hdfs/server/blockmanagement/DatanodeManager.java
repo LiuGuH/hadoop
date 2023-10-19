@@ -67,7 +67,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.*;
-import java.util.Map.Entry;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -912,11 +911,9 @@ public class DatanodeManager {
     synchronized (this) {
       host2DatanodeMap.remove(datanodeMap.remove(key));
     }
-    if (LOG.isDebugEnabled()) {
-      LOG.debug(getClass().getSimpleName() + ".wipeDatanode("
-          + node + "): storage " + key 
-          + " is removed from datanodeMap.");
-    }
+    LOG.warn(getClass().getSimpleName() + ".wipeDatanode("
+        + node + "): storage " + key
+        + " is removed from datanodeMap.");
   }
 
   private void incrementVersionCount(String version) {
@@ -1359,6 +1356,18 @@ public class DatanodeManager {
       countSoftwareVersions();
     } finally {
       namesystem.writeUnlock();
+    }
+  }
+
+  public void refreshDecomDeadDatanodes() {
+    final Map<String, DatanodeDescriptor> copy;
+    synchronized (this) {
+      copy = new HashMap<>(datanodeMap);
+    }
+    for (DatanodeDescriptor node : copy.values()) {
+      if (isDatanodeDead(node) && node.isDecommissioned()) {
+        wipeDatanode(node);
+      }
     }
   }
 

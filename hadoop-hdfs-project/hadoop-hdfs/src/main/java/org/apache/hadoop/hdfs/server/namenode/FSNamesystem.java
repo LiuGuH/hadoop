@@ -5051,6 +5051,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     getBlockManager().getDatanodeManager().refreshNodes(new HdfsConfiguration());
     logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
   }
+
+  void refreshDecomDeadDataNodes() throws IOException {
+    long startNanos = Time.monotonicNowNanos();
+    String operationName = "refreshDecomDeadDataNodes";
+    checkOperation(OperationCategory.UNCHECKED);
+    checkSuperuserPrivilege(operationName);
+    getBlockManager().getDatanodeManager().refreshDecomDeadDatanodes();
+    logAuditEvent(true, operationName, null, Time.monotonicNowNanos() - startNanos);
+  }
   
   public void refreshTopology() throws IOException {
     long startNanos = Time.monotonicNowNanos();

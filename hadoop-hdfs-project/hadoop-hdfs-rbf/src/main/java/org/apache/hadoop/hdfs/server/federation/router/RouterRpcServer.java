@@ -987,6 +987,11 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
   }
 
   @Override // ClientProtocol
+  public void refreshDecomDeadDataNodes() throws IOException {
+    clientProto.refreshDecomDeadDataNodes();
+  }
+
+  @Override // ClientProtocol
   public void refreshTopology() throws IOException {
     clientProto.refreshTopology();
   }
