@@ -3544,7 +3544,8 @@ public class BlockManager implements BlockStatsMXBean {
       }
     } else if (result == AddBlockResult.REPLACED) {
       curReplicaDelta = 0;
-      blockLog.warn("BLOCK* addStoredBlock: block {} moved to storageType " +
+      NameNode.getNameNodeMetrics().incrAddblockResultReplacedOps();
+      blockLog.info("[Warning] BLOCK* addStoredBlock: block {} moved to storageType " +
           "{} on node {} storageId {}, reportedBlock is {}", reportedBlock,
           storageInfo.getStorageType(), node, storageInfo.getStorageID(), reportedBlock);
     } else {
