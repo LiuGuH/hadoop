@@ -81,6 +81,8 @@ public class NameNodeMetrics {
   MutableCounterLong snapshotDiffReportOps;
   @Metric("Number of blockReceivedAndDeleted calls")
   MutableCounterLong blockReceivedAndDeletedOps;
+  @Metric("Number of addblockResultReplaced operations")
+  MutableCounterLong addblockResultReplacedOps;
   @Metric("Number of blockReports and blockReceivedAndDeleted queued")
   MutableGaugeInt blockOpsQueued;
   @Metric("Number of blockReports and blockReceivedAndDeleted batch processed")
@@ -332,6 +334,10 @@ public class NameNodeMetrics {
   
   public void incrBlockReceivedAndDeletedOps() {
     blockReceivedAndDeletedOps.incr();
+  }
+
+  public void incrAddblockResultReplacedOps() {
+    addblockResultReplacedOps.incr();
   }
 
   public void setBlockOpsQueued(int size) {
