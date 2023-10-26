@@ -198,8 +198,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public Block getStoredBlock(String bpid, long blkid)
       throws IOException {
-    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.BLOCK_POOl,
-        bpid)) {
+    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.VOLUME,
+        bpid, getReplicaInfo(bpid, blkid).getStorageUuid())) {
       ReplicaInfo r = volumeMap.get(bpid, blkid);
       if (r == null) {
         return null;
@@ -800,8 +800,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       long seekOffset) throws IOException {
 
     ReplicaInfo info;
-    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.BLOCK_POOl,
-        b.getBlockPoolId())) {
+    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.VOLUME,
+        b.getBlockPoolId(), getStorageUuidForLock(b))) {
       info = volumeMap.get(b.getBlockPoolId(), b.getLocalBlock());
     }
 
@@ -1389,8 +1389,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
 
     while (true) {
       try {
-        try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl,
-            b.getBlockPoolId())) {
+        try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
+            b.getBlockPoolId(), getStorageUuidForLock(b))) {
           ReplicaInfo replicaInfo = recoverCheck(b, newGS, expectedBlockLen);
           FsVolumeReference ref = replicaInfo.getVolume().obtainReference();
           ReplicaInPipeline replica;
@@ -1714,8 +1714,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     ReplicaInfo lastFoundReplicaInfo = null;
     boolean isInPipeline = false;
     do {
-      try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl,
-          b.getBlockPoolId())) {
+      try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
+          b.getBlockPoolId(), getStorageUuidForLock(b))) {
         startHoldLockTimeMs = Time.monotonicNow();
         ReplicaInfo currentReplicaInfo =
             volumeMap.get(b.getBlockPoolId(), b.getBlockId());
@@ -3026,8 +3026,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public long getReplicaVisibleLength(final ExtendedBlock block)
   throws IOException {
-    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.BLOCK_POOl,
-        block.getBlockPoolId())) {
+    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.VOLUME,
+        block.getBlockPoolId(), getStorageUuidForLock(block))) {
       final Replica replica = getReplicaInfo(block.getBlockPoolId(),
           block.getBlockId());
       if (replica.getGenerationStamp() < block.getGenerationStamp()) {
@@ -3181,8 +3181,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override // FsDatasetSpi
   public BlockLocalPathInfo getBlockLocalPathInfo(ExtendedBlock block)
       throws IOException {
-    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.BLOCK_POOl,
-        block.getBlockPoolId())) {
+    try (AutoCloseableLock lock = lockManager.readLock(LockLevel.VOLUME,
+        block.getBlockPoolId(), getStorageUuidForLock(block))) {
       final Replica replica = volumeMap.get(block.getBlockPoolId(),
           block.getBlockId());
       if (replica == null) {
@@ -3236,7 +3236,8 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override
   public void onCompleteLazyPersist(String bpId, long blockId,
       long creationTime, File[] savedFiles, FsVolumeImpl targetVolume) {
-    try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl, bpId)) {
+    try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME, bpId,
+        targetVolume.getStorageID())) {
       ramDiskReplicaTracker.recordEndLazyPersist(bpId, blockId, savedFiles);
 
       targetVolume.incDfsUsedAndNumBlocks(bpId, savedFiles[0].length()
@@ -3370,8 +3371,9 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       try {
         block = ramDiskReplicaTracker.dequeueNextReplicaToPersist();
         if (block != null) {
-          try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl,
-              block.getBlockPoolId())) {
+          replicaInfo = volumeMap.get(block.getBlockPoolId(), block.getBlockId());
+          try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
+              block.getBlockPoolId(), replicaInfo.getStorageUuid())) {
             replicaInfo = volumeMap.get(block.getBlockPoolId(), block.getBlockId());
 
             // If replicaInfo is null, the block was either deleted before

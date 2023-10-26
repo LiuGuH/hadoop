@@ -3082,8 +3082,12 @@ public class DataNode extends ReconfigurableBase
     final BlockConstructionStage stage;
 
     //get replica information
+    Replica replica = data.getReplica(b.getBlockPoolId(), b.getBlockId());
+    if (replica == null) {
+      throw new ReplicaNotFoundException(b + "not found in datanode.");
+    }
     try (AutoCloseableLock lock = dataSetLockManager.readLock(
-        LockLevel.BLOCK_POOl, b.getBlockPoolId())) {
+        LockLevel.BLOCK_POOl, b.getBlockPoolId(), replica.getStorageUuid())) {
       Block storedBlock = data.getStoredBlock(b.getBlockPoolId(),
           b.getBlockId());
       if (null == storedBlock) {
