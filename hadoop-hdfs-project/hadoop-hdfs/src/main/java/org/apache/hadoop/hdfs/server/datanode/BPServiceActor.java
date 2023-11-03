@@ -744,8 +744,8 @@ class BPServiceActor implements Runnable {
           LOG.info("Forcing a full block report to " + nnAddr);
         }
         if ((fullBlockReportLeaseId != 0 && shouldSendFBR) || forceFullBr) {
-          fbrExecutorService.submit(new FBRTaskHandler());
           shouldSendFBR = false;
+          fbrExecutorService.submit(new FBRTaskHandler());
         }
 
         if (!dn.areCacheReportsDisabledForTests()) {
