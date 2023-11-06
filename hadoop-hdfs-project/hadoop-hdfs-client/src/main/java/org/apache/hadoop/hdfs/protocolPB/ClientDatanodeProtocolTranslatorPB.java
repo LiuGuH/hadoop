@@ -298,13 +298,9 @@ public class ClientDatanodeProtocolTranslatorPB implements
   @Override
   public String triggerDirectoryScanner() throws IOException {
     TriggerDirectoryScannerResponseProto responseProto;
-    try {
-      responseProto = rpcProxy.triggerDirectoryScanner(NULL_CONTROLLER,
-          VOID_TRIGGER_DIRECTORY_SCANNER);
-      return responseProto.getResult();
-    } catch (ServiceException e) {
-      throw ProtobufHelper.getRemoteException(e);
-    }
+    responseProto = ipc(() -> rpcProxy.triggerDirectoryScanner(NULL_CONTROLLER,
+        VOID_TRIGGER_DIRECTORY_SCANNER));
+    return responseProto.getResult();
   }
 
   @Override
