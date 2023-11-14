@@ -1570,6 +1570,13 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final boolean DFS_PROTECTED_SUBDIRECTORIES_ENABLE_DEFAULT =
       false;
 
+  public static final String
+      DFS_DATANODE_LOCKMANAGER_TRACE =
+      "dfs.datanode.lockmanager.trace";
+
+  public static final boolean
+      DFS_DATANODE_LOCKMANAGER_TRACE_DEFAULT = false;
+
   // dfs.client.retry confs are moved to HdfsClientConfigKeys.Retry
   @Deprecated
   public static final String  DFS_CLIENT_RETRY_POLICY_ENABLED_KEY
