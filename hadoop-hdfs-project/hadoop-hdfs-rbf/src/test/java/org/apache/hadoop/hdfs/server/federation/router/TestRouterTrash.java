@@ -236,17 +236,17 @@ public class TestRouterTrash {
     FileSystem fs =
         DFSTestUtil.getFileSystemAs(ugi, routerConf);
 
-    Trash trash = new Trash(fs , routerConf);
+    Trash trash = new Trash(fs, routerConf);
     assertTrue(trash.moveToTrash(new Path(FILE)));
     assertTrue(trash.moveToTrash(new Path(FILE1)));
 
 
-    //Client user see gloabl trash view， wo should see all three mount point
+    // Client user see gloabl trash view， wo should see only two mount points that really has path in the trash
     FileStatus[] fileStatuses = fs.listStatus(new Path("/user/test-trash/.Trash/Current/"));
-    assertEquals(3, fileStatuses.length);
+    assertEquals(2, fileStatuses.length);
 
-    //This should return fileStatuses rather than Not found Exception
-    fileStatuses = fs.listStatus(new Path("/user/test-trash/.Trash/Current/"+MOUNT_POINT2));
+    // This should return empty fileStatuses rather than Not found Exception
+    fileStatuses = fs.listStatus(new Path("/user/test-trash/.Trash/Current/" + MOUNT_POINT2));
     assertEquals(0, fileStatuses.length);
   }
 
