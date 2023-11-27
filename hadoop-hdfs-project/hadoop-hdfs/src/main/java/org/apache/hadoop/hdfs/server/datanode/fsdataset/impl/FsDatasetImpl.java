@@ -1714,8 +1714,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     ReplicaInfo lastFoundReplicaInfo = null;
     boolean isInPipeline = false;
     do {
-      try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.VOLUME,
-          b.getBlockPoolId(), getStorageUuidForLock(b))) {
+      // The reason we use BP writeLock rather than Volume writeLock here is that 
+      // the block metainfo is not exist in current datanode. 
+      try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl,
+          b.getBlockPoolId())) {
         startHoldLockTimeMs = Time.monotonicNow();
         ReplicaInfo currentReplicaInfo =
             volumeMap.get(b.getBlockPoolId(), b.getBlockId());
