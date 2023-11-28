@@ -248,6 +248,13 @@ public class TestRouterTrash {
     // This should return empty fileStatuses rather than Not found Exception
     fileStatuses = fs.listStatus(new Path("/user/test-trash/.Trash/Current/" + MOUNT_POINT2));
     assertEquals(0, fileStatuses.length);
+
+    // In ns1, make a trash path with timestamp to simulate a trash path.
+    String trashPath = "/user/test-trash/.Trash/" + System.currentTimeMillis();
+    client1.mkdirs(trashPath, new FsPermission("770"),
+        true);
+    fileStatuses = fs.listStatus(new Path("/user/test-trash/.Trash"));
+    assertEquals(2, fileStatuses.length);
   }
 
   @Test
