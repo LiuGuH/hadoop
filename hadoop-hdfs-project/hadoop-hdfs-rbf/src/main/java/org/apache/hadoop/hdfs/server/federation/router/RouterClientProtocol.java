@@ -106,6 +106,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -867,9 +868,12 @@ public class RouterClientProtocol implements ClientProtocol {
     }
 
     // Add mount points at this level in the tree
-    final List<String> children = subclusterResolver.getMountPoints(src);
+    IdentityHashMap<String, String> childrenMountTableWithSrc =
+        subclusterResolver.getMountPointsWithSrc(src);
+    List<String> children = null;
     // Sort the list as the entries from subcluster are also sorted
-    if (children != null) {
+    if (childrenMountTableWithSrc != null) {
+      children = new ArrayList<>(childrenMountTableWithSrc.keySet());
       Collections.sort(children);
     }
     if (children != null) {
@@ -877,7 +881,20 @@ public class RouterClientProtocol implements ClientProtocol {
       Map<String, Long> dates = getMountPointDates(src);
 
       // Create virtual folder with the mount name
-      for (String child : children) {
+      boolean isTrashPath = MountTableResolver.isTrashPath(src);
+      for (int i = 0; i < children.size(); i++) {
+        String child = children.get(i);
+        if (isTrashPath) {
+          HdfsFileStatus dir = getFileInfo(
+              MountTableResolver.getTrashCurrentPath(src) + childrenMountTableWithSrc.get(child),
+              false);
+          if (dir == null) {
+            children.remove(child);
+            i--;
+            continue;
+          }
+        }
+        
         long date = 0;
         if (dates != null && dates.containsKey(child)) {
           date = dates.get(child);
@@ -910,7 +927,7 @@ public class RouterClientProtocol implements ClientProtocol {
       }
     }
 
-    if (!namenodeListingExists && nnListing.size() == 0) {
+    if (!namenodeListingExists && nnListing.size() == 0 && children == null) {
       // NN returns a null object if the directory cannot be found and has no
       // listing. If we didn't retrieve any NN listing data, and there are no
       // mount points here, return null.
@@ -931,6 +948,10 @@ public class RouterClientProtocol implements ClientProtocol {
 
   @Override
   public HdfsFileStatus getFileInfo(String src) throws IOException {
+    return getFileInfo(src, true);
+  }
+
+  public HdfsFileStatus getFileInfo(String src, boolean withMountTable) throws IOException {
     rpcServer.checkOperation(NameNode.OperationCategory.READ);
 
     final List<RemoteLocation> locations =
@@ -948,6 +969,10 @@ public class RouterClientProtocol implements ClientProtocol {
           locations, method, HdfsFileStatus.class, null);
     }
 
+    if (!withMountTable) {
+      return ret;
+    }
+
     // If there is no real path, check mount points
     if (ret == null) {
       List<String> children = subclusterResolver.getMountPoints(src);
@@ -957,10 +982,10 @@ public class RouterClientProtocol implements ClientProtocol {
         if (dates != null && dates.containsKey(src)) {
           date = dates.get(src);
         }
-        ret = getMountPointStatus(src, children.size(), date);
+        ret = getMountPointStatus(src, children.size(), date, false);
       } else if (children != null) {
         // The src is a mount point, but there are no files or directories
-        ret = getMountPointStatus(src, 0, 0);
+        ret = getMountPointStatus(src, 0, 0, false);
       }
     }
 
@@ -2037,6 +2062,21 @@ public class RouterClientProtocol implements ClientProtocol {
   @VisibleForTesting
   HdfsFileStatus getMountPointStatus(
       String name, int childrenNum, long date) {
+    return getMountPointStatus(name, childrenNum, date, true);
+  }
+
+  /**
+   * Create a new file status for a mount point.
+   *
+   * @param name Name of the mount point.
+   * @param childrenNum Number of children.
+   * @param date Map with the dates.
+   * @param setPath if true should set path in HdfsFileStatus (Only getFileInfo() will be false)
+   * @return New HDFS file status representing a mount point.
+   */
+  @VisibleForTesting
+  HdfsFileStatus getMountPointStatus(
+      String name, int childrenNum, long date, boolean setPath) {
     long modTime = date;
     long accessTime = date;
     FsPermission permission = FsPermission.getDirDefault();
@@ -2086,17 +2126,20 @@ public class RouterClientProtocol implements ClientProtocol {
       }
     }
     long inodeId = 0;
-    Path path = new Path(name);
-    String nameStr = path.getName();
-    return new HdfsFileStatus.Builder()
-        .isdir(true)
+    HdfsFileStatus.Builder builder = new HdfsFileStatus.Builder();
+    if (setPath) {
+      Path path = new Path(name);
+      String nameStr = path.getName();
+      builder.path(DFSUtil.string2Bytes(nameStr));
+    }
+
+    return builder.isdir(true)
         .mtime(modTime)
         .atime(accessTime)
         .perm(permission)
         .owner(owner)
         .group(group)
         .symlink(new byte[0])
-        .path(DFSUtil.string2Bytes(nameStr))
         .fileId(inodeId)
         .children(childrenNum)
         .flags(flags)

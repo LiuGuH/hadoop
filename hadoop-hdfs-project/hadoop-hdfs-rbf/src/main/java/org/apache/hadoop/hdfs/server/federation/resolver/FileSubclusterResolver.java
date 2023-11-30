@@ -19,10 +19,17 @@
 package org.apache.hadoop.hdfs.server.federation.resolver;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.IdentityHashMap;
+import java.util.LinkedList;
 import java.util.List;
-
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeSet;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.server.federation.store.records.MountTable;
 
 /**
  * Interface to map a file path in the global name space to a specific
@@ -70,9 +77,124 @@ public interface FileSubclusterResolver {
   List<String> getMountPoints(String path) throws IOException;
 
   /**
+   * Get a IdentityHashMap (child, mountTable source path) of mount points for a path.
+   * Results are from the mount table cache.
+   *
+   * @param path Path to get the mount points under.
+   * @return IdentityHashMap of mount points present at this path. Return zero-length
+   *         IdentityHashMap if the path is a mount point but there are no mount points
+   *         under the path. Return null if the path is not a mount point
+   *         and there are no mount points under the path.
+   * @throws IOException Throws exception if the data is not available.
+   */
+  IdentityHashMap<String,String> getMountPointsWithSrc(String path) throws IOException;
+
+
+  /**
    * Get the default namespace for the cluster.
    *
    * @return Default namespace identifier.
    */
   String getDefaultNamespace();
+
+  /**
+   * Get the all namespace which has mountpoints for the cluster.
+   *
+   * @return a set of namespace identifiers.
+   */
+  Set<String> getAllNamespaces();
+
+  /**
+   * Get a list of mount points for a path.
+   *
+   * @param path Path to get the mount points under.
+   * @param mountPoints the mount points to choose.
+   * @return Return empty list if the path is a mount point but there are no
+   *         mount points under the path. Return null if the path is not a mount
+   *         point and there are no mount points under the path.
+   */
+  static List<String> getMountPoints(String path,
+      Collection<String> mountPoints) {
+    Set<String> children = new TreeSet<>();
+    boolean exists = false;
+    for (String subPath : mountPoints) {
+      String child = subPath;
+
+      // Special case for /
+      if (!path.equals(Path.SEPARATOR)) {
+        // Get the children
+        int ini = path.length();
+        child = subPath.substring(ini);
+      }
+
+      if (child.isEmpty()) {
+        // This is a mount point but without children
+        exists = true;
+      } else if (child.startsWith(Path.SEPARATOR)) {
+        // This is a mount point with children
+        exists = true;
+        child = child.substring(1);
+
+        // We only return immediate children
+        int fin = child.indexOf(Path.SEPARATOR);
+        if (fin > -1) {
+          child = child.substring(0, fin);
+        }
+        if (!child.isEmpty()) {
+          children.add(child);
+        }
+      }
+    }
+    if (!exists) {
+      return null;
+    }
+    return new LinkedList<>(children);
+  }
+
+  /**
+   * Get a IdentityHashMap (child, mountTable source path) for a path. The child can be repetitive.
+   *
+   * @param path Path to get the mount points under.
+   * @param tree the mount points tree.
+   * @return Return empty IdentityHashMap if the path is a mount point but there are no
+   * mount points under the path. Return null if the path is not a mount
+   * point and there are no mount points under the path.
+   */
+  static IdentityHashMap<String,String> getMountPointsWithSrc(String path, SortedMap<String,
+      MountTable> tree) {
+    IdentityHashMap<String,String> childWithSourcePaths = new IdentityHashMap<>();
+    boolean exists = false;
+    for (String subPath : tree.keySet()) {
+      String child = subPath;
+
+      // Special case for /
+      if (!path.equals(Path.SEPARATOR)) {
+        // Get the children
+        int ini = path.length();
+        child = subPath.substring(ini);
+      }
+
+      if (child.isEmpty()) {
+        // This is a mount point but without children
+        exists = true;
+      } else if (child.startsWith(Path.SEPARATOR)) {
+        // This is a mount point with children
+        exists = true;
+        child = child.substring(1);
+
+        // We only return immediate children
+        int fin = child.indexOf(Path.SEPARATOR);
+        if (fin > -1) {
+          child = child.substring(0, fin);
+        }
+        if (!child.isEmpty()) {
+          childWithSourcePaths.put(child, tree.get(subPath).getSourcePath());
+        }
+      }
+    }
+    if (!exists) {
+      return null;
+    }
+    return childWithSourcePaths;
+  }
 }
