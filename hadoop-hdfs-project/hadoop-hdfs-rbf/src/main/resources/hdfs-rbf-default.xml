@@ -459,7 +459,7 @@
 
   <property>
     <name>dfs.federation.router.safemode.extension</name>
-    <value>30s</value>
+    <value>1s</value>
     <description>
       Time after startup that the Router is in safe mode. This setting
       supports multiple time unit suffixes as described in
