@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.ipc;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_OBSERVER_STALE_RPC_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_OBSERVER_STALE_RPC_INTERVAL;
 import static org.apache.hadoop.ipc.ProcessingDetails.Timing;
 import static org.apache.hadoop.ipc.RpcConstants.AUTHORIZATION_FAILED_CALL_ID;
 import static org.apache.hadoop.ipc.RpcConstants.CONNECTION_CONTEXT_CALL_ID;
@@ -818,6 +820,8 @@ public abstract class Server {
     // store last seen states for multiple namespaces.
     private ByteString federatedNamespaceState;
 
+    private boolean isStale;
+
     Call() {
       this(RpcConstants.INVALID_CALL_ID, RpcConstants.INVALID_RETRY_COUNT,
         RPC.RpcKind.RPC_BUILTIN, RpcConstants.DUMMY_CLIENT_ID);
@@ -850,6 +854,7 @@ public abstract class Server {
       this.callerContext = callerContext;
       this.clientStateId = Long.MIN_VALUE;
       this.isCallCoordinated = false;
+      this.isStale = false;
     }
 
     /**
@@ -880,6 +885,14 @@ public abstract class Server {
 
     public ByteString getFederatedNamespaceState() {
       return this.federatedNamespaceState;
+    }
+
+    public boolean isStale() {
+      return isStale;
+    }
+
+    public void setStale(boolean stale) {
+      isStale = stale;
     }
 
     @Override
@@ -1079,6 +1092,9 @@ public abstract class Server {
       ResponseParams responseParams = new ResponseParams();
 
       try {
+        if (isStale()) {
+          throw new ObserverRetryOnActiveException("The rpc call is stale.");
+        }
         value = call(
             rpcKind, connection.protocolName, rpcRequest, getTimestampNanos(), connection.getHostAddress(), connection.user.getShortUserName());
       } catch (Throwable e) {
@@ -3133,10 +3149,17 @@ public abstract class Server {
              * In case of Observer, it handles only reads, which are
              * commutative.
              */
-            // Re-queue the call and continue
-            requeueCall(call);
-            call = null;
-            continue;
+            if (startTimeNanos - call.timestampNanos < BzlDynamicConfiguration.getInstance()
+                .getTimeDuration(IPC_SERVER_OBSERVER_STALE_RPC_INTERVAL,
+                    IPC_SERVER_OBSERVER_STALE_RPC_DEFAULT, TimeUnit.NANOSECONDS)) {
+              // Re-queue the call and continue
+              requeueCall(call);
+              call = null;
+              continue;
+            } else {
+              call.setStale(true);
+              rpcMetrics.incrStaleCalls();
+            }
           }
           if (LOG.isDebugEnabled()) {
             LOG.debug(Thread.currentThread().getName() + ": " + call + " for RpcKind " + call.rpcKind);

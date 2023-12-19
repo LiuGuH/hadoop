@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 public class BzlDynamicConfiguration {
 
@@ -56,10 +57,94 @@ public class BzlDynamicConfiguration {
     return Long.parseLong(valueString);
   }
 
+  public long getTimeDuration(String name, String defaultValue, TimeUnit unit) {
+    return getTimeDuration(name, defaultValue, unit, unit);
+  }
+
+  public long getTimeDuration(String name, String defaultValue,
+                              TimeUnit defaultUnit, TimeUnit returnUnit) {
+    String vStr = get(name, defaultValue);
+    if (null == vStr) {
+      return getTimeDurationHelper(name, defaultValue, defaultUnit, returnUnit);
+    } else {
+      return getTimeDurationHelper(name, vStr, defaultUnit, returnUnit);
+    }
+  }
+
+  private long getTimeDurationHelper(String name, String vStr,
+                                     TimeUnit defaultUnit, TimeUnit returnUnit) {
+    vStr = vStr.trim();
+    vStr = StringUtils.toLowerCase(vStr);
+    ParsedTimeDuration vUnit = ParsedTimeDuration.unitFor(vStr);
+    if (null == vUnit) {
+      vUnit = ParsedTimeDuration.unitFor(defaultUnit);
+    } else {
+      vStr = vStr.substring(0, vStr.lastIndexOf(vUnit.suffix()));
+    }
+
+    long raw = Long.parseLong(vStr);
+    long converted = returnUnit.convert(raw, vUnit.unit());
+    if (vUnit.unit().convert(converted, returnUnit) < raw) {
+      LOG.warn("Possible loss of precision converting " + vStr
+          + vUnit.suffix() + " to " + returnUnit + " for " + name);
+    }
+    return converted;
+  }
+
   public void init(Configuration conf) {
     if (conf.getBoolean(CommonConfigurationKeys.HADOOP_BZL_DYNAMIC_CONFIG_ENABLE, false)) {
       new BzlDynamicConfigLoaderThread(
           conf.getLong(CommonConfigurationKeys.HADOOP_BZL_DYNAMIC_CONFIG_PERIOD, 30000)).start();
+    }
+  }
+
+  enum ParsedTimeDuration {
+    NS {
+      TimeUnit unit() { return TimeUnit.NANOSECONDS; }
+      String suffix() { return "ns"; }
+    },
+    US {
+      TimeUnit unit() { return TimeUnit.MICROSECONDS; }
+      String suffix() { return "us"; }
+    },
+    MS {
+      TimeUnit unit() { return TimeUnit.MILLISECONDS; }
+      String suffix() { return "ms"; }
+    },
+    S {
+      TimeUnit unit() { return TimeUnit.SECONDS; }
+      String suffix() { return "s"; }
+    },
+    M {
+      TimeUnit unit() { return TimeUnit.MINUTES; }
+      String suffix() { return "m"; }
+    },
+    H {
+      TimeUnit unit() { return TimeUnit.HOURS; }
+      String suffix() { return "h"; }
+    },
+    D {
+      TimeUnit unit() { return TimeUnit.DAYS; }
+      String suffix() { return "d"; }
+    };
+    abstract TimeUnit unit();
+    abstract String suffix();
+    static ParsedTimeDuration unitFor(String s) {
+      for (ParsedTimeDuration ptd : values()) {
+        // iteration order is in decl order, so SECONDS matched last
+        if (s.endsWith(ptd.suffix())) {
+          return ptd;
+        }
+      }
+      return null;
+    }
+    public static ParsedTimeDuration unitFor(TimeUnit unit) {
+      for (ParsedTimeDuration ptd : values()) {
+        if (ptd.unit() == unit) {
+          return ptd;
+        }
+      }
+      return null;
     }
   }
 }

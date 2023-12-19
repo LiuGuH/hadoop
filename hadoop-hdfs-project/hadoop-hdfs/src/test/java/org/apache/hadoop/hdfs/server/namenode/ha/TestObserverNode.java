@@ -170,6 +170,33 @@ public class TestObserverNode {
   }
 
   @Test
+  public void testObserverStableRpc() throws Exception {
+    FSNamesystem observerFsNS = dfsCluster.getNamesystem(2);
+    try {
+      // Stop EditlogTailer of Observer NameNode.
+      observerFsNS.getEditLogTailer().stop();
+
+      Path tmpTestPath = new Path("/TestObserverStableRpc");
+      dfs.create(tmpTestPath, (short)1).close();
+      assertSentTo(0);
+      // This operation will be blocked in ObserverNameNode
+      // until observer rpc stable time is reached.
+      FileStatus fileStatus = dfs.getFileStatus(tmpTestPath);
+      assertSentTo(0);
+      assertNotNull(fileStatus);
+
+      observerFsNS.getEditLogTailer().doTailEdits();
+      fileStatus = dfs.getFileStatus(tmpTestPath);
+      assertSentTo(2);
+      assertNotNull(fileStatus);
+    } finally {
+      EditLogTailer editLogTailer = new EditLogTailer(observerFsNS, conf);
+      observerFsNS.setEditLogTailerForTests(editLogTailer);
+      editLogTailer.start();
+    }
+  }
+
+  @Test
   public void testNoActiveToObserver() throws Exception {
     try {
       dfsCluster.transitionToObserver(0);
