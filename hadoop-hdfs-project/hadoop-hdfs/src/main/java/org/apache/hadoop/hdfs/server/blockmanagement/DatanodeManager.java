@@ -1880,9 +1880,9 @@ public class DatanodeManager {
             - xmitsInProgress;
       }
       int numReplicationTasks = (int) Math.ceil(
-          (double) (totalReplicateBlocks * maxTransfers) / totalBlocks);
+          (double) totalReplicateBlocks * maxTransfers / totalBlocks);
       int numECTasks = (int) Math.ceil(
-          (double) (totalECBlocks * maxTransfers) / totalBlocks);
+          (double) totalECBlocks * maxTransfers / totalBlocks);
       if (LOG.isDebugEnabled()) {
         LOG.debug("Pending replication tasks: " + numReplicationTasks
             + " erasure-coded tasks: " + numECTasks);
