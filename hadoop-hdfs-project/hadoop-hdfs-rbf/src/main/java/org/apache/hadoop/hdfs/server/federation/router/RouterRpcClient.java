@@ -1967,6 +1967,7 @@ public class RouterRpcClient {
     namenodes = namenodeResolver.getNamenodesForNameserviceId(nsId, listObserverNamenodesFirst);
     if (!listObserverNamenodesFirst) {
       // Refresh time of last call to active NameNode.
+      LOG.debug("Refresh time of last call to active NameNode for nameservice {}." , nsId);
       getTimeOfLastCallToActive(nsId).accumulate(Time.monotonicNow());
     }
 
