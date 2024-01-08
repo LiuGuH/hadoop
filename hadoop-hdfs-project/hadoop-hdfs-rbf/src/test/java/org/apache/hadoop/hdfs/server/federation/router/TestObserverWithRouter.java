@@ -248,7 +248,7 @@ public class TestObserverWithRouter {
       throws Exception {
     // Disable observer reads using per-nameservice override
     Configuration confOverrides = new Configuration(false);
-    confOverrides.set(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_OVERRIDES, "ns0");
+    confOverrides.set(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DISABLE_LIST, "ns0");
     startUpCluster(2, confOverrides);
     fileSystem = routerContext.getFileSystem(getConfToEnableObserverReads(configSetting));
 
@@ -879,7 +879,7 @@ public class TestObserverWithRouter {
     Configuration confOverride = new Configuration(false);
     String namespaceWithObserverReadsDisabled = "ns0";
     // Disable observer reads for ns0
-    confOverride.set(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_OVERRIDES,
+    confOverride.set(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DISABLE_LIST,
         namespaceWithObserverReadsDisabled);
     startUpCluster(1, confOverride);
     fileSystem = routerContext.getFileSystem(getConfToEnableObserverReads(configSetting));

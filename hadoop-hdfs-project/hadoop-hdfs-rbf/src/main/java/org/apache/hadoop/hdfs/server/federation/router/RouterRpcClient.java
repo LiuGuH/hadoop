@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -90,7 +89,6 @@ import org.apache.hadoop.net.ConnectTimeoutException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import org.eclipse.jetty.util.ajax.JSON;
 import org.slf4j.Logger;
@@ -148,10 +146,6 @@ public class RouterRpcClient {
   private final RouterRpcMonitor rpcMonitor;
   /** Field separator of CallerContext. */
   private final String contextFieldSeparator;
-  /** Observer read enabled. Default for all nameservices. */
-  private final boolean observerReadEnabledDefault;
-  /** Nameservice specific overrides of the default setting for enabling observer reads. */
-  private HashSet<String> observerReadEnabledOverrides = new HashSet<>();
   /**
    * Period to refresh namespace stateID using active namenode.
    * This ensures the namespace stateID is fresh even when an
@@ -237,15 +231,9 @@ public class RouterRpcClient {
     this.retryPolicy = RetryPolicies.failoverOnNetworkException(
         RetryPolicies.TRY_ONCE_THEN_FAIL, maxFailoverAttempts, maxRetryAttempts,
         failoverSleepBaseMillis, failoverSleepMaxMillis);
-     this.observerReadEnabledDefault = conf.getBoolean(
-        RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_KEY,
-        RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_VALUE);
-    String[] observerReadOverrides =
-        conf.getStrings(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_OVERRIDES);
-    if (observerReadOverrides != null) {
-      observerReadEnabledOverrides.addAll(Arrays.asList(observerReadOverrides));
-    }
-    if (this.observerReadEnabledDefault) {
+    if (BzlDynamicConfiguration.getInstance()
+        .getBoolean(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_KEY,
+            RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_VALUE)) {
       LOG.info("Observer read is enabled for router.");
     }
     this.activeNNStateIdRefreshPeriodMs = conf.getTimeDuration(
@@ -1987,8 +1975,13 @@ public class RouterRpcClient {
    * @param nsId namespaceID
    * @return whether the 'namespace' has observer reads enabled.
    */
-  boolean isNamespaceObserverReadEligible(String nsId) {
-    return observerReadEnabledDefault != observerReadEnabledOverrides.contains(nsId);
+  static boolean isNamespaceObserverReadEligible(String nsId) {
+    boolean isReadEnabledForNamespace = BzlDynamicConfiguration.getInstance()
+        .getBoolean(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_KEY,
+            RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DEFAULT_VALUE) &&
+        !BzlDynamicConfiguration.getInstance()
+            .get(RBFConfigKeys.DFS_ROUTER_OBSERVER_READ_DISABLE_LIST, "").contains(nsId);
+    return isReadEnabledForNamespace;
   }
 
   /**
