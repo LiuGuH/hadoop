@@ -22,12 +22,12 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERV
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_TRASH_INTERVAL_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_ENABLED_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_ENABLED_KEY;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_MAX_SIZE_DEFAULT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_MAX_SIZE_KEY;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_PRINT_MAX_SIZE_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_PRINT_MAX_SIZE_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SEPARATOR_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SEPARATOR_KEY;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SIGNATURE_MAX_SIZE_DEFAULT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SIGNATURE_MAX_SIZE_KEY;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SIGNATURE_PRINT_MAX_SIZE_DEFAULT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_SIGNATURE_PRINT_MAX_SIZE_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IO_FILE_BUFFER_SIZE_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IO_FILE_BUFFER_SIZE_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT;
@@ -8633,12 +8633,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       isCallerContextEnabled = conf.getBoolean(
           HADOOP_CALLER_CONTEXT_ENABLED_KEY,
           HADOOP_CALLER_CONTEXT_ENABLED_DEFAULT);
-      callerContextMaxLen = conf.getInt(
-          HADOOP_CALLER_CONTEXT_MAX_SIZE_KEY,
-          HADOOP_CALLER_CONTEXT_MAX_SIZE_DEFAULT);
-      callerSignatureMaxLen = conf.getInt(
-          HADOOP_CALLER_CONTEXT_SIGNATURE_MAX_SIZE_KEY,
-          HADOOP_CALLER_CONTEXT_SIGNATURE_MAX_SIZE_DEFAULT);
+      callerContextPrintMaxLen = conf.getInt(
+          HADOOP_CALLER_CONTEXT_PRINT_MAX_SIZE_KEY,
+          HADOOP_CALLER_CONTEXT_PRINT_MAX_SIZE_DEFAULT);
+      callerSignaturePrintMaxLen = conf.getInt(
+          HADOOP_CALLER_CONTEXT_SIGNATURE_PRINT_MAX_SIZE_KEY,
+          HADOOP_CALLER_CONTEXT_SIGNATURE_PRINT_MAX_SIZE_DEFAULT);
       logTokenTrackingId = conf.getBoolean(
           DFSConfigKeys.DFS_NAMENODE_AUDIT_LOG_TOKEN_TRACKING_ID_KEY,
           DFSConfigKeys.DFS_NAMENODE_AUDIT_LOG_TOKEN_TRACKING_ID_DEFAULT);
@@ -8713,15 +8713,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
             callerContext != null &&
             callerContext.isContextValid()) {
           sb.append("\t").append("callerContext=");
-          if (callerContext.getContext().length() > callerContextMaxLen) {
+          if (callerContext.getContext().length() > callerContextPrintMaxLen) {
             sb.append(callerContext.getContext().substring(0,
-                callerContextMaxLen));
+                callerContextPrintMaxLen));
           } else {
             sb.append(callerContext.getContext());
           }
           if (callerContext.getSignature() != null &&
               callerContext.getSignature().length > 0 &&
-              callerContext.getSignature().length <= callerSignatureMaxLen) {
+              callerContext.getSignature().length <= callerSignaturePrintMaxLen) {
             sb.append(":")
                 .append(new String(callerContext.getSignature(),
                     CallerContext.SIGNATURE_ENCODING));
