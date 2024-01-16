@@ -52,7 +52,7 @@ public final class CallerContext {
    *
    * It will be truncated if it exceeds the maximum allowed length in
    * server. The default length limit is
-   * {@link org.apache.hadoop.fs.CommonConfigurationKeysPublic#HADOOP_CALLER_CONTEXT_MAX_SIZE_DEFAULT}
+   * {@link org.apache.hadoop.fs.CommonConfigurationKeysPublic#HADOOP_CALLER_CONTEXT_PRINT_MAX_SIZE_DEFAULT}
    */
   private final String context;
 
@@ -61,7 +61,7 @@ public final class CallerContext {
    * The signature is optional. The null or empty signature will be abandoned.
    * If the signature exceeds the maximum allowed length in server, the caller
    * context will be abandoned. The default length limit is
-   * {@link org.apache.hadoop.fs.CommonConfigurationKeysPublic#HADOOP_CALLER_CONTEXT_SIGNATURE_MAX_SIZE_DEFAULT}
+   * {@link org.apache.hadoop.fs.CommonConfigurationKeysPublic#HADOOP_CALLER_CONTEXT_SIGNATURE_PRINT_MAX_SIZE_DEFAULT}
    */
   private final byte[] signature;
 
