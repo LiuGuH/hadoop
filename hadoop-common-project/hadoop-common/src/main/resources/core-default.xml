@@ -3869,8 +3869,8 @@
     </description>
   </property>
   <property>
-    <name>hadoop.caller.context.max.size</name>
-    <value>128</value>
+    <name>hadoop.caller.context.print.max.size</name>
+    <value>256</value>
     <description>The maximum bytes a caller context string can have. If the
       passed caller context is longer than this maximum bytes, client will
       truncate it before sending to server. Note that the server may have a
@@ -3879,7 +3879,7 @@
     </description>
   </property>
   <property>
-    <name>hadoop.caller.context.signature.max.size</name>
+    <name>hadoop.caller.context.signature.print.max.size</name>
     <value>40</value>
     <description>
       The caller's signature (optional) is for offline validation. If the
