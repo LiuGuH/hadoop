@@ -197,7 +197,7 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
 
   public static final String DFS_ROUTER_OBSERVER_FEDERATED_STATE_PROPAGATION_MAXSIZE =
       FEDERATION_ROUTER_PREFIX + "observer.federated.state.propagation.maxsize";
-  public static final int DFS_ROUTER_OBSERVER_FEDERATED_STATE_PROPAGATION_MAXSIZE_DEFAULT = 5;
+  public static final int DFS_ROUTER_OBSERVER_FEDERATED_STATE_PROPAGATION_MAXSIZE_DEFAULT = 100;
 
   public static final String DFS_ROUTER_OBSERVER_STATE_ID_REFRESH_PERIOD_KEY =
       FEDERATION_ROUTER_PREFIX + "observer.state.id.refresh.period";
