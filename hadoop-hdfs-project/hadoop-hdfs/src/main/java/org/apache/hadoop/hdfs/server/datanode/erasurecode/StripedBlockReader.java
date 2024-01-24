@@ -158,7 +158,7 @@ class StripedBlockReader {
       return peer;
     } finally {
       if (!success) {
-        IOUtils.cleanupWithLogger(null, peer);
+        IOUtils.cleanupWithLogger(IOUtils.LOG, peer);
         IOUtils.closeSocket(sock);
       }
     }

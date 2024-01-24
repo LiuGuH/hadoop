@@ -331,7 +331,7 @@ class DataXceiver extends Receiver implements Runnable {
       updateCurrentThreadName("Cleaning up");
       if (peer != null) {
         dataXceiverServer.closePeer(peer);
-        IOUtils.closeStream(in);
+        IOUtils.cleanupWithLogger(IOUtils.LOG, in);
       }
     }
   }
