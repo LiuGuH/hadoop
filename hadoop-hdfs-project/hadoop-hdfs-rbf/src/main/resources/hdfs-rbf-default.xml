@@ -727,8 +727,26 @@
   </property>
 
   <property>
+    <name>dfs.federation.router.observer.read.default</name>
+    <value>false</value>
+    <description>
+      Whether observer reads are enabled. This is a default for all nameservices.
+      The default can be inverted for individual namespace by adding them to
+      dfs.federation.router.observer.read.overrides.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.observer.read.disable.list</name>
+    <value/>
+    <description>
+      Commas separated list of namespaces for disable observer reads.
+    </description>
+  </property>
+
+  <property>
     <name>dfs.federation.router.observer.federated.state.propagation.maxsize</name>
-    <value>5</value>
+    <value>100</value>
     <description>
       The maximum size of the federated state to send in the RPC header. Sending the federated
       state removes the need to msync on every read call, but at the expense of having a larger
@@ -744,6 +762,22 @@
       Period to refresh namespace stateID using active namenode. This ensures the
       namespace stateID is refresh even when an observer is trailing behind.
       If this is below 0, the auto-refresh is disabled.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.auto.msync.enable</name>
+    <value>false</value>>
+    <description>
+     Whether to enable router auto msycn service.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.auto.msync.interval</name>
+    <value>1000</value>>
+    <description>
+      The intarval in milliseconds for router to auto msync to nameservices .
     </description>
   </property>
 </configuration>
