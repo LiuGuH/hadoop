@@ -267,6 +267,9 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.namenode.redundancy.considerLoad.factor";
   public static final double
       DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_FACTOR_DEFAULT = 2.0;
+  public static final String DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_KEY = 
+      "dfs.namenode.specific.exclude.datanode.ip.list";
+  public static final String DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_DEFAULT = "";
   public static final String DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY =
       HdfsClientConfigKeys.DeprecatedKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY;
   public static final int DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_DEFAULT = 3;

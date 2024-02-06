@@ -34,6 +34,8 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_STORAGE_POLICY_ENABLED_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_STORAGE_POLICY_PERMISSIONS_SUPERUSER_ONLY_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_STORAGE_POLICY_PERMISSIONS_SUPERUSER_ONLY_KEY;
@@ -114,6 +116,7 @@ import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicyInfo;
 import org.apache.hadoop.metrics2.lib.MutableCounterLong;
 import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfoStriped;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import org.apache.hadoop.hdfs.protocol.BatchedDirectoryListing;
@@ -129,6 +132,7 @@ import org.apache.hadoop.hdfs.server.common.ECTopologyVerifier;
 import org.apache.hadoop.hdfs.server.namenode.metrics.ReplicatedBlocksMBean;
 import org.apache.hadoop.hdfs.server.protocol.SlowDiskReports;
 import org.apache.hadoop.ipc.ObserverRetryOnActiveException;
+import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.Time;
 import static org.apache.hadoop.util.Time.now;
 import static org.apache.hadoop.util.Time.monotonicNow;
@@ -336,7 +340,6 @@ import org.apache.hadoop.security.token.delegation.DelegationKey;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.ReflectionUtils;
-import org.apache.hadoop.util.StringUtils;
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.log4j.Logger;
 import org.apache.log4j.Appender;
@@ -3051,8 +3054,28 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return onRetryBlock[0];
     }
 
+    String specificExcludeDatanodeIPList = BzlDynamicConfiguration.getInstance().
+        get(DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_KEY, 
+            DFS_NAMENODE_SPECIFIC_EXCLUDE_DATANODE_IP_LIST_DEFAULT);
+
+    Set<DatanodeInfo> allExcludedNodes = new HashSet<>(); 
+    if (org.apache.commons.lang3.StringUtils.isNotEmpty(specificExcludeDatanodeIPList)) {
+      String[] dataNodeIPs = specificExcludeDatanodeIPList.split(",");
+      for (String iter : dataNodeIPs) {
+        DatanodeDescriptor dn = getBlockManager().getDatanodeManager().getDatanodeByHost(iter);
+        if (dn != null) {
+          allExcludedNodes.add(dn);
+        }
+      }
+    }
+    if (excludedNodes != null) {
+      allExcludedNodes.addAll(new HashSet<>(Arrays.asList(excludedNodes)));
+    }
+    DatanodeInfo[] allExcludedArray = allExcludedNodes.toArray(
+        new DatanodeInfo[allExcludedNodes.size()]);
+
     DatanodeStorageInfo[] targets = FSDirWriteFileOp.chooseTargetForNewBlock(
-        blockManager, src, excludedNodes, favoredNodes, flags, r);
+        blockManager, src, allExcludedArray, favoredNodes, flags, r);
 
     checkOperation(OperationCategory.WRITE);
     writeLock();
