@@ -280,7 +280,7 @@ public class IOUtils {
           c.close();
         } catch (Throwable e) {
           if (logger != null) {
-            logger.debug("Exception in closing {}", c, e);
+            logger.debug("Exception in closing " + c, e);
           }
         }
       }
