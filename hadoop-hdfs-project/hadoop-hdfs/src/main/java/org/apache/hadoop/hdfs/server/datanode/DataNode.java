@@ -2150,6 +2150,8 @@ public class DataNode extends ReconfigurableBase
     }
     if (metrics != null) {
       metrics.setDataNodeActiveXceiversCount(0);
+      metrics.setDataNodeReadActiveXceiversCount(0);
+      metrics.setDataNodeWriteActiveXceiversCount(0);
       metrics.setDataNodePacketResponderCount(0);
       metrics.setDataNodeBlockRecoveryWorkerCount(0);
     }
