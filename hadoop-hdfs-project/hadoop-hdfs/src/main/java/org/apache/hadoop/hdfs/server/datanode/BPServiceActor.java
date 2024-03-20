@@ -742,7 +742,7 @@ class BPServiceActor implements Runnable {
             }
 
             DatanodeCommand[] cmds = resp.getCommands();
-            if (cmds != null) {
+            if (cmds != null && cmds.length != 0) {
               int length = cmds.length;
               for (int i = length - 1; i >= 0; i--) {
                 if (cmds[i] instanceof KeyUpdateCommand) {
@@ -751,8 +751,8 @@ class BPServiceActor implements Runnable {
                   break;
                 }
               }
+              commandProcessingThread.enqueue(cmds);
             }
-            commandProcessingThread.enqueue(cmds);
           }
         }
 
