@@ -377,6 +377,13 @@ public interface HdfsClientConfigKeys {
           PREFIX + "count-reset-time-period-ms";
       long    COUNT_RESET_TIME_PERIOD_MS_DEFAULT = 10*SECOND;
     }
+    
+    interface ECRedunency {
+      String DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY =
+          "dfs.client.ec.checkstreamer.redunency";
+      int DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY_DEFAILT = 2;
+    }
+    
   }
 
   /** dfs.client.block.write configuration properties */

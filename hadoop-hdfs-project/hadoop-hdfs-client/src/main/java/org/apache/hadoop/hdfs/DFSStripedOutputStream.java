@@ -73,6 +73,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.Write.ECRedunency.DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.Write.ECRedunency.DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY_DEFAILT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.Write.RECOVER_LEASE_ON_CLOSE_EXCEPTION_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.Write.RECOVER_LEASE_ON_CLOSE_EXCEPTION_KEY;
 
@@ -286,6 +288,7 @@ public class DFSStripedOutputStream extends DFSOutputStream
   private CompletionService<Void> flushAllExecutorCompletionService;
   private int blockGroupIndex;
   private long datanodeRestartTimeout;
+  private final int extraStreamerRedunency;
 
   /** Construct a new output stream for creating a file. */
   DFSStripedOutputStream(DFSClient dfsClient, String src, HdfsFileStatus stat,
@@ -327,6 +330,12 @@ public class DFSStripedOutputStream extends DFSOutputStream
     currentPackets = new DFSPacket[streamers.size()];
     datanodeRestartTimeout = dfsClient.getConf().getDatanodeRestartTimeout();
     setCurrentStreamer(0);
+
+    int extraStreamerTmp = dfsClient.getConfiguration().getInt(
+        DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY,
+        DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY_DEFAILT);
+    
+    extraStreamerRedunency = Math.min(extraStreamerTmp, ecPolicy.getNumParityUnits());
   }
 
   /** Construct a new output stream for appending to a file. */
@@ -692,7 +701,7 @@ public class DFSStripedOutputStream extends DFSOutputStream
       // 2) create new block outputstream
       newFailed = waitCreatingStreamers(healthySet);
       if (newFailed.size() + failedStreamers.size() >
-          numAllBlocks - numDataBlocks) {
+          numAllBlocks - numDataBlocks - extraStreamerRedunency) {
         // The write has failed, Close all the streamers.
         closeAllStreamers();
         throw new IOException(
