@@ -28,6 +28,7 @@ import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 
+import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.PipelineAckProto;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status;
 import org.apache.hadoop.thirdparty.protobuf.TextFormat;
@@ -41,6 +42,30 @@ public class PipelineAck {
   public final static long UNKOWN_SEQNO = -2;
   final static int OOB_START = Status.OOB_RESTART_VALUE; // the first OOB type
   final static int OOB_END = Status.OOB_RESERVED3_VALUE; // the last OOB type
+
+  /**
+   * Used for indicating slow node in pipeline.
+   */
+  public enum SLOW {
+    DISABLED(0),
+    NORMAL(1),
+    SLOW(2),
+    RESERVED(3);
+
+    private final int value;
+    private static final SLOW[] VALUES = values();
+    static SLOW valueOf(int value) {
+      return VALUES[value];
+    }
+
+    SLOW(int value) {
+      this.value = value;
+    }
+
+    public int getValue() {
+      return value;
+    }
+  }
 
   public enum ECN {
     DISABLED(0),
@@ -66,7 +91,8 @@ public class PipelineAck {
   private enum StatusFormat {
     STATUS(null, 4),
     RESERVED(STATUS.BITS, 1),
-    ECN_BITS(RESERVED.BITS, 2);
+    ECN_BITS(RESERVED.BITS, 2),
+    SLOW_BITS(ECN_BITS.BITS, 2);
 
     private final LongBitFormat BITS;
 
@@ -82,12 +108,20 @@ public class PipelineAck {
       return ECN.valueOf((int) ECN_BITS.BITS.retrieve(header));
     }
 
+    static SLOW getSLOW(int header) {
+      return SLOW.valueOf((int) SLOW_BITS.BITS.retrieve(header));
+    }
+
     public static int setStatus(int old, Status status) {
       return (int) STATUS.BITS.combine(status.getNumber(), old);
     }
 
     public static int setECN(int old, ECN ecn) {
       return (int) ECN_BITS.BITS.combine(ecn.getValue(), old);
+    }
+
+    public static int setSLOW(int old, SLOW slow) {
+      return (int) SLOW_BITS.BITS.combine(slow.getValue(), old);
     }
   }
 
@@ -112,18 +146,41 @@ public class PipelineAck {
    */
   public PipelineAck(long seqno, int[] replies,
                      long downstreamAckTimeNanos) {
+    this(seqno, replies, downstreamAckTimeNanos, new long[0], new long[0]);
+  }
+
+  /**
+   * Constructor
+   * @param seqno sequence number
+   * @param replies an array of replies
+   * @param downstreamAckTimeNanos ack RTT in nanoseconds, 0 if no next DN in pipeline
+   * @param downstreamTimeNanos an array of downstream time elapsed
+   * @param diskTimeNanos an array of downstream disk time elapsed
+   */
+  public PipelineAck(long seqno, int[] replies, long downstreamAckTimeNanos,
+                     long[] downstreamTimeNanos, long[] diskTimeNanos) {
     ArrayList<Status> statusList = Lists.newArrayList();
     ArrayList<Integer> flagList = Lists.newArrayList();
+    ArrayList<Long> downstreamTimeList = Lists.newArrayList();
+    ArrayList<Long> diskTimeList = Lists.newArrayList();
     for (int r : replies) {
       statusList.add(StatusFormat.getStatus(r));
       flagList.add(r);
     }
+    for (long t : downstreamTimeNanos) {
+      downstreamTimeList.add(t);
+    }
+    for (long t : diskTimeNanos) {
+      diskTimeList.add(t);
+    }
     proto = PipelineAckProto.newBuilder()
-      .setSeqno(seqno)
-      .addAllReply(statusList)
-      .addAllFlag(flagList)
-      .setDownstreamAckTimeNanos(downstreamAckTimeNanos)
-      .build();
+        .setSeqno(seqno)
+        .addAllReply(statusList)
+        .addAllFlag(flagList)
+        .setDownstreamAckTimeNanos(downstreamAckTimeNanos)
+        .addAllDownstreamTimeNanos(downstreamTimeList)
+        .addAllDiskTimeNanos(diskTimeList)
+        .build();
   }
 
   /**
@@ -149,12 +206,28 @@ public class PipelineAck {
     if (proto.getFlagCount() > 0) {
       return proto.getFlag(i);
     } else {
-      return combineHeader(ECN.DISABLED, proto.getReply(i));
+      return combineHeader(ECN.DISABLED, proto.getReply(i), SLOW.DISABLED);
     }
   }
 
   public int getFlag(int i) {
     return proto.getFlag(i);
+  }
+
+  public long getDownstreamTime(int i) {
+    if (proto.getDownstreamTimeNanosCount() > 0) {
+      return proto.getDownstreamTimeNanos(i);
+    } else {
+      return 0L;
+    }
+  }
+
+  public long getDiskTime(int i) {
+    if (proto.getDiskTimeNanosCount() > 0) {
+      return proto.getDiskTimeNanos(i);
+    } else {
+      return 0L;
+    }
   }
 
   /**
@@ -230,14 +303,28 @@ public class PipelineAck {
     return StatusFormat.getECN(header);
   }
 
+  public static SLOW getSLOWFromHeader(int header) {
+    return StatusFormat.getSLOW(header);
+  }
+
   public static int setStatusForHeader(int old, Status status) {
     return StatusFormat.setStatus(old, status);
   }
 
+  @VisibleForTesting
+  public static int setSLOWForHeader(int old, SLOW slow) {
+    return StatusFormat.setSLOW(old, slow);
+  }
+
   public static int combineHeader(ECN ecn, Status status) {
+    return combineHeader(ecn, status, SLOW.DISABLED);
+  }
+
+  public static int combineHeader(ECN ecn, Status status, SLOW slow) {
     int header = 0;
     header = StatusFormat.setStatus(header, status);
     header = StatusFormat.setECN(header, ecn);
+    header = StatusFormat.setSLOW(header, slow);
     return header;
   }
 }

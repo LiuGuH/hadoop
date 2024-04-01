@@ -184,7 +184,7 @@ class StripedBlockWriter {
       DFSPacket packet = new DFSPacket(packetBuf,
           stripedWriter.getMaxChunksPerPacket(),
           blockOffset4Target, seqNo4Target++,
-          stripedWriter.getChecksumSize(), false);
+          stripedWriter.getChecksumSize(), false, false);
       int maxBytesToPacket = stripedWriter.getMaxChunksPerPacket()
           * stripedWriter.getBytesPerChecksum();
       int toWrite = targetBuffer.remaining() > maxBytesToPacket ?
@@ -207,7 +207,7 @@ class StripedBlockWriter {
   void endTargetBlock(byte[] packetBuf) throws IOException {
     DFSPacket packet = new DFSPacket(packetBuf, 0,
         blockOffset4Target, seqNo4Target++,
-        stripedWriter.getChecksumSize(), true);
+        stripedWriter.getChecksumSize(), true, false);
     packet.writeTo(targetOutputStream);
     targetOutputStream.flush();
   }

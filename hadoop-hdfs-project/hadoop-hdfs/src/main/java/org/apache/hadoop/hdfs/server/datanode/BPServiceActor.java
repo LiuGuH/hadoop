@@ -116,6 +116,7 @@ class BPServiceActor implements Runnable {
   private String nnId = null;
   private volatile RunningState runningState = RunningState.CONNECTING;
   private volatile boolean shouldServiceRun = true;
+  private volatile boolean isSlownode = false;
   private final DataNode dn;
   private final DNConf dnConf;
   private long prevBlockReportId;
@@ -214,6 +215,7 @@ class BPServiceActor implements Runnable {
         String.valueOf(getScheduler().getLastBlockReportTime()));
     info.put("maxBlockReportSize", String.valueOf(getMaxBlockReportSize()));
     info.put("maxDataLength", String.valueOf(maxDataLength));
+    info.put("isSlownode", String.valueOf(isSlownode));
     return info;
   }
 
@@ -753,6 +755,7 @@ class BPServiceActor implements Runnable {
               }
               commandProcessingThread.enqueue(cmds);
             }
+            isSlownode = resp.getIsSlownode();
           }
         }
 
@@ -1567,5 +1570,9 @@ class BPServiceActor implements Runnable {
     if (commandProcessingThread != null) {
       commandProcessingThread.interrupt();
     }
+  }
+
+  boolean isSlownode() {
+    return isSlownode;
   }
 }

@@ -58,10 +58,12 @@ import org.apache.hadoop.fs.FSInputStream;
 import org.apache.hadoop.fs.FileEncryptionInfo;
 import org.apache.hadoop.fs.HasEnhancedByteBufferAccess;
 import org.apache.hadoop.fs.ReadOption;
+import org.apache.hadoop.fs.SlowReadSwitchException;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.fs.StreamCapabilities;
 import org.apache.hadoop.hdfs.DFSUtilClient.CorruptedBlocks;
 import org.apache.hadoop.hdfs.client.impl.BlockReaderFactory;
+import org.apache.hadoop.hdfs.client.impl.BlockReaderRemote;
 import org.apache.hadoop.hdfs.client.impl.DfsClientConf;
 import org.apache.hadoop.hdfs.protocol.BlockType;
 import org.apache.hadoop.hdfs.protocol.ClientDatanodeProtocol;
@@ -83,6 +85,7 @@ import org.apache.hadoop.ipc.RetriableException;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.SecretManager.InvalidToken;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.thirdparty.com.google.common.cache.Cache;
 import org.apache.hadoop.util.IdentityHashStore;
 import org.apache.hadoop.util.StopWatch;
 import org.apache.hadoop.util.StringUtils;
@@ -147,6 +150,10 @@ public class DFSInputStream extends FSInputStream
    * whether we this is a memory-mapped buffer or not.
    */
   private IdentityHashStore<ByteBuffer, Object> extendedReadBuffers;
+  // When read switch happens 3 times, it means cluster load is possiblely high.
+  // So, we won't switch datanode for reading any more.
+  private int maxSlowReadSwitchCountPerBlock = 3;
+  private int curSlowReadSwitchCount;
 
   private synchronized IdentityHashStore<ByteBuffer, Object>
         getExtendedReadBuffers() {
@@ -180,10 +187,21 @@ public class DFSInputStream extends FSInputStream
 
   private byte[] oneByteBuf; // used for 'int read()'
 
+  private long slowDatanodeCheckWindowNs;
+  private long slowReadDatanodeCheckThresholdNs;
+  private long slowReadDatanodeOverThresholdCountInWindow;
+
+  private final Cache<DatanodeInfo, DatanodeInfo> slowNodesCache;
+  private Map<DatanodeInfo, SlowMetrics> dnSlowMetricsMap = null;
+
   protected void addToLocalDeadNodes(DatanodeInfo dnInfo) {
     DFSClient.LOG.debug("Add {} to local dead nodes, previously was {}.",
             dnInfo, deadNodes);
     deadNodes.put(dnInfo, dnInfo);
+  }
+
+  void addToSlowNodes(DatanodeInfo dnInfo) {
+    slowNodesCache.put(dnInfo, dnInfo);
   }
 
   protected void removeFromLocalDeadNodes(DatanodeInfo dnInfo) {
@@ -215,6 +233,12 @@ public class DFSInputStream extends FSInputStream
       this.cachingStrategy = dfsClient.getDefaultReadCachingStrategy();
     }
     this.locatedBlocks = locatedBlocks;
+
+    this.slowDatanodeCheckWindowNs = dfsClient.getConf().getSlowDatanodeCheckWindowNs();
+    this.slowReadDatanodeCheckThresholdNs = dfsClient.getConf().getSlowReadDatanodeCheckThresholdNs();
+    this.slowReadDatanodeOverThresholdCountInWindow = dfsClient.getConf().getSlowReadDatanodeOverThresholdCountInWindow();
+    this.dnSlowMetricsMap = new ConcurrentHashMap<>();
+    this.slowNodesCache = this.dfsClient.getSlowNodeCache();
     openInfo(false);
   }
 
@@ -239,6 +263,14 @@ public class DFSInputStream extends FSInputStream
 
   private void setLocatedBlocksTimeStamp(long timeStamp) {
     this.locatedBlocksTimeStamp = timeStamp;
+  }
+  
+  private void setMaxSlowReadSwitchCountPerBlock(int maxReadSwitchCount) {
+    this.maxSlowReadSwitchCountPerBlock = maxReadSwitchCount;
+  }
+  
+  private void setCurSlowReadSwitchCount(int curSwitchCount) {
+    this.curSlowReadSwitchCount = curSwitchCount;
   }
 
   /**
@@ -671,6 +703,7 @@ public class DFSInputStream extends FSInputStream
       this.blockEnd = targetBlock.getStartOffset() +
             targetBlock.getBlockSize() - 1;
       this.currentLocatedBlock = targetBlock;
+      setMaxSlowReadSwitchCountPerBlock(this.currentLocatedBlock.getLocations().length);
 
       long offsetIntoBlock = target - targetBlock.getStartOffset();
 
@@ -682,12 +715,26 @@ public class DFSInputStream extends FSInputStream
       targetBlock = retval.block;
 
       try {
+        long startGetBlockReaderTimeNs = Time.monotonicNowNanos();
         blockReader = getBlockReader(targetBlock, offsetIntoBlock,
             targetBlock.getBlockSize() - offsetIntoBlock, targetAddr,
             storageType, chosenNode);
         if(connectFailedOnce) {
           DFSClient.LOG.info("Successfully connected to " + targetAddr +
                              " for " + targetBlock.getBlock());
+        }
+        long endGetBlockReaderTimeNs = Time.monotonicNowNanos();
+        if (blockReader instanceof BlockReaderRemote && !(this instanceof DFSStripedInputStream)) {
+          // use minimum check window to make slow node judgement strictly.
+          this.slowDatanodeCheckWindowNs = Math.min(slowDatanodeCheckWindowNs,
+              ((BlockReaderRemote) blockReader).getSlowDatanodeCheckWindowNs());
+          this.slowReadDatanodeCheckThresholdNs = Math.max(slowReadDatanodeCheckThresholdNs,
+              ((BlockReaderRemote) blockReader).getSlowReadDatanodeCheckThresholdNs()); 
+          this.slowReadDatanodeOverThresholdCountInWindow = Math.max(slowReadDatanodeOverThresholdCountInWindow,
+              ((BlockReaderRemote) blockReader).getSlowReadDatanodeOverThresholdCountInWindow()); 
+          updateSlowNodeMetrics(endGetBlockReaderTimeNs - startGetBlockReaderTimeNs,
+              currentLocatedBlock, chosenNode);
+          checkSlowReadDatanode(currentLocatedBlock, chosenNode);
         }
         return chosenNode;
       } catch (IOException ex) {
@@ -702,6 +749,9 @@ public class DFSInputStream extends FSInputStream
         } else if (refetchToken > 0 && tokenRefetchNeeded(ex, targetAddr)) {
           refetchToken--;
           fetchBlockAt(target);
+        } else if (ex instanceof SlowReadSwitchException) {
+          DFSClient.LOG.warn(ex.getMessage());
+          addToSlowNodes(chosenNode);
         } else {
           connectFailedOnce = true;
           DFSClient.LOG.warn("Failed to connect to {} for file {} for block "
@@ -823,9 +873,18 @@ public class DFSInputStream extends FSInputStream
     boolean retryCurrentNode = true;
 
     while (true) {
+      int ret = 0;
       // retry as many times as seekToNewSource allows.
       try {
-        return reader.readFromBlock(blockReader, len);
+        long startReadPacketTimeNs = Time.monotonicNowNanos();
+        ret = reader.readFromBlock(blockReader, len);
+        long endReadPacketTimeNs = Time.monotonicNowNanos();
+        if (blockReader instanceof BlockReaderRemote && !(this instanceof DFSStripedInputStream)) {
+          updateSlowNodeMetrics(endReadPacketTimeNs - startReadPacketTimeNs,
+              currentLocatedBlock, currentNode);
+          checkSlowReadDatanode(currentLocatedBlock, currentNode);
+        }
+        return ret;
       } catch (ChecksumException ce) {
         DFSClient.LOG.warn("Found Checksum error for "
             + getCurrentBlock() + " from " + currentNode
@@ -834,6 +893,20 @@ public class DFSInputStream extends FSInputStream
         retryCurrentNode = false;
         // we want to remember which block replicas we have tried
         corruptedBlocks.addCorruptedBlock(getCurrentBlock(), currentNode);
+      } catch (SlowReadSwitchException re) {
+        if (curSlowReadSwitchCount == maxSlowReadSwitchCountPerBlock) {
+          String msg = String.format("Reading block %s of file %s from datanode %s slowly!",
+              currentLocatedBlock.getBlock(), src, currentNode);
+          DFSClient.LOG.warn("{}, But we have switched reading over {} times, skip switching!",
+              msg, maxSlowReadSwitchCountPerBlock);
+          return ret;
+        }
+        DFSClient.LOG.warn(re.getMessage());
+        retryCurrentNode = false;
+        ioe = re;
+        addToSlowNodes(currentNode);
+        currentNode = null;
+        curSlowReadSwitchCount++;
       } catch (IOException e) {
         if (!retryCurrentNode) {
           DFSClient.LOG.warn("Exception while reading from "
@@ -850,8 +923,10 @@ public class DFSInputStream extends FSInputStream
          */
         sourceFound = seekToBlockSource(pos);
       } else {
-        addToLocalDeadNodes(currentNode);
-        dfsClient.addNodeToDeadNodeDetector(this, currentNode);
+        if (currentNode != null) {
+          addToLocalDeadNodes(currentNode);
+          dfsClient.addNodeToDeadNodeDetector(this, currentNode);
+        }
         sourceFound = seekToNewSource(pos);
       }
       if (!sourceFound) {
@@ -859,6 +934,77 @@ public class DFSInputStream extends FSInputStream
       }
       retryCurrentNode = false;
     }
+  }
+
+  private void updateSlowNodeMetrics(long elapsedTime, LocatedBlock block,
+      DatanodeInfo datanodeInfo) {
+    if (datanodeInfo == null) {
+      return;
+    }
+    SlowMetrics metrics = getNodeSlowMetrics(datanodeInfo);
+    boolean elapsedTimeGreaterThanThreshold = metrics.putMetric(elapsedTime);
+    if (elapsedTimeGreaterThanThreshold) {
+      String msg = String.format("read block %s of file %s from datanode %s slowly. costs %s ms",
+          block.getBlock(), src, datanodeInfo, TimeUnit.NANOSECONDS.toMillis(elapsedTime));
+      DFSClient.LOG.debug(msg);
+    }
+  }
+
+  /**
+   * Check whether we meet slow read or not. If meet and canSwitchToOtherNode return true,
+   * We throw SlowReadSwitchException to switch node for reading.
+   * @param block
+   * @param datanodeInfo
+   * @throws SlowReadSwitchException
+   */
+  private void checkSlowReadDatanode(LocatedBlock block, DatanodeInfo datanodeInfo)
+      throws SlowReadSwitchException {
+    if (!((BlockReaderRemote) blockReader).isSlowDatanodeKickoutEnable()
+        || datanodeInfo == null || block == null) {
+      return;
+    }
+    SlowMetrics metrics = getNodeSlowMetrics(datanodeInfo);
+    if (metrics.inSlowState()) {
+      String msg = String.format("Reading block %s of file %s from datanode %s slowly!",
+          block.getBlock(), src, datanodeInfo);
+      if (canSwitchToOtherNode(datanodeInfo, block)) {
+        throw new SlowReadSwitchException(msg + " Switch to other datanode for reading automatically!");
+      }
+    }
+  }
+
+  private SlowMetrics getNodeSlowMetrics(DatanodeInfo node) {
+    if (dnSlowMetricsMap.get(node) == null) {
+      SlowMetrics slowMetric = new SlowMetrics(
+          slowDatanodeCheckWindowNs,
+          slowReadDatanodeCheckThresholdNs,
+          slowReadDatanodeOverThresholdCountInWindow);
+      dnSlowMetricsMap.put(node, slowMetric);
+    }
+    return dnSlowMetricsMap.get(node);
+  }
+
+  /**
+   * Judges whether be able to switch or not
+   * @param excludeNode
+   * @param locatedBlock
+   * @return
+   */
+  private boolean canSwitchToOtherNode(DatanodeInfo excludeNode, LocatedBlock locatedBlock) {
+    int unchoosen = 0;
+    for (DatanodeInfo dn: locatedBlock.getLocations()) {
+      if (dn.equals(excludeNode)) {
+        unchoosen++;
+      } else if (deadNodes.containsKey(dn)) {
+        unchoosen++;
+      } else if (slowNodesCache.asMap().containsKey(dn)) {
+        unchoosen++;
+      }
+    }
+    if (unchoosen >= locatedBlock.getLocations().length) {
+      return false;
+    }
+    return true;
   }
 
   protected synchronized int readWithStrategy(ReaderStrategy strategy)
@@ -881,6 +1027,9 @@ public class DFSInputStream extends FSInputStream
           // expired.
           if (pos > blockEnd || currentNode == null
               || updateBlockLocationsStamp()) {
+            if (pos > blockEnd) {
+              setCurSlowReadSwitchCount(0);
+            }
             currentNode = blockSeekTo(pos);
           }
           int realLen = (int) Math.min(len, (blockEnd - pos + 1L));
@@ -1057,6 +1206,9 @@ public class DFSInputStream extends FSInputStream
     StorageType[] storageTypes = block.getStorageTypes();
     DatanodeInfo chosenNode = null;
     StorageType storageType = null;
+    boolean[] nodesChosenArray = null;
+    int chosenNodeIndex = -1;
+
     if (dfsClient.getConf().isReadUseCachePriority()) {
       DatanodeInfo[] cachedLocs = block.getCachedLocations();
       if (cachedLocs != null) {
@@ -1070,6 +1222,7 @@ public class DFSInputStream extends FSInputStream
     }
 
     if (chosenNode == null && nodes != null) {
+      nodesChosenArray = new boolean[nodes.length];
       for (int i = 0; i < nodes.length; i++) {
         if (isValidNode(nodes[i], ignoredNodes)) {
           chosenNode = nodes[i];
@@ -1078,10 +1231,41 @@ public class DFSInputStream extends FSInputStream
           if (storageTypes != null && i < storageTypes.length) {
             storageType = storageTypes[i];
           }
-          break;
+          nodesChosenArray[i] = true;
         }
       }
     }
+
+    // choose the quickest node when all nodes are slow.
+    if (nodesChosenArray != null && nodes != null) {
+      chosenNode = null;
+      storageType = null;
+      double tmp = -1.0;
+      // exclude slow nodes
+      Double minSlowNodeMetricsValue = -1.0;
+      for (int i = 0; i < nodesChosenArray.length; i++) {
+        // choose the first normal node
+        if (nodesChosenArray[i]) {
+          if (!slowNodesCache.asMap().containsKey(nodes[i])) {
+            chosenNodeIndex = i;
+            break;
+          } else {
+            if (minSlowNodeMetricsValue == -1.0) {
+              minSlowNodeMetricsValue = getNodeSlowMetrics(nodes[i]).getAvg();
+              chosenNodeIndex = i;
+            } else if ((tmp = getNodeSlowMetrics(nodes[i]).getAvg()) < minSlowNodeMetricsValue) {
+              minSlowNodeMetricsValue = tmp;
+              chosenNodeIndex = i;
+            }
+          }
+        }
+      }
+      if (chosenNodeIndex >= 0) {
+        chosenNode = nodes[chosenNodeIndex];
+        storageType = storageTypes[chosenNodeIndex];
+      }
+    }
+    
     if (chosenNode == null) {
       reportLostBlock(block, ignoredNodes);
       return null;

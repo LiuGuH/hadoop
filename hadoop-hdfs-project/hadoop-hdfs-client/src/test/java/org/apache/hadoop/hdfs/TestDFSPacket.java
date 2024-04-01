@@ -40,7 +40,7 @@ public class TestDFSPacket {
 
     byte[] packetBuf = new byte[data.length * 2];
     DFSPacket p = new DFSPacket(packetBuf, maxChunksPerPacket,
-                                0, 0, checksumSize, false);
+                                0, 0, checksumSize, false, false);
     p.setSyncBlock(true);
     p.writeData(data, 0, data.length);
     p.writeChecksum(checksum, 0, checksum.length);

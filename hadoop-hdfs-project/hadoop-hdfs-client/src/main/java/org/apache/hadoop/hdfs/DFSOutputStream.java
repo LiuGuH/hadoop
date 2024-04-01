@@ -148,7 +148,7 @@ public class DFSOutputStream extends FSOutputSummer
     }
 
     return new DFSPacket(buf, chunksPerPkt, offsetInBlock, seqno,
-        getChecksumSize(), lastPacketInBlock);
+        getChecksumSize(), lastPacketInBlock, getStreamer().isEndBlockFlag());
   }
 
   @Override
@@ -360,7 +360,6 @@ public class DFSOutputStream extends FSOutputSummer
   }
 
   private void adjustPacketChunkSize(HdfsFileStatus stat) throws IOException{
-
     long usedInLastBlock = stat.getLen() % blockSize;
     int freeInLastBlock = (int)(blockSize - usedInLastBlock);
 
@@ -556,10 +555,11 @@ public class DFSOutputStream extends FSOutputSummer
    * @throws IOException
    */
   void endBlock() throws IOException {
-    if (getStreamer().getBytesCurBlock() == blockSize) {
+    if (getStreamer().getBytesCurBlock() == blockSize || getStreamer().isEndBlockFlag()) {
       setCurrentPacketToEmpty();
       enqueueCurrentPacket();
       getStreamer().setBytesCurBlock(0);
+      getStreamer().setEndBlockFlag(false);
       lastFlushOffset = 0;
     }
   }

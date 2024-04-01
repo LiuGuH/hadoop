@@ -25,9 +25,15 @@ import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_CONT
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_LOCAL_INTERFACES;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SERVER_DEFAULTS_VALIDITY_PERIOD_MS_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SERVER_DEFAULTS_VALIDITY_PERIOD_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_TEST_DROP_NAMENODE_RESPONSE_NUM_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_TEST_DROP_NAMENODE_RESPONSE_NUM_KEY;
 
+import org.apache.hadoop.thirdparty.com.google.common.cache.Cache;
+import org.apache.hadoop.thirdparty.com.google.common.cache.CacheBuilder;
 import java.io.DataOutputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -247,6 +253,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   private static volatile ThreadPoolExecutor STRIPED_READ_THREAD_POOL;
   private final int smallBufferSize;
   private final long serverDefaultsValidityPeriod;
+  private static Cache<DatanodeInfo, DatanodeInfo> slowNodeCache;
 
   /**
    * Disabled stop DeadNodeDetectorThread for the testing when MiniDFSCluster
@@ -417,6 +424,21 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     this.saslClient = new SaslDataTransferClient(
         conf, DataTransferSaslUtil.getSaslPropertiesResolver(conf),
         TrustedChannelResolver.getInstance(conf), nnFallbackToSimpleAuth);
+
+    int maxDnSize = conf.getInt(
+        DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY,
+        DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY_DEFAULT);
+    long slowNodeExpirationTime = conf.getLong(
+        DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY,
+        DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY_DEFAULT);
+    synchronized (DFSClient.class) {
+      if (this.slowNodeCache == null) {
+        this.slowNodeCache = CacheBuilder.newBuilder()
+            .maximumSize(maxDnSize)
+            .expireAfterWrite(slowNodeExpirationTime, TimeUnit.MILLISECONDS)
+            .build();
+      }
+    }
   }
 
   /**
@@ -3437,5 +3459,9 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
    */
   public DeadNodeDetector getDeadNodeDetector() {
     return clientContext.getDeadNodeDetector();
+  }
+
+  public Cache<DatanodeInfo, DatanodeInfo> getSlowNodeCache() {
+    return slowNodeCache;
   }
 }

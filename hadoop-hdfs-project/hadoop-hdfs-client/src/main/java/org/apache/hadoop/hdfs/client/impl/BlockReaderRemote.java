@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
 import java.util.EnumSet;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
@@ -58,6 +59,10 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_BLOCK_READER_REMOTE_BUFFER_SIZE_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_BLOCK_READER_REMOTE_BUFFER_SIZE_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT;
 
 /**
  * This is a wrapper around connection to datanode
@@ -124,6 +129,11 @@ public class BlockReaderRemote implements BlockReader {
   private boolean sentStatusCode = false;
 
   private final int networkDistance;
+
+  private long slowDatanodeCheckWindowNs;
+  private long slowReadDatanodeCheckThresholdNs;
+  private long slowReadDatanodeOverThresholdCountInWindow;
+  private boolean slowDatanodeKickoutEnable;
 
   @VisibleForTesting
   public Peer getPeer() {
@@ -302,6 +312,22 @@ public class BlockReaderRemote implements BlockReader {
     this.networkDistance = networkDistance;
   }
 
+  protected BlockReaderRemote(String file, long blockId,
+                              DataChecksum checksum, boolean verifyChecksum,
+                              long startOffset, long firstChunkOffset,
+                              long bytesToRead, Peer peer,
+                              DatanodeID datanodeID, PeerCache peerCache,
+                              int networkDistance, boolean slowDatanodeKickoutEnable,
+                              long slowDatanodeCheckWindowNs, long slowReadDatanodeCheckThresholdNs,
+                              long slowReadDatanodeOverThresholdCountInWindow) {
+    this(file, blockId, checksum, verifyChecksum, startOffset, firstChunkOffset,
+        bytesToRead, peer, datanodeID, peerCache, networkDistance);
+    this.slowDatanodeKickoutEnable = slowDatanodeKickoutEnable;
+    this.slowDatanodeCheckWindowNs = slowDatanodeCheckWindowNs;
+    this.slowReadDatanodeCheckThresholdNs = slowReadDatanodeCheckThresholdNs;
+    this.slowReadDatanodeOverThresholdCountInWindow = slowReadDatanodeOverThresholdCountInWindow;
+  }
+
 
   @Override
   public synchronized void close() throws IOException {
@@ -419,6 +445,21 @@ public class BlockReaderRemote implements BlockReader {
         checksumInfo.getChecksum());
     //Warning when we get CHECKSUM_NULL?
 
+    boolean slowDatanodeKickoutEnable = DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT;
+    long slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT);
+    long slowReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT);
+    long slowReadDatanodeOverThresholdCountInWindow = DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+    
+    if (status.getSlowDatanodeKickoutEnableList()!= null && status.getSlowDatanodeKickoutEnableCount() > 0) {
+      slowDatanodeKickoutEnable = status.getSlowDatanodeKickoutEnable(0);
+      slowDatanodeCheckWindowNs = Math.min(status.getSlowDatanodeCheckWindowNs(),
+          slowDatanodeCheckWindowNs);
+      slowReadDatanodeCheckThresholdNs = Math.max(status.getSlowReadDatanodeCheckThreholdNs(),
+          slowReadDatanodeCheckThresholdNs);
+      slowReadDatanodeOverThresholdCountInWindow = Math.max(status.getSlowReadDatanodeOverthresholdCountInWindow(),
+          slowReadDatanodeOverThresholdCountInWindow);
+    }
+    
     // Read the first chunk offset.
     long firstChunkOffset = checksumInfo.getChunkOffset();
 
@@ -431,7 +472,8 @@ public class BlockReaderRemote implements BlockReader {
 
     return new BlockReaderRemote(file, block.getBlockId(), checksum,
         verifyChecksum, startOffset, firstChunkOffset, len, peer, datanodeID,
-        peerCache, networkDistance);
+        peerCache, networkDistance, slowDatanodeKickoutEnable, slowDatanodeCheckWindowNs,
+        slowReadDatanodeCheckThresholdNs, slowReadDatanodeOverThresholdCountInWindow);
   }
 
   static void checkSuccess(
@@ -472,5 +514,21 @@ public class BlockReaderRemote implements BlockReader {
   @Override
   public int getNetworkDistance() {
     return networkDistance;
+  }
+
+  public long getSlowReadDatanodeCheckThresholdNs() {
+    return slowReadDatanodeCheckThresholdNs;
+  }
+
+  public long getSlowReadDatanodeOverThresholdCountInWindow() {
+    return slowReadDatanodeOverThresholdCountInWindow;
+  }
+
+  public long getSlowDatanodeCheckWindowNs() {
+    return slowDatanodeCheckWindowNs;
+  }
+
+  public boolean isSlowDatanodeKickoutEnable() {
+    return slowDatanodeKickoutEnable;
   }
 }

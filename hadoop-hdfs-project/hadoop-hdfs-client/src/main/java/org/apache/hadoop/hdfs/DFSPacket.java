@@ -48,6 +48,7 @@ public class DFSPacket {
   private final int maxChunks; // max chunks in packet
   private byte[] buf;
   private final boolean lastPacketInBlock; // is this the last packet in block?
+  private final boolean endInAdvance; // is this the endInAdvance flag packet? 
 
   /**
    * buf is pointed into like follows:
@@ -82,13 +83,14 @@ public class DFSPacket {
    * @param lastPacketInBlock if this is the last packet
    */
   public DFSPacket(byte[] buf, int chunksPerPkt, long offsetInBlock, long seqno,
-                   int checksumSize, boolean lastPacketInBlock) {
+                   int checksumSize, boolean lastPacketInBlock, boolean endInAdvance) {
     this.lastPacketInBlock = lastPacketInBlock;
     this.numChunks = 0;
     this.offsetInBlock = offsetInBlock;
     this.seqno = seqno;
 
     this.buf = buf;
+    this.endInAdvance = endInAdvance;
 
     checksumStart = PacketHeader.PKT_MAX_HEADER_LEN;
     checksumPos = checksumStart;
@@ -162,7 +164,7 @@ public class DFSPacket {
     final int pktLen = HdfsConstants.BYTES_IN_INTEGER + dataLen + checksumLen;
 
     PacketHeader header = new PacketHeader(
-        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, syncBlock);
+        pktLen, offsetInBlock, seqno, lastPacketInBlock, dataLen, syncBlock, endInAdvance);
 
     if (checksumPos != dataStart) {
       // Move the checksum to cover the gap. This can happen for the last
@@ -359,5 +361,9 @@ public class DFSPacket {
 
   public Span getSpan() {
     return span;
+  }
+
+  public boolean isEndInAdvance() {
+    return endInAdvance;
   }
 }

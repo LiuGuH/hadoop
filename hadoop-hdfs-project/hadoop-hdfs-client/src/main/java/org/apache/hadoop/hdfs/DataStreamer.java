@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs;
 
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOW_PIPELINENODE_CHECK_CLASSNAME_KEY;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 
 import java.io.BufferedOutputStream;
@@ -38,6 +39,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -520,19 +522,30 @@ class DataStreamer extends Daemon {
   //persist blocks on namenode
   private final AtomicBoolean persistBlocks = new AtomicBoolean(false);
   private boolean failPacket = false;
-  private final long dfsclientSlowLogThresholdMs;
+  private final long dfsClientSlowLogThresholdMs;
+  private List<Boolean> dfsSlowDatanodeKickoutEnableList = new ArrayList<>();
+  private long slowDatanodeCheckWindowNs;
+  private long slowWriteDatanodeCheckThresholdNs;
+  private long slowWriteDatanodeOverThresholdCountInWindow;
   private long artificialSlowdown = 0;
   // List of congested data nodes. The stream will back off if the DataNodes
   // are congested
   private final List<DatanodeInfo> congestedNodes = new ArrayList<>();
+  private final Map<DatanodeInfo, Integer> slowNodeMap = new HashMap<>();
   private static final int CONGESTION_BACKOFF_MEAN_TIME_IN_MS = 5000;
   private static final int CONGESTION_BACK_OFF_MAX_TIME_IN_MS =
       CONGESTION_BACKOFF_MEAN_TIME_IN_MS * 10;
   private int lastCongestionBackoffTime;
-
+  private int markSlowNodeAsBadNodeThreshold;
   protected final LoadingCache<DatanodeInfo, DatanodeInfo> excludedNodes;
   private final String[] favoredNodes;
   private final EnumSet<AddBlockFlag> addBlockFlags;
+  private SlowPipelineNodeStrategy[] slowDatanodeMetrics;
+  private volatile boolean needEndBlockInAdvance = false;
+  private volatile boolean endBlockFlag = false;
+  private volatile boolean skipRestPacketsInBlockSlowHandle = false;
+  private int curSlowWriteKickOutCount = 0;
+  private final int maxSlowWriteDatanodeKickoutCount = 3;
 
   private DataStreamer(HdfsFileStatus stat, ExtendedBlock block,
                        DFSClient dfsClient, String src,
@@ -553,10 +566,14 @@ class DataStreamer extends Daemon {
     this.isAppend = isAppend;
     this.favoredNodes = favoredNodes;
     final DfsClientConf conf = dfsClient.getConf();
-    this.dfsclientSlowLogThresholdMs = conf.getSlowIoWarningThresholdMs();
+    this.dfsClientSlowLogThresholdMs = conf.getSlowIoWarningThresholdMs();
+    this.slowDatanodeCheckWindowNs = conf.getSlowDatanodeCheckWindowNs();
+    this.slowWriteDatanodeCheckThresholdNs = conf.getSlowWriteDatanodeCheckThresholdNs();
+    this.slowWriteDatanodeOverThresholdCountInWindow = conf.getSlowWriteDatanodeOverThresholdCountInWindow();
     this.excludedNodes = initExcludedNodes(conf.getExcludedNodesCacheExpiry());
     this.errorState = new ErrorState(conf.getDatanodeRestartTimeout());
     this.addBlockFlags = flags;
+    this.markSlowNodeAsBadNodeThreshold = conf.getMarkSlowNodeAsBadNodeThreshold();
   }
 
   /**
@@ -616,6 +633,26 @@ class DataStreamer extends Daemon {
     this.nodes = nodes;
     this.storageTypes = storageTypes;
     this.storageIDs = storageIDs;
+
+    Class<? extends SlowPipelineNodeStrategy> slowNodesCheckStrategyClazz =
+        dfsClient.getConfiguration().getClass(DFS_CLIENT_SLOW_PIPELINENODE_CHECK_CLASSNAME_KEY,
+        SlowMetrics.class, SlowPipelineNodeStrategy.class);
+
+    if (nodes != null) {
+      this.slowDatanodeMetrics = new SlowPipelineNodeStrategy[nodes.length];
+      for (int i = 0; i < nodes.length; i++) {
+        try {
+          this.slowDatanodeMetrics[i] = slowNodesCheckStrategyClazz.getConstructor(long.class, long.class, long.class)
+              .newInstance(slowDatanodeCheckWindowNs, slowWriteDatanodeCheckThresholdNs, slowWriteDatanodeOverThresholdCountInWindow);
+        } catch (Exception e) {
+          LOG.warn("Error occurs when initialize SlowPipelineNodeStrategy object. Will use SlowMetrics default.");
+          this.slowDatanodeMetrics[i] = new SlowMetrics(
+              slowDatanodeCheckWindowNs,
+              slowWriteDatanodeCheckThresholdNs,
+              slowWriteDatanodeOverThresholdCountInWindow);
+        }
+      }
+    }
   }
 
   /**
@@ -641,7 +678,9 @@ class DataStreamer extends Daemon {
     this.setName("DataStreamer for file " + src);
     closeResponder();
     closeStream();
+    skipRestPacketsInBlockSlowHandle = false;
     setPipeline(null, null, null);
+    setCurSlowWriteKickOutCount(0);
     stage = BlockConstructionStage.PIPELINE_SETUP_CREATE;
   }
 
@@ -658,7 +697,7 @@ class DataStreamer extends Daemon {
     TraceScope scope = null;
     while (!streamerClosed && dfsClient.clientRunning) {
       // if the Responder encountered an error, shutdown Responder
-      if (errorState.hasError()) {
+      if (!needEndBlockInAdvance && errorState.hasError()) {
         closeResponder();
       }
 
@@ -749,7 +788,7 @@ class DataStreamer extends Daemon {
             scope = null;
             dataQueue.removeFirst();
             ackQueue.addLast(one);
-            packetSendTime.put(one.getSeqno(), Time.monotonicNow());
+            packetSendTime.put(one.getSeqno(), Time.monotonicNowNanos());
             dataQueue.notifyAll();
           }
         }
@@ -944,10 +983,10 @@ class DataStreamer extends Daemon {
         LOG.debug("Closed channel exception", cce);
       }
       long duration = Time.monotonicNow() - begin;
-      if (duration > dfsclientSlowLogThresholdMs) {
+      if (duration > dfsClientSlowLogThresholdMs) {
         LOG.warn("Slow waitForAckedSeqno took {}ms (threshold={}ms). File being"
                 + " written: {}, block: {}, Write pipeline datanodes: {}.",
-            duration, dfsclientSlowLogThresholdMs, src, block, nodes);
+            duration, dfsClientSlowLogThresholdMs, src, block, nodes);
       }
     }
   }
@@ -1032,6 +1071,11 @@ class DataStreamer extends Daemon {
   private void closeResponder() {
     if (response != null) {
       try {
+        if (slowDatanodeMetrics != null) {
+          for (int i = 0; i < slowDatanodeMetrics.length; i++) {
+            slowDatanodeMetrics[i].clear();
+          }
+        }
         response.close();
         response.join();
       } catch (InterruptedException  e) {
@@ -1135,14 +1179,15 @@ class DataStreamer extends Daemon {
         try {
           // read an ack from the pipeline
           ack.readFields(blockReplyStream);
+          long duration = 0L;
           if (ack.getSeqno() != DFSPacket.HEART_BEAT_SEQNO) {
             Long begin = packetSendTime.get(ack.getSeqno());
             if (begin != null) {
-              long duration = Time.monotonicNow() - begin;
-              if (duration > dfsclientSlowLogThresholdMs) {
+              duration = Time.monotonicNowNanos() - begin;
+              if (TimeUnit.NANOSECONDS.toMillis(duration) > dfsClientSlowLogThresholdMs) {
                 LOG.info("Slow ReadProcessor read fields for block " + block
-                    + " took " + duration + "ms (threshold="
-                    + dfsclientSlowLogThresholdMs + "ms); ack: " + ack
+                    + " took " + TimeUnit.NANOSECONDS.toMillis(duration) + "ms (threshold="
+                    + dfsClientSlowLogThresholdMs + "ms); ack: " + ack
                     + ", targets: " + Arrays.asList(targets));
               }
             }
@@ -1153,12 +1198,17 @@ class DataStreamer extends Daemon {
           long seqno = ack.getSeqno();
           // processes response status from datanodes.
           ArrayList<DatanodeInfo> congestedNodesFromAck = new ArrayList<>();
+          ArrayList<DatanodeInfo> slownodesFromAck = new ArrayList<>();
           for (int i = ack.getNumOfReplies()-1; i >=0  && dfsClient.clientRunning; i--) {
             final Status reply = PipelineAck.getStatusFromHeader(ack
                 .getHeaderFlag(i));
             if (PipelineAck.getECNFromHeader(ack.getHeaderFlag(i)) ==
                 PipelineAck.ECN.CONGESTED) {
               congestedNodesFromAck.add(targets[i]);
+            }
+            if (PipelineAck.getSLOWFromHeader(ack.getHeaderFlag(i)) ==
+                PipelineAck.SLOW.SLOW) {
+              slownodesFromAck.add(targets[i]);
             }
             // Restart will not be treated differently unless it is
             // the local node or the only one in the pipeline.
@@ -1175,6 +1225,7 @@ class DataStreamer extends Daemon {
               throw new IOException("Bad response " + reply +
                   " for " + block + " from datanode " + targets[i]);
             }
+            checkSlowNodes(seqno, ack, i, duration);
           }
 
           if (!congestedNodesFromAck.isEmpty()) {
@@ -1187,6 +1238,15 @@ class DataStreamer extends Daemon {
               congestedNodes.clear();
               lastCongestionBackoffTime = 0;
             }
+          }
+
+          if (slownodesFromAck.isEmpty()) {
+            if (!slowNodeMap.isEmpty()) {
+              slowNodeMap.clear();
+            }
+          } else {
+            markSlowNode(slownodesFromAck);
+            LOG.debug("SlowNodeMap content: {}.", slowNodeMap);
           }
 
           assert seqno != PipelineAck.UNKOWN_SEQNO :
@@ -1255,9 +1315,128 @@ class DataStreamer extends Daemon {
       }
     }
 
+    void markSlowNode(List<DatanodeInfo> slownodesFromAck) throws IOException {
+      if (skipRestPacketsInBlockSlowHandle) {
+        return;
+      }
+      Set<DatanodeInfo> discontinuousNodes = new HashSet<>(slowNodeMap.keySet());
+      for (DatanodeInfo slowNode : slownodesFromAck) {
+        if (!slowNodeMap.containsKey(slowNode)) {
+          slowNodeMap.put(slowNode, 1);
+        } else {
+          int oldCount = slowNodeMap.get(slowNode);
+          slowNodeMap.put(slowNode, ++oldCount);
+        }
+        discontinuousNodes.remove(slowNode);
+      }
+      for (DatanodeInfo discontinuousNode : discontinuousNodes) {
+        slowNodeMap.remove(discontinuousNode);
+      }
+
+      if (!slowNodeMap.isEmpty()) {
+        for (Map.Entry<DatanodeInfo, Integer> entry : slowNodeMap.entrySet()) {
+          if (entry.getValue() >= markSlowNodeAsBadNodeThreshold) {
+            DatanodeInfo slowNode = entry.getKey();
+            int index = getDatanodeIndex(slowNode);
+            if (index >= 0 && dfsSlowDatanodeKickoutEnableList.get(index)) {
+              String exceptionMsg = "Receive reply from slowNode " + slowNode +
+                  " for continuous " + markSlowNodeAsBadNodeThreshold +
+                  " times, treating it as badNode";
+              if (!isEndBlockFlag() && getBytesCurBlock() * 2 > dfsClient.getConf().getDefaultBlockSize()) {
+                LOG.warn(exceptionMsg);
+                needEndBlockInAdvance = true;
+                skipRestPacketsInBlockSlowHandle = true;
+                errorState.setInternalError();
+                errorState.setBadNodeIndex(index);
+                return;
+              } else {
+                LOG.warn("Meet kick-out slow datanode case.");
+                if (curSlowWriteKickOutCount >= maxSlowWriteDatanodeKickoutCount) {
+                  LOG.warn("Have kickout slow write datanodes {} times, will not kickout for this block.", curSlowWriteKickOutCount);
+                  return;
+                }
+                curSlowWriteKickOutCount++;
+                errorState.setBadNodeIndex(index);
+                throw new IOException(exceptionMsg);
+              }
+            }
+            slowNodeMap.remove(entry.getKey());
+          }
+        }
+      }
+    }
+
     void close() {
       responderClosed = true;
       this.interrupt();
+    }
+
+    int getDatanodeIndex(DatanodeInfo datanodeInfo) {
+      for (int i = 0; i < targets.length; i++) {
+        if (targets[i].equals(datanodeInfo)) {
+          return i;
+        }
+      }
+      return -1;
+    }
+
+    /**
+     * Check whether the i-th datanode in pipeline is slow or not.
+     * @param seqno seqno
+     * @param ack PipelineAck object
+     * @param dnIndexInPipeline index of i-th datanode in pipeline. 
+     * @param duration client receive ack time - client send packet time, unit is nanos.
+     * @throws IOException
+     */
+    private void checkSlowNodes(long seqno, PipelineAck ack, int dnIndexInPipeline, long duration)
+        throws IOException {
+      if (dfsSlowDatanodeKickoutEnableList == null || dfsSlowDatanodeKickoutEnableList.size() ==0) {
+        return;
+      }
+      if (skipRestPacketsInBlockSlowHandle) {
+        return;
+      }
+      if (dfsSlowDatanodeKickoutEnableList.size() > dnIndexInPipeline && 
+          !dfsSlowDatanodeKickoutEnableList.get(dnIndexInPipeline)) {
+        // specific datanode not allowed to kick
+        return;
+      }
+
+      if (dnIndexInPipeline > 0) {
+        slowDatanodeMetrics[dnIndexInPipeline].putMetric(ack.getDownstreamTime(dnIndexInPipeline - 1));
+      } else {
+        slowDatanodeMetrics[dnIndexInPipeline].putMetric(duration);
+      }
+      LOG.debug("{} downstream time: {}", seqno, slowDatanodeMetrics[dnIndexInPipeline]);
+      if (slowDatanodeMetrics[dnIndexInPipeline].inSlowState()) {
+        String msg = String.format("Writing file %s met slow datanode: %d ms for %s from %s.", src,
+            TimeUnit.NANOSECONDS.toMillis((long) slowDatanodeMetrics[dnIndexInPipeline].getAvg()),
+            block, targets[dnIndexInPipeline]);
+        if (!isEndBlockFlag() && getBytesCurBlock() * 2 > dfsClient.getConf().getDefaultBlockSize()) {
+          needEndBlockInAdvance = true;
+          skipRestPacketsInBlockSlowHandle = true;
+          errorState.setInternalError();
+          errorState.setBadNodeIndex(dnIndexInPipeline);
+          LOG.warn(msg);
+          return;
+        }
+
+        if (nodes.length > 1) {
+          if (curSlowWriteKickOutCount >= maxSlowWriteDatanodeKickoutCount) {
+            LOG.warn("Have kickout slow write datanodes {} times, will not kickout for this block.", curSlowWriteKickOutCount);
+            return;
+          }
+          if (dfsSlowDatanodeKickoutEnableList.get(dnIndexInPipeline)) {
+            errorState.setBadNodeIndex(dnIndexInPipeline);
+            curSlowWriteKickOutCount++;
+            throw new IOException(msg);
+          } else {
+            LOG.warn(msg + ", but not allowed to kick out it automatically!");
+          }
+        } else {
+          LOG.warn(msg + ", but no other datanode to retry!");
+        }
+      }
     }
   }
 
@@ -1275,7 +1454,20 @@ class DataStreamer extends Daemon {
     if (!errorState.hasDatanodeError() && !shouldHandleExternalError()) {
       return false;
     }
-    LOG.debug("start process datanode/external error, {}", this);
+
+    if (needEndBlockInAdvance && !(this instanceof StripedDataStreamer)) {
+      final int badNodeIndex = errorState.getBadNodeIndex();
+      LOG.warn("End block {} in advance because written bytes are greater than half of block size " +
+              "and {} is bad. in pipeline datanode: {}. Bad datanode index is {}",
+          block, nodes[badNodeIndex], Arrays.toString(nodes), badNodeIndex);
+      excludedNodes.put(nodes[badNodeIndex], nodes[badNodeIndex]);
+      errorState.resetInternalError();
+      lastException.clear();
+      endBlockFlag = true;
+      needEndBlockInAdvance = false;
+      return false;
+    }
+
     if (response != null) {
       LOG.info("Error Recovery for " + block +
           " waiting for responder to exit. ");
@@ -1804,6 +1996,16 @@ class DataStreamer extends Daemon {
         Status pipelineStatus = resp.getStatus();
         firstBadLink = resp.getFirstBadLink();
 
+        if (resp.getSlowDatanodeKickoutEnableList() != null && resp.getSlowDatanodeKickoutEnableList().size() > 0) {
+          dfsSlowDatanodeKickoutEnableList = resp.getSlowDatanodeKickoutEnableList();
+          slowDatanodeCheckWindowNs = Math.min(resp.getSlowDatanodeCheckWindowNs(),
+              slowDatanodeCheckWindowNs);
+          slowWriteDatanodeCheckThresholdNs = Math.max(resp.getSlowWriteDatanodeCheckThresholdNs(),
+              slowWriteDatanodeCheckThresholdNs);
+          slowWriteDatanodeOverThresholdCountInWindow = Math.max(resp.getSlowReadDatanodeOverthresholdCountInWindow(),
+              slowWriteDatanodeOverThresholdCountInWindow);
+        }
+
         // Got an restart OOB ack.
         // If a node is already restarting, this status is not likely from
         // the same node. If it is from a different node, it is not
@@ -2003,7 +2205,7 @@ class DataStreamer extends Daemon {
    */
   private DFSPacket createHeartbeatPacket() {
     final byte[] buf = new byte[PacketHeader.PKT_MAX_HEADER_LEN];
-    return new DFSPacket(buf, 0, 0, DFSPacket.HEART_BEAT_SEQNO, 0, false);
+    return new DFSPacket(buf, 0, 0, DFSPacket.HEART_BEAT_SEQNO, 0, false, false);
   }
 
   private static LoadingCache<DatanodeInfo, DatanodeInfo> initExcludedNodes(
@@ -2156,5 +2358,24 @@ class DataStreamer extends Daemon {
     final ExtendedBlock extendedBlock = block.getCurrentBlock();
     return extendedBlock == null ?
         "block==null" : "" + extendedBlock.getLocalBlock();
+  }
+
+  @VisibleForTesting
+  public int getAckQueueLength() {
+    synchronized (dataQueue) {
+      return ackQueue.size();
+    }
+  }
+
+  public boolean isEndBlockFlag() {
+    return endBlockFlag;
+  }
+
+  public void setEndBlockFlag(boolean endBlockFlag) {
+    this.endBlockFlag = endBlockFlag;
+  }
+
+  public void setCurSlowWriteKickOutCount(int curSlowWriteKickOutCount) {
+    this.curSlowWriteKickOutCount = curSlowWriteKickOutCount;
   }
 }

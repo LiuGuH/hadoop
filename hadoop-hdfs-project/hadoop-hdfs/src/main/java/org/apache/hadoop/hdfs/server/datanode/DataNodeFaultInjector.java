@@ -23,6 +23,7 @@ import org.apache.hadoop.classification.InterfaceAudience;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
 /**
@@ -66,6 +67,11 @@ public class DataNodeFaultInjector {
 
   public void delaySendingAckToUpstream(final String upstreamAddr)
       throws IOException {
+  }
+
+  public void delaySendingAckToUpstream(String inAddr, int downDnslength)
+      throws IOException {
+    
   }
 
   /**
@@ -156,6 +162,7 @@ public class DataNodeFaultInjector {
    */
   public void badDecoding(ByteBuffer[] outputs) {}
 
+
   public void throwIOExceptionWhenReconcile() throws IOException {}
 
   /**
@@ -163,4 +170,23 @@ public class DataNodeFaultInjector {
    */
   public void delayDeleteReplica() {}
 
+  public void markSlow(String dnAddr, int[] replies) {}
+
+  public void markDiskSlow(long[] diskDuration) {}
+
+  public void delayDiskWrite(int downstreamDNsCount) {}
+
+  public void delayTransfer() {}
+
+  /**
+   * Simulating slow network situation happens on the first datanode in pipeline.
+   * @param xferAddress
+   */
+  public void delayFirstDatanodeNetworkSlow(InetSocketAddress xferAddress) throws IOException {}
+
+  /**
+   * Simulating slow network situation happens on the middle datanodes in pipeline.
+   * @param downStreamDns
+   */
+  public void delayMiddleDatanodesNetworkSlow(int downStreamDns) throws IOException {}
 }

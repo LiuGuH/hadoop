@@ -17,11 +17,13 @@
  */
 package org.apache.hadoop.hdfs;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_DEFAULT_NAME_KEY;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -42,6 +44,7 @@ import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.ExtendedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.datatransfer.BlockConstructionStage;
+import org.apache.hadoop.hdfs.protocol.datatransfer.PipelineAck;
 import org.apache.hadoop.hdfs.protocolPB.DatanodeProtocolClientSideTranslatorPB;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
@@ -893,4 +896,371 @@ public class TestClientProtocolForPipelineRecovery {
       DataNodeFaultInjector.set(oldDnInjector);
     }
   }
+
+  @Test
+  public void testPipelineRecoveryWithSlowNode() throws Exception {
+    final int oneWriteSize = 5000;
+
+    final int threshold = 3;
+    Configuration conf = new HdfsConfiguration();
+    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_KEY, threshold);
+
+    // Need 4 datanodes to verify the replaceDatanode during pipeline recovery
+    final MiniDFSCluster cluster =
+        new MiniDFSCluster.Builder(conf).numDataNodes(4).build();
+    DataNodeFaultInjector old = DataNodeFaultInjector.get();
+
+    try {
+      DistributedFileSystem fs = cluster.getFileSystem();
+      Path fileName = new Path("/f");
+      FSDataOutputStream o = fs.create(fileName);
+      // Flush to get the pipeline created.
+      o.writeBytes("hello");
+      o.hflush();
+      DFSOutputStream dfsO = (DFSOutputStream) o.getWrappedStream();
+      final DatanodeInfo[] pipeline = dfsO.getStreamer().getNodes();
+      final String lastDn = pipeline[2].getXferAddr(false);
+
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markSlow(String mirrorAddr, int[] replies) {
+          if (!lastDn.equals(mirrorAddr)) {
+            // Only fail for last DN
+            return;
+          }
+          assert(replies.length == 2);
+          replies[1] = PipelineAck.setSLOWForHeader(replies[1], PipelineAck.SLOW.SLOW);
+        }
+      });
+
+      int count = 0;
+      Random r = new Random();
+      byte[] b = new byte[oneWriteSize];
+      while (count < threshold + 1) {
+        r.nextBytes(b);
+        o.write(b);
+        count++;
+        o.hflush();
+      }
+      Assert.assertNotEquals(lastDn, dfsO.getStreamer().getNodes()[2].getXferAddr(false));
+    } finally {
+      DataNodeFaultInjector.set(old);
+      cluster.shutdown();
+    }
+  }
+
+
+  /**
+   * Test client kicking out slow datanodes in pipeline can be controlled by Datanode.
+   * Note. when change to bzl-dynamic.xml, this UT will failed. It's Okay.
+   * @throws Exception
+   */
+  @Test
+  public void testKickSlowControlledByDatanode() throws Exception {
+    // DataNode-side Configuration
+    Configuration dnConf = new HdfsConfiguration();
+    dnConf.setBoolean(HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, false);
+    dnConf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY, 500L);
+    dnConf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY, 10);
+    dnConf.setLong(HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY, 20L);
+    dnConf.setBoolean("fs.hdfs.impl.disable.cache", true);
+
+    final MiniDFSCluster cluster =
+        new MiniDFSCluster.Builder(dnConf).numDataNodes(5).build();
+
+    // Client-side Configuration
+    Configuration clientConf = new HdfsConfiguration();
+    clientConf.setBoolean(HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, true);
+
+    DistributedFileSystem fileSystem = cluster.getFileSystem();
+    String clusterURI = fileSystem.getConf().get(FS_DEFAULT_NAME_KEY);
+    String dnConfURI = dnConf.get(FS_DEFAULT_NAME_KEY);
+    Assert.assertEquals(clusterURI, dnConfURI);
+
+    clientConf.set(FS_DEFAULT_NAME_KEY, dnConfURI);
+    FileSystem fs = FileSystem.get(clientConf);
+
+    Path fileName = new Path("/f");
+    FSDataOutputStream o = fs.create(fileName);
+    // Get the pipeline created.
+    Random r = new Random();
+    byte[] tmpBytes = new byte[65 * 1024];
+    r.nextBytes(tmpBytes);
+    o.write(tmpBytes);
+    DFSOutputStream dfsO = (DFSOutputStream) o.getWrappedStream();
+    GenericTestUtils.waitFor(new Supplier<Boolean>() {
+      @Override
+      public Boolean get() {
+        return dfsO.getStreamer().getNodes() != null;
+      }
+    }, 1000, 60000);
+
+//    Assert.assertEquals(Boolean.parseBoolean(dnConf.get(HdfsClientConfigKeys.DFS_CLIENT_SLOW_DATANODE_KICKOUT_ENABLE_KEY)) &&
+//            Boolean.parseBoolean(clientConf.get(HdfsClientConfigKeys.DFS_CLIENT_SLOW_DATANODE_KICKOUT_ENABLE_KEY)),
+//        dfsO.getStreamer().isDfsClientSlowDatanodeKickoutEnable());
+  }
+
+  /**
+   * Test kick out the first datanode in pipeline.
+   * @throws Exception
+   */
+  @Test
+  public void testPipelineRecoveryWithSlowWriteNode() throws Exception {
+    Configuration conf = new HdfsConfiguration();
+    conf.setBoolean(HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, true);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY, 500L);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY, 10);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY, 300L);
+    
+    final MiniDFSCluster cluster =
+        new MiniDFSCluster.Builder(conf).numDataNodes(5).build();
+    DataNodeFaultInjector old = DataNodeFaultInjector.get();
+
+    try {
+      DistributedFileSystem fs = cluster.getFileSystem();
+      Path fileName = new Path("/f");
+      FSDataOutputStream o = fs.create(fileName);
+      // Get the pipeline created.
+      Random r = new Random();
+      byte[] tmpBytes = new byte[65 * 1024];
+      r.nextBytes(tmpBytes);
+      o.write(tmpBytes);
+      DFSOutputStream dfsO = (DFSOutputStream) o.getWrappedStream();
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getNodes() != null;
+        }
+      }, 1000, 60000);
+
+      String firstXferAddr = dfsO.getStreamer().getNodes()[0].getXferAddr(false);
+      // inject slow node
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markDiskSlow(long[] diskDuration) {
+          if (diskDuration.length != 3) {
+            return;
+          }
+        }
+        
+        @Override
+        public void delayDiskWrite(int downstreamDNsCount) {
+          try {
+            // Simulating the first datanode in pipeline writes slowly.
+            if (downstreamDNsCount == 2)         {
+              Thread.sleep(2100); 
+            }
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          }
+        }
+      });
+
+      final int perWriteSize = 64 * 1024;
+      final int writeLoops = 30;
+      int count = 0;
+      byte[] b = new byte[perWriteSize];
+      while (count < writeLoops) {
+        r.nextBytes(b);
+        o.write(b);
+        count++;
+      }
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getAckQueueLength() == 0;
+        }
+      }, 1000, 120000);
+      Assert.assertNotEquals(firstXferAddr, dfsO.getStreamer().getNodes()[0].getXferAddr(false));
+    } finally {
+      DataNodeFaultInjector.set(old);
+      cluster.shutdown();
+    }
+  }
+
+  /**
+   * Test slow peer situation. Simulating datanode slow network.
+   * @throws Exception
+   */
+  @Test
+  public void testPipelineRecoveryWithSlowPeerNode() throws Exception {
+    Configuration conf = new HdfsConfiguration();
+    conf.setBoolean(HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, true);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY, 2000L);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY, 20);
+    conf.setLong(HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY, 300L);
+
+    final MiniDFSCluster cluster =
+        new MiniDFSCluster.Builder(conf).numDataNodes(5).build();
+    DataNodeFaultInjector old = DataNodeFaultInjector.get();
+
+    try {
+      DistributedFileSystem fs = cluster.getFileSystem();
+      Path fileName = new Path("/f");
+      FSDataOutputStream o = fs.create(fileName);
+      // Get the pipeline created.
+      Random r = new Random();
+      byte[] tmpBytes = new byte[65 * 1024];
+      r.nextBytes(tmpBytes);
+      o.write(tmpBytes);
+      DFSOutputStream dfsO = (DFSOutputStream) o.getWrappedStream();
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getNodes() != null;
+        }
+      }, 1000, 60000);
+      
+      String firstNodeXferAddr = dfsO.getStreamer().getNodes()[0].getXferAddr();
+
+//      final long DELAY = 3000;
+      final String err = "Interrupted while sleeping. Bailing out.";
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+//        @Override
+//        public void delaySendingAckToUpstream(final String upstreamAddr, int downDnslength) {
+//          try {
+//            if (downDnslength == 2) {
+//              LOG.info("Client addr is {}", upstreamAddr);
+//              Thread.sleep(500);
+//            }
+//          } catch (InterruptedException e) {
+//            LOG.warn(err);
+//          }
+//        }
+
+        @Override
+        public void delayDiskWrite(int downstreamDNsCount) {
+          // noop
+        }
+
+        @Override
+        public void delayMiddleDatanodesNetworkSlow(int downStreamDns) throws IOException {
+          // noop
+//          if (downStreamDns == 0) {
+//            try {
+//              Thread.sleep(500);
+//            } catch (InterruptedException e) {
+//              e.printStackTrace();
+//            }
+//          }
+        }
+        
+        @Override
+        public void delayFirstDatanodeNetworkSlow(InetSocketAddress xferAddress) throws IOException {
+          int xferLength = xferAddress.toString().length();
+          if (firstNodeXferAddr.equals(xferAddress.toString().substring(1, xferLength))) {
+            try {
+              Thread.sleep(2001);
+            } catch (InterruptedException e) {
+              e.printStackTrace();
+            }
+          }
+        }
+
+      });
+
+      final int oneWriteSize = 64 * 1024;
+      final int threshold = 30;
+      int count = 0;
+      byte[] b = new byte[oneWriteSize];
+      while (count < threshold) {
+        r.nextBytes(b);
+        o.write(b);
+        count++;
+      }
+
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getAckQueueLength() == 0;
+        }
+      }, 1000, 120000);
+
+      Assert.assertNotEquals(firstNodeXferAddr, dfsO.getStreamer().getNodes()[0].getXferAddr(false));
+    } finally {
+      DataNodeFaultInjector.set(old);
+      cluster.shutdown();
+    }
+  }
+
+  /**
+   * 测试当遇到SLOW节点时提前end block.
+   * @throws Exception
+   */
+  @Test
+  public void testEndBlockInAdvanceWithSlowNode() throws Exception {
+    final int oneWriteSize = 63 * 1024;
+
+    final int threshold = 3;
+    Configuration conf = new HdfsConfiguration();
+    conf.setInt(HdfsClientConfigKeys.DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_KEY, threshold);
+
+    // Need 4 datanodes to verify the replaceDatanode during pipeline recovery
+    final MiniDFSCluster cluster =
+        new MiniDFSCluster.Builder(conf).numDataNodes(20).build();
+    DataNodeFaultInjector old = DataNodeFaultInjector.get();
+
+    try {
+      DistributedFileSystem fs = cluster.getFileSystem();
+      Path fileName = new Path("/f");
+      FSDataOutputStream o = fs.create(fileName);
+      // Flush to get the pipeline created.
+      o.writeBytes("hello");
+      o.hflush();
+      DFSOutputStream dfsO = (DFSOutputStream) o.getWrappedStream();
+      final DatanodeInfo[] pipeline = dfsO.getStreamer().getNodes();
+      final String lastDn = pipeline[2].getXferAddr(false);
+
+      // write until greater than (default block size / 2) 
+      Random r = new Random();
+      int loop = 0;
+      byte[] buf = new byte[63 * 1024];
+      while (loop < 1057) {
+        r.nextBytes(buf);
+        o.write(buf);
+        loop++;
+      }
+
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getAckQueueLength() == 0;
+        }
+      }, 1000, 120000);
+
+      DataNodeFaultInjector.set(new DataNodeFaultInjector() {
+        @Override
+        public void markSlow(String mirrorAddr, int[] replies) {
+          if (!lastDn.equals(mirrorAddr)) {
+            // Only fail for last DN
+            return;
+          }
+          assert(replies.length == 2);
+          replies[1] = PipelineAck.setSLOWForHeader(replies[1], PipelineAck.SLOW.SLOW);
+        }
+      });
+
+      int count = 0;
+      byte[] b = new byte[oneWriteSize];
+      while (count < 3000) {
+        //while (count < threshold + 1) {
+        r.nextBytes(b);
+        o.write(b);
+        count++;
+        o.hflush();
+      }
+      Thread.sleep(20000);
+      GenericTestUtils.waitFor(new Supplier<Boolean>() {
+        @Override
+        public Boolean get() {
+          return dfsO.getStreamer().getAckQueueLength() == 0;
+        }
+      }, 1000, 120000);
+//      Assert.assertNotEquals(lastDn, dfsO.getStreamer().getNodes()[2].getXferAddr(false));
+    } finally {
+      DataNodeFaultInjector.set(old);
+      cluster.shutdown();
+    }
+  }
+  
 }

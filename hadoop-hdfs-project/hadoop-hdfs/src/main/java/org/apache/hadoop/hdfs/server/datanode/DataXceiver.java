@@ -17,8 +17,10 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
+import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.hadoop.thirdparty.protobuf.ByteString;
 import javax.crypto.SecretKey;
 import org.apache.commons.logging.Log;
@@ -86,9 +88,22 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.channels.ClosedChannelException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.ShortCircuitFdResponse.DO_NOT_USE_RECEIPT_VERIFICATION;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.ShortCircuitFdResponse.USE_RECEIPT_VERIFICATION;
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.ERROR;
@@ -765,6 +780,21 @@ class DataXceiver extends Receiver implements Runnable {
     Status mirrorInStatus = SUCCESS;
     final String storageUuid;
     final boolean isOnTransientStorage;
+
+    boolean slowDatanodeKickoutEnable = BzlDynamicConfiguration.getInstance().getBoolean(
+        DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT);
+    long slowDatanodeCheckWindowNs = BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT);
+    long slowWriteDatanodeCheckThresholdNs = BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
+        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT);
+    long slowWriteDatanodeOverthresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
+        DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
+    
+    ArrayList<Boolean> slowDnKickoutEnableList = Lists.newArrayList();
+
     try {
       final Replica replica;
       if (isDatanode || 
@@ -784,6 +814,9 @@ class DataXceiver extends Receiver implements Runnable {
       storageUuid = replica.getStorageUuid();
       isOnTransientStorage = replica.isOnTransientStorage();
 
+      if (targets.length == 0 && isClient) {
+        slowDnKickoutEnableList.add(slowDatanodeKickoutEnable);
+      }
       //
       // Connect to downstream machine, if appropriate
       //
@@ -868,8 +901,19 @@ class DataXceiver extends Receiver implements Runnable {
                   "ack  from downstream datanode with firstbadlink as {}",
                   targets.length, firstBadLink);
             }
-          }
 
+            slowDnKickoutEnableList.add(slowDatanodeKickoutEnable);
+            int downstreamCount = connectAck.getSlowDatanodeKickoutEnableCount();
+            for (int i = 0; i < downstreamCount; i++) {
+              slowDnKickoutEnableList.add(connectAck.getSlowDatanodeKickoutEnable(i));
+            }
+            // use minimum check window to make slow node judgement strictly.
+            slowDatanodeCheckWindowNs = Math.min(slowDatanodeCheckWindowNs, connectAck.getSlowDatanodeCheckWindowNs());
+            slowWriteDatanodeCheckThresholdNs = Math.max(slowWriteDatanodeCheckThresholdNs,
+                connectAck.getSlowWriteDatanodeCheckThresholdNs());
+            slowWriteDatanodeOverthresholdCountInWindow = Math.max(slowWriteDatanodeOverthresholdCountInWindow,
+                connectAck.getSlowWriteDatanodeOverthresholdCountInWindow());
+          }
         } catch (IOException e) {
           if (isClient) {
             BlockOpResponseProto.newBuilder()
@@ -907,6 +951,10 @@ class DataXceiver extends Receiver implements Runnable {
         BlockOpResponseProto.newBuilder()
           .setStatus(mirrorInStatus)
           .setFirstBadLink(firstBadLink)
+          .addAllSlowDatanodeKickoutEnable(slowDnKickoutEnableList)
+          .setSlowDatanodeCheckWindowNs(slowDatanodeCheckWindowNs)
+          .setSlowWriteDatanodeCheckThresholdNs(slowWriteDatanodeCheckThresholdNs)
+          .setSlowWriteDatanodeOverthresholdCountInWindow(slowWriteDatanodeOverthresholdCountInWindow)
           .build()
           .writeDelimitedTo(replyOut);
         replyOut.flush();
@@ -1369,10 +1417,29 @@ class DataXceiver extends Receiver implements Runnable {
       .setChecksum(DataTransferProtoUtil.toProto(blockSender.getChecksum()))
       .setChunkOffset(blockSender.getOffset())
       .build();
-      
+
+    boolean slowDatanodeKickoutEnable = BzlDynamicConfiguration.getInstance().getBoolean(
+        DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT);
+    long slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT));
+    long slowReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
+        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    long slowReadDatanodeOverThresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
+        DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
+        DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
+    
+    ArrayList<Boolean> slowReadDatanodeSwitchEnableList = Lists.newArrayList();
+    slowReadDatanodeSwitchEnableList.add(slowDatanodeKickoutEnable);
+    
     BlockOpResponseProto response = BlockOpResponseProto.newBuilder()
       .setStatus(SUCCESS)
       .setReadOpChecksumInfo(ckInfo)
+      .addAllSlowDatanodeKickoutEnable(slowReadDatanodeSwitchEnableList)
+      .setSlowDatanodeCheckWindowNs(slowDatanodeCheckWindowNs)
+      .setSlowReadDatanodeCheckThreholdNs(slowReadDatanodeCheckThresholdNs)
+      .setSlowReadDatanodeOverthresholdCountInWindow(slowReadDatanodeOverThresholdCountInWindow)
       .build();
     response.writeDelimitedTo(out);
     out.flush();
