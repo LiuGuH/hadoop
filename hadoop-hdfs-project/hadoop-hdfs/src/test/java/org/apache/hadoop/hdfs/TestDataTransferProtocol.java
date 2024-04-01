@@ -159,6 +159,7 @@ public class TestDataTransferProtocol {
       100,                 // sequencenumber
       true,                // lastPacketInBlock
       0,                   // chunk length
+      false,
       false);               // sync block
     hdr.write(sendOut);
     sendOut.writeInt(0);           // zero checksum
@@ -396,7 +397,7 @@ public class TestDataTransferProtocol {
       100,   // seqno
       false, // last packet
       -1 - random.nextInt(oneMil), // bad datalen
-      false);
+      false, false);
     hdr.write(sendOut);
 
     sendResponse(Status.SUCCESS, "", null, recvOut);
@@ -416,7 +417,7 @@ public class TestDataTransferProtocol {
       100,   // sequencenumber
       true,  // lastPacketInBlock
       0,     // chunk length
-      false);    
+      false, false);    
     hdr.write(sendOut);
     sendOut.writeInt(0);           // zero checksum
     sendOut.flush();
@@ -503,7 +504,7 @@ public class TestDataTransferProtocol {
       100,                 // sequencenumber
       false,               // lastPacketInBlock
       4096,                // chunk length
-      false);
+      false, false);
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     hdr.write(new DataOutputStream(baos));
 
@@ -549,6 +550,39 @@ public class TestDataTransferProtocol {
     newAck.readFields(new ByteArrayInputStream(newAckBytes.toByteArray()));
     assertEquals(PipelineAck.combineHeader(PipelineAck.ECN.SUPPORTED, Status
         .CHECKSUM_OK), newAck.getHeaderFlag(0));
+  }
+
+  @Test
+  public void testPipeLineAckCompatibilityWithSLOW() throws IOException {
+    DataTransferProtos.PipelineAckProto proto = DataTransferProtos
+        .PipelineAckProto.newBuilder()
+        .setSeqno(0)
+        .addReply(Status.CHECKSUM_OK)
+        .addFlag(PipelineAck.combineHeader(PipelineAck.ECN.SUPPORTED,
+            Status.CHECKSUM_OK))
+        .build();
+
+    DataTransferProtos.PipelineAckProto newProto = DataTransferProtos
+        .PipelineAckProto.newBuilder()
+        .setSeqno(0)
+        .addReply(Status.CHECKSUM_OK)
+        .addFlag(PipelineAck.combineHeader(PipelineAck.ECN.SUPPORTED,
+            Status.CHECKSUM_OK, PipelineAck.SLOW.SLOW))
+        .build();
+
+    ByteArrayOutputStream oldAckBytes = new ByteArrayOutputStream();
+    proto.writeDelimitedTo(oldAckBytes);
+    PipelineAck oldAck = new PipelineAck();
+    oldAck.readFields(new ByteArrayInputStream(oldAckBytes.toByteArray()));
+    assertEquals(PipelineAck.combineHeader(PipelineAck.ECN.SUPPORTED, Status
+        .CHECKSUM_OK, PipelineAck.SLOW.DISABLED), oldAck.getHeaderFlag(0));
+
+    PipelineAck newAck = new PipelineAck();
+    ByteArrayOutputStream newAckBytes = new ByteArrayOutputStream();
+    newProto.writeDelimitedTo(newAckBytes);
+    newAck.readFields(new ByteArrayInputStream(newAckBytes.toByteArray()));
+    assertEquals(PipelineAck.combineHeader(PipelineAck.ECN.SUPPORTED, Status
+        .CHECKSUM_OK, PipelineAck.SLOW.SLOW), newAck.getHeaderFlag(0));
   }
 
   void writeBlock(String poolId, long blockId, DataChecksum checksum) throws IOException {

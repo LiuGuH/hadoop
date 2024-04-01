@@ -57,6 +57,7 @@ public class PacketHeader {
       .setLastPacketInBlock(false)
       .setDataLen(0)
       .setSyncBlock(false)
+      .setEndBlockInAdvance(false)
       .build().getSerializedSize();
   public static final int PKT_LENGTHS_LEN =
       Ints.BYTES + Shorts.BYTES;
@@ -70,7 +71,8 @@ public class PacketHeader {
   }
 
   public PacketHeader(int packetLen, long offsetInBlock, long seqno,
-                      boolean lastPacketInBlock, int dataLen, boolean syncBlock) {
+                      boolean lastPacketInBlock, int dataLen, boolean syncBlock,
+                      boolean endInAdvance) {
     this.packetLen = packetLen;
     Preconditions.checkArgument(packetLen >= Ints.BYTES,
         "packet len %s should always be at least 4 bytes",
@@ -80,6 +82,7 @@ public class PacketHeader {
         .setOffsetInBlock(offsetInBlock)
         .setSeqno(seqno)
         .setLastPacketInBlock(lastPacketInBlock)
+        .setEndBlockInAdvance(endInAdvance)
         .setDataLen(dataLen);
 
     if (syncBlock) {
@@ -115,6 +118,10 @@ public class PacketHeader {
 
   public boolean getSyncBlock() {
     return proto.getSyncBlock();
+  }
+  
+  public boolean isEndBlockInAdvance() {
+    return proto.getEndBlockInAdvance();
   }
 
   @Override

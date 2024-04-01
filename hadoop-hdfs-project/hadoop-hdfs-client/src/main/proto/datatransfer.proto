@@ -240,6 +240,7 @@ message PacketHeaderProto {
   required bool lastPacketInBlock = 3;
   required sfixed32 dataLen = 4;
   optional bool syncBlock = 5 [default = false];
+  optional bool endBlockInAdvance = 10 [default = false];
 }
 
 // Status is a 4-bit enum
@@ -270,6 +271,8 @@ message PipelineAckProto {
   repeated Status reply = 2;
   optional uint64 downstreamAckTimeNanos = 3 [default = 0];
   repeated uint32 flag = 4 [packed=true];
+  repeated uint64 downstreamTimeNanos = 10;
+  repeated uint64 diskTimeNanos = 11;
 }
 
 /**
@@ -306,6 +309,13 @@ message BlockOpResponseProto {
    * read.
    */
   optional uint32 shortCircuitAccessVersion = 6;
+
+  repeated bool slowDatanodeKickoutEnable = 10;
+  optional uint64 slowDatanodeCheckWindowNs = 11;
+  optional uint64 slowWriteDatanodeCheckThresholdNs = 12;
+  optional uint64 slowWriteDatanodeOverthresholdCountInWindow = 13;
+  optional uint64 slowReadDatanodeCheckThreholdNs = 14;
+  optional uint64 slowReadDatanodeOverthresholdCountInWindow = 15;
 }
 
 /**

@@ -151,6 +151,36 @@ public interface HdfsClientConfigKeys {
   String  DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_KEY =
       "dfs.client.slow.io.warning.threshold.ms";
   long    DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_DEFAULT = 30000;
+  String  DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_KEY =
+      "dfs.client.mark.slownode.as.badnode.threshold";
+  int DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_DEFAULT = 10;
+
+  String DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY =
+      "dfs.slow.datanode.kickout.enable";
+  boolean DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT = false;
+  String DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY =
+      "dfs.slow.datanode.check.window.ms";
+  long DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT = 300000L;
+  String DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY =
+      "dfs.slowwrite.datanode.check.threshold.ms";
+  long DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 2000L;
+  String DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY =
+      "dfs.slowwrite.datanode.overthreshold.count.inwindow";
+  long DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT = 40;
+  String DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY =
+      "dfs.slowread.datanode.check.threshold.ms";
+  long DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 2000L;
+  String DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY =
+      "dfs.slowread.datanode.overthreshold.count.inwindow";
+  long DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT = 30;
+
+  String DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY =
+      "dfs.client.slow.cache.size.max";
+  int DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY_DEFAULT = 100;
+  String DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY =
+      "dfs.client.slow.cache.expiration.ms";
+  long DFS_CLIENT_SLOWNODE_CACHE_EXPIRATION_MS_KEY_DEFAULT = 43200000L;
+
   String  DFS_CLIENT_KEY_PROVIDER_CACHE_EXPIRY_MS =
           "dfs.client.key.provider.cache.expiry";
   long    DFS_CLIENT_KEY_PROVIDER_CACHE_EXPIRY_DEFAULT =
@@ -247,6 +277,8 @@ public interface HdfsClientConfigKeys {
 
   String DFS_LEASE_HARDLIMIT_KEY = "dfs.namenode.lease-hard-limit-sec";
   long DFS_LEASE_HARDLIMIT_DEFAULT = 20 * 60;
+
+  String DFS_CLIENT_SLOW_PIPELINENODE_CHECK_CLASSNAME_KEY = "dfs.client.slow.pipeline.check.classname";
 
   /**
    * These are deprecated config keys to client code.

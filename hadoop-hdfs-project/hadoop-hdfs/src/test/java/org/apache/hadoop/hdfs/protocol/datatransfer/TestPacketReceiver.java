@@ -42,7 +42,7 @@ public class TestPacketReceiver {
     
     int packetLen = data.length + sums.length + Ints.BYTES;
     PacketHeader header = new PacketHeader(
-        packetLen, OFFSET_IN_BLOCK, SEQNO, false, data.length, false);
+        packetLen, OFFSET_IN_BLOCK, SEQNO, false, data.length, false, false);
     header.write(dos);
     
     dos.write(sums);

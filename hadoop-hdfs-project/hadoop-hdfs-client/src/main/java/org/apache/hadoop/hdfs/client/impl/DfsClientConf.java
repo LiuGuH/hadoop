@@ -60,10 +60,22 @@ import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_DOMA
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_DOMAIN_SOCKET_DATA_TRAFFIC_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_KEY_PROVIDER_CACHE_EXPIRY_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_KEY_PROVIDER_CACHE_EXPIRY_MS;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_MAX_BLOCK_ACQUIRE_FAILURES_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_READ_USE_CACHE_PRIORITY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_READ_USE_CACHE_PRIORITY_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_SOCKET_CACHE_CAPACITY_DEFAULT;
@@ -141,6 +153,12 @@ public class DfsClientConf {
   private final int retryIntervalForGetLastBlockLength;
   private final long datanodeRestartTimeout;
   private final long slowIoWarningThresholdMs;
+  private final int markSlowNodeAsBadNodeThreshold;
+  private long slowDatanodeCheckWindowNs;
+  private long slowWriteDatanodeCheckThresholdNs;
+  private long slowWriteDatanodeOverThresholdCountInWindow;
+  private long slowReadDatanodeCheckThresholdNs;
+  private long slowReadDatanodeOverThresholdCountInWindow;
 
   /** wait time window before refreshing blocklocation for inputstream. */
   private final long refreshReadBlockLocationsMS;
@@ -258,8 +276,28 @@ public class DfsClientConf {
     slowIoWarningThresholdMs = conf.getLong(
         DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_KEY,
         DFS_CLIENT_SLOW_IO_WARNING_THRESHOLD_DEFAULT);
+
+    slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(conf.getLong(
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
+        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT));
+    slowWriteDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(conf.getLong(
+        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
+        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    slowWriteDatanodeOverThresholdCountInWindow = conf.getLong(
+        DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
+        DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
+    slowReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(conf.getLong(
+        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
+        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    slowReadDatanodeOverThresholdCountInWindow = conf.getLong(
+        DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
+        DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
+
     readUseCachePriority = conf.getBoolean(DFS_CLIENT_READ_USE_CACHE_PRIORITY,
         DFS_CLIENT_READ_USE_CACHE_PRIORITY_DEFAULT);
+    markSlowNodeAsBadNodeThreshold = conf.getInt(
+        DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_KEY,
+        DFS_CLIENT_MARK_SLOWNODE_AS_BADNODE_THRESHOLD_DEFAULT);
 
     refreshReadBlockLocationsMS = conf.getLong(
         HdfsClientConfigKeys.DFS_CLIENT_REFRESH_READ_BLOCK_LOCATIONS_MS_KEY,
@@ -639,6 +677,13 @@ public class DfsClientConf {
     return slowIoWarningThresholdMs;
   }
 
+  /**
+   * @return the continuous slowNode replies received to mark slowNode as badNode
+   */
+  public int getMarkSlowNodeAsBadNodeThreshold() {
+    return markSlowNodeAsBadNodeThreshold;
+  }
+
   /*
    * @return the clientShortCircuitNum
    */
@@ -708,6 +753,41 @@ public class DfsClientConf {
    */
   public ShortCircuitConf getShortCircuitConf() {
     return shortCircuitConf;
+  }
+
+  /**
+   * @return the slowDatanodeCheckWindowNs
+   */
+  public long getSlowDatanodeCheckWindowNs() {
+    return slowDatanodeCheckWindowNs;
+  }
+
+  /**
+   * @return the slowReadDatanodeCheckThresholdNs
+   */
+  public long getSlowReadDatanodeCheckThresholdNs() {
+    return slowReadDatanodeCheckThresholdNs;
+  }
+
+  /**
+   * @return the slowReadDatanodeOverThresholdCountInWindow
+   */
+  public long getSlowReadDatanodeOverThresholdCountInWindow() {
+    return slowReadDatanodeOverThresholdCountInWindow;
+  }
+
+  /**
+   * @return the slowWriteDatanodeCheckThresholdNs
+   */
+  public long getSlowWriteDatanodeCheckThresholdNs() {
+    return slowWriteDatanodeCheckThresholdNs;
+  }
+
+  /**
+   * @return the slowWriteDatanodeOverThresholdCountInWindow
+   */
+  public long getSlowWriteDatanodeOverThresholdCountInWindow() {
+    return slowWriteDatanodeOverThresholdCountInWindow;
   }
 
   /**

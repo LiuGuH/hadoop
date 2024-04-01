@@ -32,6 +32,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.Checksum;
 
@@ -146,6 +147,7 @@ class BlockReceiver implements Closeable {
   private boolean pinning;
   private final AtomicLong lastSentTime = new AtomicLong(0L);
   private long maxSendIdleTime;
+  private long lastPacketWriteTime = 0;
 
   BlockReceiver(final ExtendedBlock block, final StorageType storageType,
       final DataInputStream in,
@@ -535,7 +537,8 @@ class BlockReceiver implements Closeable {
   private int receivePacket() throws IOException {
     // read the next packet
     packetReceiver.receiveNextPacket(in);
-
+    DataNodeFaultInjector.get().delayFirstDatanodeNetworkSlow(datanode.getXferAddress());
+    DataNodeFaultInjector.get().delayMiddleDatanodesNetworkSlow(downstreamDNs.length);
     PacketHeader header = packetReceiver.getHeader();
     if (LOG.isDebugEnabled()){
       LOG.debug("Receiving one packet for block " + block +
@@ -558,6 +561,7 @@ class BlockReceiver implements Closeable {
     long offsetInBlock = header.getOffsetInBlock();
     long seqno = header.getSeqno();
     boolean lastPacketInBlock = header.isLastPacketInBlock();
+    boolean endBlockInAdvance = header.isEndBlockInAdvance();
     final int len = header.getDataLen();
     boolean syncBlock = header.getSyncBlock();
 
@@ -579,7 +583,7 @@ class BlockReceiver implements Closeable {
     // put in queue for pending acks, unless sync was requested
     if (responder != null && !syncBlock && !shouldVerifyChecksum()) {
       ((PacketResponder) responder.getRunnable()).enqueue(seqno,
-          lastPacketInBlock, offsetInBlock, Status.SUCCESS);
+          lastPacketInBlock, offsetInBlock, Status.SUCCESS, lastPacketWriteTime, endBlockInAdvance);
     }
 
     // Drop heartbeat for testing.
@@ -621,7 +625,7 @@ class BlockReceiver implements Closeable {
     
     ByteBuffer dataBuf = packetReceiver.getDataSlice();
     ByteBuffer checksumBuf = packetReceiver.getChecksumSlice();
-    
+    long writeDiskStartNanoTime = Time.monotonicNowNanos();
     if (lastPacketInBlock || len == 0) {
       if(LOG.isDebugEnabled()) {
         LOG.debug("Receiving an empty packet or the end of the block " + block);
@@ -739,23 +743,26 @@ class BlockReceiver implements Closeable {
           int numBytesToDisk = (int)(offsetInBlock-onDiskLen);
           
           // Write data to disk.
-          long begin = Time.monotonicNow();
+          // long begin = Time.monotonicNow();
+          long begin = Time.monotonicNowNanos();
           streams.writeDataToDisk(dataBuf.array(),
               startByteToDisk, numBytesToDisk);
+
           // no-op in prod
           DataNodeFaultInjector.get().delayWriteToDisk();
-          long duration = Time.monotonicNow() - begin;
-          if (duration > datanodeSlowLogThresholdMs) {
-            datanode.metrics.incrPacketsSlowWriteToDisk();
-            if (LOG.isWarnEnabled()) {
-              LOG.warn("Slow BlockReceiver write data to disk cost: {}ms " +
-                      "(threshold={}ms), volume={}, blockId={}, seqno={}",
-                  duration, datanodeSlowLogThresholdMs, getVolumeBaseUri(),
-                  replicaInfo.getBlockId(), seqno);
-            }
+          DataNodeFaultInjector.get().delayDiskWrite(downstreamDNs.length);
+          long duration = Time.monotonicNowNanos() - begin;
+          if (TimeUnit.NANOSECONDS.toMillis(duration) > datanodeSlowLogThresholdMs && LOG.isWarnEnabled()) {
+            LOG.warn("Slow BlockReceiver write data to disk cost:" + TimeUnit.NANOSECONDS.toMillis(duration)
+                + "ms (threshold=" + datanodeSlowLogThresholdMs + "ms), "
+                + "volume=" + getVolumeBaseUri()
+                + ", blockId=" + replicaInfo.getBlockId()
+                + ", seqno=" + seqno);
           }
 
-          if (duration > maxWriteToDiskMs) {
+          lastPacketWriteTime = duration;
+          LOG.debug("seqno={}, lastPacketWriteTime is {}.", seqno, lastPacketWriteTime);
+          if (TimeUnit.NANOSECONDS.toMillis(duration) > maxWriteToDiskMs) {
             maxWriteToDiskMs = duration;
           }
 
@@ -830,7 +837,7 @@ class BlockReceiver implements Closeable {
           replicaInfo.setLastChecksumAndDataLen(offsetInBlock, lastCrc);
 
           datanode.metrics.incrBytesWritten(len);
-          datanode.metrics.incrTotalWriteTime(duration);
+          datanode.metrics.incrTotalWriteTime(TimeUnit.NANOSECONDS.toMillis(duration));
 
           manageWriterOsCache(offsetInBlock, seqno);
         }
@@ -840,11 +847,14 @@ class BlockReceiver implements Closeable {
       }
     }
 
+    long diskDuration = Time.monotonicNowNanos() - writeDiskStartNanoTime;
+    LOG.debug("seqno={}, diskDuration={}", seqno, diskDuration);
+
     // if sync was requested, put in queue for pending acks here
     // (after the fsync finished)
     if (responder != null && (syncBlock || shouldVerifyChecksum())) {
       ((PacketResponder) responder.getRunnable()).enqueue(seqno,
-          lastPacketInBlock, offsetInBlock, Status.SUCCESS);
+          lastPacketInBlock, offsetInBlock, Status.SUCCESS, diskDuration, endBlockInAdvance);
     }
 
     /*
@@ -1277,7 +1287,7 @@ class BlockReceiver implements Closeable {
       // interrupted by the receiver thread.
       return running && (datanode.shouldRun || datanode.isRestarting());
     }
-    
+
     /**
      * enqueue the seqno that is still be to acked by the downstream datanode.
      * @param seqno sequence number of the packet
@@ -1285,9 +1295,31 @@ class BlockReceiver implements Closeable {
      * @param offsetInBlock offset of this packet in block
      */
     void enqueue(final long seqno, final boolean lastPacketInBlock,
-        final long offsetInBlock, final Status ackStatus) {
+                 final long offsetInBlock, final Status ackStatus) {
       final Packet p = new Packet(seqno, lastPacketInBlock, offsetInBlock,
           System.nanoTime(), ackStatus);
+      if(LOG.isDebugEnabled()) {
+        LOG.debug(myString + ": enqueue " + p);
+      }
+      synchronized(ackQueue) {
+        if (running) {
+          ackQueue.add(p);
+          ackQueue.notifyAll();
+        }
+      }
+    }
+
+    /**
+     * enqueue the seqno that is still be to acked by the downstream datanode.
+     * @param seqno sequence number of the packet
+     * @param lastPacketInBlock if true, this is the last packet in block
+     * @param offsetInBlock offset of this packet in block
+     * @param diskDuration duration time of writing packet to disk
+     */
+    void enqueue(final long seqno, final boolean lastPacketInBlock,
+        final long offsetInBlock, final Status ackStatus, final long diskDuration, boolean endInAdvance) {
+      final Packet p = new Packet(seqno, lastPacketInBlock, offsetInBlock,
+          System.nanoTime(), ackStatus, diskDuration, endInAdvance);
       LOG.debug("{}: enqueue {}", this, p);
       synchronized (ackQueue) {
         if (running) {
@@ -1328,8 +1360,9 @@ class BlockReceiver implements Closeable {
 
       LOG.info("Sending an out of band ack of type " + ackStatus);
       try {
-        sendAckUpstreamUnprotected(null, PipelineAck.UNKOWN_SEQNO, 0L, 0L,
-            PipelineAck.combineHeader(datanode.getECN(), ackStatus));
+        sendAckUpstreamUnprotected(null, PipelineAck.UNKOWN_SEQNO, 0L, 0L, 0L, 0L,
+            PipelineAck.combineHeader(datanode.getECN(), ackStatus,
+                datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
       } finally {
         // Let others send ack. Unless there are miltiple OOB send
         // calls, there can be only one waiter, the responder thread.
@@ -1386,6 +1419,7 @@ class BlockReceiver implements Closeable {
     public void run() {
       datanode.metrics.incrDataNodePacketResponderCount();
       boolean lastPacketInBlock = false;
+      boolean endInAdvance = false;
       final long startTime = ClientTraceLog.isInfoEnabled() ? System.nanoTime() : 0;
       while (isRunning() && !lastPacketInBlock) {
         long totalAckTimeNanos = 0;
@@ -1396,6 +1430,7 @@ class BlockReceiver implements Closeable {
           PipelineAck ack = new PipelineAck();
           long seqno = PipelineAck.UNKOWN_SEQNO;
           long ackRecvNanoTime = 0;
+          long ackTimeNanos = 0;
           try {
             if (type != PacketResponderType.LAST_IN_PIPELINE && !mirrorError) {
               DataNodeFaultInjector.get().failPipeline(replicaInfo, mirrorAddr);
@@ -1409,9 +1444,10 @@ class BlockReceiver implements Closeable {
               Status oobStatus = ack.getOOBStatus();
               if (oobStatus != null) {
                 LOG.info("Relaying an out of band ack of type " + oobStatus);
-                sendAckUpstream(ack, PipelineAck.UNKOWN_SEQNO, 0L, 0L,
+                sendAckUpstream(ack, PipelineAck.UNKOWN_SEQNO, 0L, 0L, 0L, 0L,
                     PipelineAck.combineHeader(datanode.getECN(),
-                      Status.SUCCESS));
+                      Status.SUCCESS,
+                      datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
                 continue;
               }
               seqno = ack.getSeqno();
@@ -1436,16 +1472,18 @@ class BlockReceiver implements Closeable {
                 totalAckTimeNanos = ackRecvNanoTime - pkt.ackEnqueueNanoTime;
                 // Report the elapsed time from ack send to ack receive minus
                 // the downstream ack time.
-                long ackTimeNanos = totalAckTimeNanos
+                ackTimeNanos = totalAckTimeNanos
                     - ack.getDownstreamAckTimeNanos();
                 if (ackTimeNanos < 0) {
                   if (LOG.isDebugEnabled()) {
                     LOG.debug("Calculated invalid ack time: " + ackTimeNanos
                         + "ns.");
                   }
+                  ackTimeNanos = 0;
                 } else {
                   datanode.metrics.addPacketAckRoundTripTimeNanos(ackTimeNanos);
                 }
+                endInAdvance = pkt.endInAdvance;
               }
               lastPacketInBlock = pkt.lastPacketInBlock;
             }
@@ -1497,11 +1535,16 @@ class BlockReceiver implements Closeable {
             // For test only, no-op in production system.
             DataNodeFaultInjector.get().delayAckLastPacket();
           }
+          
+          if (endInAdvance) {
+            datanode.metrics.incrEndBlockInAdvanceCounts();
+          }
 
           Status myStatus = pkt != null ? pkt.ackStatus : Status.SUCCESS;
-          sendAckUpstream(ack, expected, totalAckTimeNanos,
-            (pkt != null ? pkt.offsetInBlock : 0),
-            PipelineAck.combineHeader(datanode.getECN(), myStatus));
+          sendAckUpstream(ack, expected, totalAckTimeNanos, ackTimeNanos,
+              (pkt != null ? pkt.diskDurationNanoTime : 0), (pkt != null ? pkt.offsetInBlock : 0),
+              PipelineAck.combineHeader(datanode.getECN(), myStatus,
+                  datanode.getSLOWByBlockPoolId(block.getBlockPoolId())));
           if (pkt != null) {
             // remove the packet from the ack queue
             removeAckHead();
@@ -1569,13 +1612,15 @@ class BlockReceiver implements Closeable {
      *
      * @param ack Ack received from downstream
      * @param seqno sequence number of ack to be sent upstream
-     * @param totalAckTimeNanos total ack time including all the downstream
-     *          nodes
+     * @param totalAckTimeNanos total ack time including all the downstream nodes
+     * @param downstreamMirrorTimeNanos Average time from ack send to receive minus the downstream ack time
+     *                                  in nanoseconds                         
+     * @param diskTimeNanos  the time spent writing packet to the local disk                          
      * @param offsetInBlock offset in block for the data in packet
      * @param myHeader the local ack header
      */
     private void sendAckUpstream(PipelineAck ack, long seqno,
-        long totalAckTimeNanos, long offsetInBlock,
+        long totalAckTimeNanos, long downstreamMirrorTimeNanos, long diskTimeNanos, long offsetInBlock,
         int myHeader) throws IOException {
       try {
         // Wait for other sender to finish. Unless there is an OOB being sent,
@@ -1589,7 +1634,7 @@ class BlockReceiver implements Closeable {
 
         try {
           if (!running) return;
-          sendAckUpstreamUnprotected(ack, seqno, totalAckTimeNanos,
+          sendAckUpstreamUnprotected(ack, seqno, totalAckTimeNanos, downstreamMirrorTimeNanos, diskTimeNanos,
               offsetInBlock, myHeader);
         } finally {
           synchronized(this) {
@@ -1609,29 +1654,46 @@ class BlockReceiver implements Closeable {
      * @param seqno sequence number of ack to be sent upstream
      * @param totalAckTimeNanos total ack time including all the downstream
      *          nodes
+     * @param diskDuration total writing packet to disk time.                           
      * @param offsetInBlock offset in block for the data in packet
      * @param myHeader the local ack header
      */
     private void sendAckUpstreamUnprotected(PipelineAck ack, long seqno,
-        long totalAckTimeNanos, long offsetInBlock, int myHeader)
+        long totalAckTimeNanos, long downstreamMirrorTimeNanos, long diskDuration, long offsetInBlock, int myHeader)
         throws IOException {
       final int[] replies;
+      final long[] totalAckTimes;
+      final long[] diskTimes;
       if (ack == null) {
         // A new OOB response is being sent from this node. Regardless of
         // downstream nodes, reply should contain one reply.
         replies = new int[] { myHeader };
+        totalAckTimes = new long[] { downstreamMirrorTimeNanos };
+        diskTimes = new long[] { diskDuration };
       } else if (mirrorError) { // ack read error
-        int h = PipelineAck.combineHeader(datanode.getECN(), Status.SUCCESS);
-        int h1 = PipelineAck.combineHeader(datanode.getECN(), Status.ERROR);
+        int h = PipelineAck.combineHeader(datanode.getECN(), Status.SUCCESS,
+            datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
+        int h1 = PipelineAck.combineHeader(datanode.getECN(), Status.ERROR,
+            datanode.getSLOWByBlockPoolId(block.getBlockPoolId()));
         replies = new int[] {h, h1};
+        totalAckTimes = new long[] { 0L, 0L };
+        diskTimes = new long[] { 0L, 0L };
       } else {
         short ackLen = type == PacketResponderType.LAST_IN_PIPELINE ? 0 : ack
             .getNumOfReplies();
         replies = new int[ackLen + 1];
         replies[0] = myHeader;
+        totalAckTimes = new long[ackLen + 1];
+        totalAckTimes[0] = downstreamMirrorTimeNanos;
+        diskTimes = new long[ackLen + 1];
+        diskTimes[0] = diskDuration;
         for (int i = 0; i < ackLen; ++i) {
           replies[i + 1] = ack.getHeaderFlag(i);
+          totalAckTimes[i + 1] = ack.getDownstreamTime(i);
+          diskTimes[i + 1] = ack.getDiskTime(i);
         }
+        DataNodeFaultInjector.get().markDiskSlow(diskTimes);
+        DataNodeFaultInjector.get().markSlow(mirrorAddr, replies);
         // If the mirror has reported that it received a corrupt packet,
         // do self-destruct to mark myself bad, instead of making the
         // mirror node bad. The mirror is guaranteed to be good without
@@ -1643,8 +1705,8 @@ class BlockReceiver implements Closeable {
               + "thread is corrupt");
         }
       }
-      PipelineAck replyAck = new PipelineAck(seqno, replies,
-          totalAckTimeNanos);
+      PipelineAck replyAck = new PipelineAck(seqno, replies, totalAckTimeNanos,
+          totalAckTimes, diskTimes);
       if (replyAck.isSuccess()
           && offsetInBlock > replicaInfo.getBytesAcked()) {
         replicaInfo.setBytesAcked(offsetInBlock);
@@ -1653,6 +1715,7 @@ class BlockReceiver implements Closeable {
       long begin = Time.monotonicNow();
       /* for test only, no-op in production system */
       DataNodeFaultInjector.get().delaySendingAckToUpstream(inAddr);
+      DataNodeFaultInjector.get().delaySendingAckToUpstream(inAddr, downstreamDNs.length);
       replyAck.write(upstreamOut);
       upstreamOut.flush();
       long duration = Time.monotonicNow() - begin;
@@ -1698,18 +1761,27 @@ class BlockReceiver implements Closeable {
    */
   private static class Packet {
     final long seqno;
-    final boolean lastPacketInBlock;
     final long offsetInBlock;
     final long ackEnqueueNanoTime;
+    final long diskDurationNanoTime;
     final Status ackStatus;
+    final boolean lastPacketInBlock;
+    final boolean endInAdvance;
 
     Packet(long seqno, boolean lastPacketInBlock, long offsetInBlock,
-        long ackEnqueueNanoTime, Status ackStatus) {
+           long ackEnqueueNanoTime, Status ackStatus) {
+      this(seqno, lastPacketInBlock, offsetInBlock, ackEnqueueNanoTime, ackStatus, 0L, false);
+    }
+
+    Packet(long seqno, boolean lastPacketInBlock, long offsetInBlock,
+        long ackEnqueueNanoTime, Status ackStatus, long diskDurationNanoTime, boolean endInAdvance) {
       this.seqno = seqno;
       this.lastPacketInBlock = lastPacketInBlock;
       this.offsetInBlock = offsetInBlock;
       this.ackEnqueueNanoTime = ackEnqueueNanoTime;
+      this.diskDurationNanoTime = diskDurationNanoTime;
       this.ackStatus = ackStatus;
+      this.endInAdvance = endInAdvance;
     }
 
     @Override

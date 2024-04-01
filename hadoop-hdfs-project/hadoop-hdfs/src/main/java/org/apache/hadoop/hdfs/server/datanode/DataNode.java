@@ -666,6 +666,25 @@ public class DataNode extends ReconfigurableBase
         PipelineAck.ECN.SUPPORTED;
   }
 
+  /**
+   * The SLOW bit for the DataNode of the specific BlockPool.
+   * The DataNode should return:
+   * <ul>
+   *   <li>SLOW.DISABLED when SLOW is disabled
+   *   <li>SLOW.NORMAL when SLOW is enabled and DN is not slownode.</li>
+   *   <li>SLOW.SLOW when SLOW is enabled and DN is slownode.</li>
+   * </ul>
+   */
+  public PipelineAck.SLOW getSLOWByBlockPoolId(String bpId) {
+    if (!BzlDynamicConfiguration.getInstance().getBoolean(
+        DFSConfigKeys.DFS_PIPELINE_SLOWNODE_ENABLED,
+        DFSConfigKeys.DFS_PIPELINE_SLOWNODE_ENABLED_DEFAULT)) {
+      return PipelineAck.SLOW.DISABLED;
+    }
+    return isSlownodeByBlockPoolId(bpId) ? PipelineAck.SLOW.SLOW :
+        PipelineAck.SLOW.NORMAL;
+  }
+
   public FileIoProvider getFileIoProvider() {
     return fileIoProvider;
   }
@@ -3822,5 +3841,17 @@ public class DataNode extends ReconfigurableBase
 
   public DataSetLockManager getDataSetLockManager() {
     return dataSetLockManager;
+  }
+
+  boolean isSlownodeByNameserviceId(String nsId) {
+    return blockPoolManager.isSlownodeByNameserviceId(nsId);
+  }
+
+  boolean isSlownodeByBlockPoolId(String bpId) {
+    return blockPoolManager.isSlownodeByBlockPoolId(bpId);
+  }
+
+  boolean isSlownode() {
+    return blockPoolManager.isSlownode();
   }
 }

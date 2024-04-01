@@ -898,7 +898,7 @@ class BlockSender implements java.io.Closeable {
     pkt.clear();
     // both syncBlock and syncPacket are false
     PacketHeader header = new PacketHeader(packetLen, offset, seqno,
-        (dataLen == 0), dataLen, false);
+        (dataLen == 0), dataLen, false, false);
     
     int size = header.getSerializedSize();
     pkt.position(PacketHeader.PKT_MAX_HEADER_LEN - size);

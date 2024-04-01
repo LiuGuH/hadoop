@@ -277,6 +277,7 @@ public class FileIoProvider {
       faultInjectorEventHook.beforeFileIo(volume, TRANSFER, count);
       sockOut.transferToFully(fileCh, position, count,
           waitTime, transferTime);
+      DataNodeFaultInjector.get().delayTransfer();
       profilingEventHook.afterFileIo(volume, TRANSFER, begin, count);
     } catch (Exception e) {
       String em = e.getMessage();

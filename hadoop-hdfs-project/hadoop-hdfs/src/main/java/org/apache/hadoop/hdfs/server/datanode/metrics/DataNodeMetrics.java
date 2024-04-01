@@ -213,6 +213,8 @@ public class DataNodeMetrics {
   @Metric private MutableRate updateReplicaUnderRecoveryOp;
   @Metric private MutableRate appendOp;
 
+  @Metric MutableCounterLong endBlockInAdvance;
+
   final MetricsRegistry registry = new MetricsRegistry("datanode");
   @Metric("Milliseconds spent on calling NN rpc")
   private MutableRatesWithAggregation
@@ -683,6 +685,10 @@ public class DataNodeMetrics {
 
   public void incrActorCmdQueueLength(int delta) {
     sumOfActorCommandQueueLength.incr(delta);
+  }
+  
+  public void incrEndBlockInAdvanceCounts() {
+    endBlockInAdvance.incr();
   }
 
   public void incrNumProcessedCommands() {
