@@ -115,6 +115,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Module that implements all the RPC calls in {@link ClientProtocol} in the
@@ -1865,7 +1866,18 @@ public class RouterClientProtocol implements ClientProtocol {
 
   @Override
   public void msync() throws IOException {
-    rpcServer.checkOperation(NameNode.OperationCategory.READ, false);
+    rpcServer.checkOperation(NameNode.OperationCategory.READ, true);
+    // Only msync to nameservices with observer reads enabled.
+    Set<FederationNamespaceInfo> allNamespaces = namenodeResolver.getNamespaces();
+    RemoteMethod method = new RemoteMethod("msync");
+    Set<FederationNamespaceInfo> namespacesEligibleForObserverReads = allNamespaces
+        .stream()
+        .filter(ns -> RouterRpcClient.isNamespaceObserverReadEligible(ns.getNameserviceId()))
+        .collect(Collectors.toSet());
+    if (namespacesEligibleForObserverReads.isEmpty()) {
+      return;
+    }
+    rpcClient.invokeConcurrent(namespacesEligibleForObserverReads, method);
   }
 
   @Override

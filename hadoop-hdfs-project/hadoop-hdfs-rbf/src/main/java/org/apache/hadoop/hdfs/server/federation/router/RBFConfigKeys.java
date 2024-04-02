@@ -102,6 +102,15 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final long DFS_ROUTER_HEARTBEAT_STATE_INTERVAL_MS_DEFAULT =
       TimeUnit.SECONDS.toMillis(5);
 
+  // HDFS Router Msync
+  public static final String DFS_ROUTER_AUTO_MSYNC_ENABLE =
+      FEDERATION_ROUTER_PREFIX + "auto.msync.enable";
+  public static final boolean DFS_ROUTER_AUTO_MSYNC_ENABLE_DEFAULT = false;
+  public static final String DFS_ROUTER_AUTO_MSYNC_INTERVAL_MS =
+      FEDERATION_ROUTER_PREFIX + "auto.msync.interval";
+  public static final long DFS_ROUTER_MSYNC_AUTO_INTERVAL_MS_DEFAULT =
+      TimeUnit.SECONDS.toMillis(1);
+
   // HDFS Router NN client
   public static final String
       DFS_ROUTER_NAMENODE_CONNECTION_CREATOR_QUEUE_SIZE =
@@ -179,6 +188,20 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final String DFS_ROUTER_STORE_ENABLE =
       FEDERATION_STORE_PREFIX + "enable";
   public static final boolean DFS_ROUTER_STORE_ENABLE_DEFAULT = true;
+
+  public static final String DFS_ROUTER_OBSERVER_READ_DEFAULT_KEY =
+      FEDERATION_ROUTER_PREFIX + "observer.read.default";
+  public static final boolean DFS_ROUTER_OBSERVER_READ_DEFAULT_VALUE = false;
+  public static final String DFS_ROUTER_OBSERVER_READ_DISABLE_LIST =
+      FEDERATION_ROUTER_PREFIX + "observer.read.disable.list";
+
+  public static final String DFS_ROUTER_OBSERVER_FEDERATED_STATE_PROPAGATION_MAXSIZE =
+      FEDERATION_ROUTER_PREFIX + "observer.federated.state.propagation.maxsize";
+  public static final int DFS_ROUTER_OBSERVER_FEDERATED_STATE_PROPAGATION_MAXSIZE_DEFAULT = 100;
+
+  public static final String DFS_ROUTER_OBSERVER_STATE_ID_REFRESH_PERIOD_KEY =
+      FEDERATION_ROUTER_PREFIX + "observer.state.id.refresh.period";
+  public static final String DFS_ROUTER_OBSERVER_STATE_ID_REFRESH_PERIOD_DEFAULT = "15s";
 
   public static final String FEDERATION_STORE_SERIALIZER_CLASS =
       FEDERATION_STORE_PREFIX + "serializer";

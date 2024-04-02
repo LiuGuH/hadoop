@@ -4059,4 +4059,12 @@
       ThreadGroup approach is preferred for better performance.
     </description>
   </property>
+
+  <property>
+    <name>ipc.server.observer.stale.rpc.interval</name>
+    <value>15s</value>
+    <description>
+       The interval for observer rpccall is stale.
+    </description>
+  </property>
 </configuration>

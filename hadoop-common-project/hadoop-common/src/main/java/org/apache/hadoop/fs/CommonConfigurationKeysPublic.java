@@ -1100,5 +1100,8 @@ public class CommonConfigurationKeysPublic {
   public static final String RPC_RATELIMITER_TOP_WINDOWS_MINUTES_KEY =
       "rpc.ratelimiter.top.windows.minutes";
   public static final String[] RPC_RATELIMITER_TOP_WINDOWS_MINUTES_DEFAULT = {"1", "5", "25"};
+  public static final String IPC_SERVER_OBSERVER_STALE_RPC_INTERVAL =
+      "ipc.server.observer.stale.rpc.interval";
+  public static final String IPC_SERVER_OBSERVER_STALE_RPC_DEFAULT = "20s";
 }
 

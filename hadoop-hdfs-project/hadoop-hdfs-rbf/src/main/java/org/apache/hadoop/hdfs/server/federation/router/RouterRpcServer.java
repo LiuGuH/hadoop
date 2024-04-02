@@ -41,6 +41,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.crypto.CryptoProtocolVersion;
@@ -180,6 +183,9 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
   /** Router using this RPC server. */
   private final Router router;
 
+  /** Alignment context storing state IDs for all namespaces this router serves. */
+  private final RouterStateIdContext routerStateIdContext;
+
   /** The RPC server that listens to requests from clients. */
   private final Server rpcServer;
   /** The address for this RPC server. */
@@ -222,18 +228,18 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
   /**
    * Construct a router RPC server.
    *
-   * @param configuration HDFS Configuration.
+   * @param conf HDFS Configuration.
    * @param router A router using this RPC server.
    * @param nnResolver The NN resolver instance to determine active NNs in HA.
    * @param fileResolver File resolver to resolve file paths to subclusters.
    * @throws IOException If the RPC server could not be created.
    */
-  public RouterRpcServer(Configuration configuration, Router router,
+  public RouterRpcServer(Configuration conf, Router router,
       ActiveNamenodeResolver nnResolver, FileSubclusterResolver fileResolver)
           throws IOException {
     super(RouterRpcServer.class.getName());
 
-    this.conf = configuration;
+    this.conf = conf;
     this.router = router;
     this.namenodeResolver = nnResolver;
     this.subclusterResolver = fileResolver;
@@ -291,6 +297,7 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
 
     // Create security manager
     this.securityManager = new RouterSecurityManager(this.conf);
+    routerStateIdContext = new RouterStateIdContext(conf);
 
     this.rpcServer = new RPC.Builder(this.conf)
         .setProtocol(ClientNamenodeProtocolPB.class)
@@ -301,6 +308,7 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
         .setnumReaders(readerCount)
         .setQueueSizePerHandler(handlerQueueSize)
         .setVerbose(false)
+        .setAlignmentContext(routerStateIdContext)
         .setSecretManager(this.securityManager.getSecretManager())
         .build();
 
@@ -354,13 +362,41 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
 
     // Create the client
     this.rpcClient = new RouterRpcClient(this.conf, this.router,
-        this.namenodeResolver, this.rpcMonitor);
+        this.namenodeResolver, this.rpcMonitor, routerStateIdContext);
 
     // Initialize modules
     this.quotaCall = new Quota(this.router, this);
     this.nnProto = new RouterNamenodeProtocol(this);
     this.clientProto = new RouterClientProtocol(conf, this);
     this.routerProto = new RouterUserProtocol(this);
+
+    Executors
+        .newSingleThreadScheduledExecutor()
+        .scheduleWithFixedDelay(this::clearStaleNamespacesInRouterStateIdContext,
+            0,
+            conf.getLong(RBFConfigKeys.FEDERATION_STORE_MEMBERSHIP_EXPIRATION_MS,
+                RBFConfigKeys.FEDERATION_STORE_MEMBERSHIP_EXPIRATION_MS_DEFAULT),
+            TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Clear expired namespace in the shared RouterStateIdContext.
+   */
+  private void clearStaleNamespacesInRouterStateIdContext() {
+    try {
+      final Set<String> resolvedNamespaces = namenodeResolver.getNamespaces()
+          .stream()
+          .map(FederationNamespaceInfo::getNameserviceId)
+          .collect(Collectors.toSet());
+
+      routerStateIdContext.getNamespaces().forEach(namespace -> {
+        if (!resolvedNamespaces.contains(namespace)) {
+          routerStateIdContext.removeNamespaceStateId(namespace);
+        }
+      });
+    } catch (IOException e) {
+      LOG.warn("Could not fetch current list of namespaces.", e);
+    }
   }
 
   @Override
@@ -397,6 +433,15 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
       this.securityManager.stop();
     }
     super.serviceStop();
+  }
+
+  /**
+   * Get the routerStateIdContext used by this server.
+   * @return routerStateIdContext
+   */
+  @VisibleForTesting
+  protected RouterStateIdContext getRouterStateIdContext() {
+    return routerStateIdContext;
   }
 
   /**
@@ -1142,7 +1187,7 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
     clientProto.modifyAclEntries(src, aclSpec);
   }
 
-  @Override // ClienProtocol
+  @Override // ClientProtocol
   public void removeAclEntries(String src, List<AclEntry> aclSpec)
       throws IOException {
     clientProto.removeAclEntries(src, aclSpec);
