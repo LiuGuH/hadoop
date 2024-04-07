@@ -12,14 +12,14 @@ import org.apache.hadoop.metrics2.MetricsSystem;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.Interns;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 public class ClientConnectionsMetrics implements MetricsSource {
 
   private RouterRpcClient routerRpcClient;
-  Map<ConnectionPoolId, ConnectionPool> forMetrics = new HashMap<>();
+  Map<ConnectionPoolId, ConnectionPool> forMetrics = new ConcurrentHashMap<>();
 
   public ClientConnectionsMetrics(RouterRpcClient routerRpcClient) {
     this.routerRpcClient = routerRpcClient;
