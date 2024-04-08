@@ -21,6 +21,8 @@ import java.util.function.Supplier;
 
 import org.apache.hadoop.hdfs.server.datanode.DataSetLockManager;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
+import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
+import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 
 import java.io.OutputStream;
@@ -203,6 +205,8 @@ public class TestFsDatasetImpl {
     final ShortCircuitRegistry shortCircuitRegistry =
         new ShortCircuitRegistry(conf);
     when(datanode.getShortCircuitRegistry()).thenReturn(shortCircuitRegistry);
+    DataNodeMetrics dataNodeMetrics = DataNodeMetrics.create(conf, "mockName");
+    when(datanode.getMetrics()).thenReturn(dataNodeMetrics);
 
     createStorageDirs(storage, conf, NUM_INIT_VOLUMES);
     dataset = new FsDatasetImpl(datanode, storage, conf);
@@ -478,6 +482,9 @@ public class TestFsDatasetImpl {
     for (Future<?> f : futureList) {
       f.get();
     }
+    // Wait for the async deletion task finish.
+    GenericTestUtils.waitFor(() -> dataset.asyncDiskService.countPendingDeletions() == 0,
+        100, 10000);
     for (String bpid : dataset.volumeMap.getBlockPoolList()) {
       assertEquals(numBlocks / 2, dataset.volumeMap.size(bpid));
     }
@@ -1347,7 +1354,14 @@ public class TestFsDatasetImpl {
       assertFalse(uuids.contains(dn.getDatanodeUuid()));
 
       // This replica has deleted from datanode memory.
-      assertNull(ds.getStoredBlock(bpid, extendedBlock.getBlockId()));
+      try {
+        LambdaTestUtils.intercept(ReplicaNotFoundException.class, () -> {
+          ds.getStoredBlock(bpid, extendedBlock.getBlockId());
+        });
+      } catch (Exception e) {
+        LOG.error("Exception type not matched.", e);
+        throw new IOException(e);
+      }
     } finally {
       cluster.shutdown();
       DataNodeFaultInjector.set(oldInjector);
