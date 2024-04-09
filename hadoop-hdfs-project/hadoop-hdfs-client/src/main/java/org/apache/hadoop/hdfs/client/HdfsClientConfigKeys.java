@@ -415,7 +415,7 @@ public interface HdfsClientConfigKeys {
     interface ECRedunency {
       String DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY =
           "dfs.client.ec.checkstreamer.redunency";
-      int DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY_DEFAILT = 2;
+      int DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY_DEFAILT = 1;
     }
     
   }

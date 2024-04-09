@@ -3722,7 +3722,7 @@
 
 <property>
   <name>dfs.client.ec.checkstreamer.redunency</name>
-  <value>2</value>
+  <value>1</value>
   <description>
     Provide extra redunency healthy streamer for ec policy
     to prevent the potential data loss. For example, if we use RS-6-3-1024K ec policy.
