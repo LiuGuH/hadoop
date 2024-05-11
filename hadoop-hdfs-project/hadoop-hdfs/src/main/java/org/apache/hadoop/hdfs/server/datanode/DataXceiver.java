@@ -783,12 +783,14 @@ class DataXceiver extends Receiver implements Runnable {
 
     boolean slowDatanodeKickoutEnable = BzlDynamicConfiguration.getInstance().getBoolean(
         DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT);
-    long slowDatanodeCheckWindowNs = BzlDynamicConfiguration.getInstance().getLong(
-        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
-        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT);
-    long slowWriteDatanodeCheckThresholdNs = BzlDynamicConfiguration.getInstance().getLong(
-        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
-        DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT);
+    long slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
+            DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT));
+    long slowWriteDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
+            DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
     long slowWriteDatanodeOverthresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
         DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
         DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
@@ -1420,12 +1422,14 @@ class DataXceiver extends Receiver implements Runnable {
 
     boolean slowDatanodeKickoutEnable = BzlDynamicConfiguration.getInstance().getBoolean(
         DFS_SLOW_DATANODE_KICKOUT_ENABLE_KEY, DFS_SLOW_DATANODE_KICKOUT_ENABLE_DEFAULT);
-    long slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(BzlDynamicConfiguration.getInstance().getLong(
-        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
-        DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT));
-    long slowReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(BzlDynamicConfiguration.getInstance().getLong(
-        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
-        DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    long slowDatanodeCheckWindowNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_SLOW_DATANODE_CHECK_WINDOW_MS_KEY,
+            DFS_SLOW_DATANODE_CHECK_WINDOW_MS_DEFAULT));
+    long slowReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
+            DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
     long slowReadDatanodeOverThresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
         DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
         DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
