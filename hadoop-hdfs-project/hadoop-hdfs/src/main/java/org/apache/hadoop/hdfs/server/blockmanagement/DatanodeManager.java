@@ -27,6 +27,7 @@ import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 
 import org.apache.hadoop.fs.StorageType;
+import org.apache.hadoop.util.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -1292,7 +1293,7 @@ public class DatanodeManager {
    * refresh the network topology of this cluster based on the mapping_topology.data file.
    */
   public void refreshTopology() throws IOException {
-    long start = System.currentTimeMillis();
+    long start = Time.monotonicNow();
     int datanodeNums = 0;
     final Map<String, DatanodeDescriptor> copy;
     synchronized (this) {
@@ -1324,23 +1325,20 @@ public class DatanodeManager {
         continue;
       }
       try {
-        synchronized (this) {
-          dnDescriptor.setNetworkLocation(resolvedNetwork);
-          networktopology.add(dnDescriptor); // may throw InvalidTopologyException
-        }
+        networktopology.updateNodeNetworkLocation(dnDescriptor, resolvedNetwork);
       } catch (Throwable e) {
-        LOG.error(getClass().getSimpleName() + ".refreshTopology: update datanode " + dnDescriptor +
-                      " failed. reset from Rack: " + resolvedNetwork + " to Rack: " + originNetwork);
+        LOG.error("{}.refreshTopology: update datanode: {} failed. reset from Rack: {} to Rack: {}.",
+            getClass().getSimpleName(), dnDescriptor, resolvedNetwork, originNetwork);
         dnDescriptor.setNetworkLocation(originNetwork);
         throw new IOException(getClass().getSimpleName() + ".refreshTopology: update datanode " + dnDescriptor +
                                   " failed. reset from Rack: " + resolvedNetwork + " to Rack: " + originNetwork);
       }
-      LOG.info(getClass().getSimpleName() + ".refreshTopology: update datanode :" + dnDescriptor +
-                   " from Rack: " + dnDescriptor.getNetworkLocation() + " to Rack: " + resolvedNetwork);
+      LOG.info("{}.refreshTopology: update datanode: {} from Rack: {} to Rack: {}.",
+          getClass().getSimpleName(), dnDescriptor, originNetwork, resolvedNetwork);
       checkIfClusterIsNowMultiRack(dnDescriptor);
     }
-    long end = System.currentTimeMillis() - start;
-    LOG.info(getClass().getSimpleName() + ".refreshTopology: " + "costs " + end + "ms");
+    long end = Time.monotonicNow() - start;
+    LOG.info("{}.refreshTopology: costs {} ms.", getClass().getSimpleName(), end);
   }
 
   /**
