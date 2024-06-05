@@ -64,6 +64,10 @@ public class DataNodeMetrics {
   @Metric MutableCounterLong blocksWritten;
   @Metric MutableCounterLong blocksRead;
   @Metric MutableCounterLong blocksReplicated;
+  @Metric MutableCounterLong fastCopyBlocksReplicatedViaHardlinkSuccesses;
+  @Metric MutableCounterLong fastCopyBlocksReplicatedViaHardlinkFailures;
+  @Metric MutableCounterLong fastCopyBlocksReplicatedViaTransferSuccesses;
+  @Metric MutableCounterLong fastCopyBlocksReplicatedViaTransferFailures;
   @Metric MutableCounterLong blocksRemoved;
   @Metric MutableCounterLong blocksVerified;
   @Metric MutableCounterLong blockVerificationFailures;
@@ -125,6 +129,7 @@ public class DataNodeMetrics {
   @Metric MutableRate writeBlockOp;
   @Metric MutableRate blockChecksumOp;
   @Metric MutableRate copyBlockOp;
+  @Metric MutableRate copyBlockCrossNamespaceOp;
   @Metric MutableRate replaceBlockOp;
   @Metric MutableRate heartbeats;
   @Metric MutableRate heartbeatsTotal;
@@ -340,6 +345,34 @@ public class DataNodeMetrics {
     blocksReplicated.incr();
   }
 
+  public long getBlocksReplicated() {
+    return blocksReplicated.value();
+  }
+
+  public void incrFastCopyBlocksReplicatedViaHardlinkSuccesses() {
+    fastCopyBlocksReplicatedViaHardlinkSuccesses.incr();
+  }
+
+  public long getFastCopyBlocksReplicatedViaHardlinkSuccesses() {
+    return fastCopyBlocksReplicatedViaHardlinkSuccesses.value();
+  }
+
+  public void incrFastCopyBlocksReplicatedViaHardlinkFailures() {
+    fastCopyBlocksReplicatedViaHardlinkFailures.incr();
+  }
+
+  public void incrFastCopyBlocksReplicatedViaTransferSuccesses() {
+    fastCopyBlocksReplicatedViaTransferSuccesses.incr();
+  }
+
+  public long getFastCopyBlocksReplicatedViaTransferSuccesses() {
+    return fastCopyBlocksReplicatedViaTransferSuccesses.value();
+  }
+
+  public void incrFastCopyBlocksReplicatedViaTransferFailures() {
+    fastCopyBlocksReplicatedViaTransferFailures.incr();
+  }
+
   public void incrBlocksWritten() {
     blocksWritten.incr();
   }
@@ -383,6 +416,10 @@ public class DataNodeMetrics {
 
   public void addCopyBlockOp(long latency) {
     copyBlockOp.add(latency);
+  }
+
+  public void addCopyBlockCrossNamespaceOp(long latency) {
+    copyBlockCrossNamespaceOp.add(latency);
   }
 
   public void addBlockChecksumOp(long latency) {

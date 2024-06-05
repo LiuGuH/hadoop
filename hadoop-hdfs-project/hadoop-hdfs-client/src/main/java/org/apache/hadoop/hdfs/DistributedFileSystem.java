@@ -588,12 +588,10 @@ public class DistributedFileSystem extends FileSystem
    * inherited policy.
    *
    */
-  private HdfsDataOutputStream create(final Path f,
-      final FsPermission permission, final EnumSet<CreateFlag> flag,
-      final int bufferSize, final short replication, final long blockSize,
-      final Progressable progress, final ChecksumOpt checksumOpt,
-      final InetSocketAddress[] favoredNodes, final String ecPolicyName,
-      final String storagePolicy)
+  public HdfsDataOutputStream create(final Path f, final FsPermission permission,
+      final EnumSet<CreateFlag> flag, final int bufferSize, final short replication,
+      final long blockSize, final Progressable progress, final ChecksumOpt checksumOpt,
+      final InetSocketAddress[] favoredNodes, final String ecPolicyName, final String storagePolicy)
       throws IOException {
     statistics.incrementWriteOps(1);
     storageStatistics.incrementOpCounter(OpType.CREATE);

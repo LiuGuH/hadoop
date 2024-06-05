@@ -189,4 +189,9 @@ public class DataNodeFaultInjector {
    * @param downStreamDns
    */
   public void delayMiddleDatanodesNetworkSlow(int downStreamDns) throws IOException {}
+
+  /**
+   * Userd for datanode transfer thow exception case.
+   */
+  public void transferThrowException() throws IOException {}
 }

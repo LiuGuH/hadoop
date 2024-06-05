@@ -52,6 +52,11 @@ public class BzlDynamicConfiguration {
     return StringUtils.equalsIgnoreCase("true", valueString);
   }
 
+  public int getInt(String key, long defaultValue) {
+    String valueString = bzlDynamicConfigMap.getOrDefault(key, String.valueOf(defaultValue));
+    return Integer.parseInt(valueString);
+  }
+
   public long getLong(String key, long defaultValue) {
     String valueString = bzlDynamicConfigMap.getOrDefault(key, String.valueOf(defaultValue));
     return Long.parseLong(valueString);
