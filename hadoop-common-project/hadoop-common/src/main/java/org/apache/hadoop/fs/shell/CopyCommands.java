@@ -207,7 +207,7 @@ class CopyCommands {
       }
     }
   }
-  
+
   /** 
    * Copy local files to a remote filesystem
    */
