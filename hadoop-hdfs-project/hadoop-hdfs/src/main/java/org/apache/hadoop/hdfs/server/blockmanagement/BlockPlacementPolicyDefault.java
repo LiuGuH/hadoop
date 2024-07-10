@@ -236,7 +236,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
         }
       }
       return getPipeline(writer,
-          results.toArray(new DatanodeStorageInfo[results.size()]));
+          results.toArray(new DatanodeStorageInfo[results.size()]), flags);
     } catch (NotEnoughReplicasException nr) {
       LOG.debug("Failed to choose with favored nodes (={}), disregard favored"
           + " nodes hint and retry.", favoredNodes, nr);
@@ -361,7 +361,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
     return getPipeline(
         (writer != null && writer instanceof DatanodeDescriptor) ? writer
             : localNode,
-        results.toArray(new DatanodeStorageInfo[results.size()]));
+        results.toArray(new DatanodeStorageInfo[results.size()]), addBlockFlags);
   }
 
   /**
@@ -1121,7 +1121,13 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
    * This is basically a traveling salesman problem.
    */
   private DatanodeStorageInfo[] getPipeline(Node writer,
-      DatanodeStorageInfo[] storages) {
+      DatanodeStorageInfo[] storages, EnumSet<AddBlockFlag> addBlockFlags) {
+    boolean favorednodesNoSort =
+        (addBlockFlags != null && addBlockFlags.contains(AddBlockFlag.FAVOREDNODES_NO_SORT));
+    if (favorednodesNoSort) {
+      return storages;
+    }
+
     if (storages.length == 0) {
       return storages;
     }

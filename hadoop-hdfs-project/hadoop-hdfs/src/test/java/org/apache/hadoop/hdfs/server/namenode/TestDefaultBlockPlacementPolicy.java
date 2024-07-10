@@ -284,7 +284,7 @@ public class TestDefaultBlockPlacementPolicy {
         clientMachine, clientMachine, flags, true, REPLICATION_FACTOR,
         1024*1024, null, RS_3_2_SCHEMA.getName(), null, false);
     LocatedBlock locatedBlock1 = nameNodeRpc.addBlock(src, clientMachine,
-        null, null, fileStatus1.getFileId(), favoredNodes, null);
+        null, null, fileStatus1.getFileId(), favoredNodes, EnumSet.of(AddBlockFlag.FAVOREDNODES_NO_SORT));
 
     for (int i = 0; i < numBlocks; i++) {
       assertEquals(favoredNodes[i], ":"+locatedBlock1.getLocations()[i].getXferPort());

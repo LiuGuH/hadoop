@@ -118,6 +118,7 @@ public class FastCopy {
     } else {
       flag = EnumSet.of(CreateFlag.CREATE);
     }
+    flag.add(CreateFlag.FAVOREDNODES_NO_SORT);
 
     DistributedFileSystem srcFs = (DistributedFileSystem) sourcePath.getFileSystem(conf);
     this.dstFs = (DistributedFileSystem) dstPath.getFileSystem(conf);

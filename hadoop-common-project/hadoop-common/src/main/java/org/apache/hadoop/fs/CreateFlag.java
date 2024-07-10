@@ -129,7 +129,13 @@ public enum CreateFlag {
    * Advise that a block replica NOT be written to the local rack DataNode where
    * 'local' means the same rack as the client is being run on.
    */
-  NO_LOCAL_RACK((short) 0x120);
+  NO_LOCAL_RACK((short) 0x120),
+
+  /**
+   * Advise that a block replica not sort when user specified favorednodes and
+   * used for fastcopy.
+   */
+  FAVOREDNODES_NO_SORT((short) 0x640);
 
   private final short mode;
 
