@@ -753,6 +753,7 @@ class BlockReceiver implements Closeable {
           DataNodeFaultInjector.get().delayDiskWrite(downstreamDNs.length);
           long duration = Time.monotonicNowNanos() - begin;
           if (TimeUnit.NANOSECONDS.toMillis(duration) > datanodeSlowLogThresholdMs && LOG.isWarnEnabled()) {
+            datanode.metrics.incrPacketsSlowWriteToDisk();
             LOG.warn("Slow BlockReceiver write data to disk cost:" + TimeUnit.NANOSECONDS.toMillis(duration)
                 + "ms (threshold=" + datanodeSlowLogThresholdMs + "ms), "
                 + "volume=" + getVolumeBaseUri()
