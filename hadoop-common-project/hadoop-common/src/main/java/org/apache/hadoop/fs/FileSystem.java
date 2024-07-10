@@ -2435,6 +2435,10 @@ public abstract class FileSystem extends Configured
     copyFromLocalFile(true, src, dst);
   }
 
+  public void fastCopy(Path src, Path dst, boolean overwrite) throws IOException {
+
+  }
+
   /**
    * The src file is on the local disk.  Add it to the filesystem at
    * the given dst name.
