@@ -549,6 +549,15 @@ public class TestDistCpOptions {
   }
 
   @Test
+  public void testPath() {
+    Path path = new Path("/user/test/a/b/c");
+    while (path != null) {
+      path = path.getParent();
+    }
+    Assert.assertTrue(path == null);
+  }
+
+  @Test
   public void testAppendToConf() {
     final int expectedBlocksPerChunk = 999;
     final String expectedValForEmptyConfigKey = "VALUE_OF_EMPTY_CONFIG_KEY";

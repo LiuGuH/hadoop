@@ -161,7 +161,7 @@ public final class DistCpOptions {
   private final boolean directWrite;
 
   private final boolean useIterator;
-  private final boolean useFastCopy;
+  private boolean useFastCopy;
 
   /**
    * File attributes for preserve.
@@ -285,6 +285,10 @@ public final class DistCpOptions {
 
   public boolean shouldSkipCRC() {
     return skipCRC;
+  }
+
+  public boolean setUseFastCopy(boolean useFastCopy) {
+    return this.useFastCopy = useFastCopy;
   }
 
   public boolean shouldUseFastCopy() {

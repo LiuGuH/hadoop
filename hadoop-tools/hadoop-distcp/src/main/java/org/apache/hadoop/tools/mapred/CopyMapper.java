@@ -255,7 +255,7 @@ public class CopyMapper extends Mapper<Text, CopyListingFileStatus, Text, Text> 
       throws IOException, InterruptedException {
     long bytesCopied;
     try {
-      if(!useFastCopy) {
+      if(!useFastCopy || action == FileAction.APPEND) {
         bytesCopied =
             (Long) new RetriableFileCopyCommand(skipCrc, description, action, directWrite).execute(
                 sourceFileStatus, target, context, fileAttributes);
