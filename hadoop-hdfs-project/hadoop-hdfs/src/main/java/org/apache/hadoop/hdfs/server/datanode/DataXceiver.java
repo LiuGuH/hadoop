@@ -1141,11 +1141,9 @@ class DataXceiver extends Receiver implements Runnable {
     DataOutputStream reply = getBufferedOutputStream();
     checkAccess(reply, true, sourceBlk, sourceBlockToken, Op.COPY_BLOCK_CROSSNAMESPACE,
         BlockTokenIdentifier.AccessMode.READ);
-    checkAccess(reply, true, targetBlk, targetBlockToken, Op.COPY_BLOCK_CROSSNAMESPACE,
-        BlockTokenIdentifier.AccessMode.WRITE);
 
     try {
-      datanode.copyBlockCrossNamespace(sourceBlk, targetBlk, targetDatanode);
+      datanode.copyBlockCrossNamespace(sourceBlk, targetBlk, targetDatanode, targetBlockToken);
       sendResponse(SUCCESS, null);
     } catch (IOException ioe) {
       LOG.warn("copyBlockCrossNamespace from {} to {} to {} received exception,", sourceBlk,

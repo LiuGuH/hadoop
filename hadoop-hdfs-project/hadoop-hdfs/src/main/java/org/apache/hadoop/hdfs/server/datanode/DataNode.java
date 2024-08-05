@@ -2565,6 +2565,7 @@ public class DataNode extends ReconfigurableBase
     /** Throttle to block replication when data transfers or writes. */
     private DataTransferThrottler throttler;
     private boolean copyBlockCrossNamespace;
+    private Token<BlockTokenIdentifier> targetBlockToken;
 
     /**
      * Connect to the first item in the target list.  Pass along the 
@@ -2601,10 +2602,11 @@ public class DataNode extends ReconfigurableBase
 
     DataTransfer(DatanodeInfo targets[], StorageType[] targetStorageTypes,
         String[] targetStorageIds, ExtendedBlock source, ExtendedBlock target,
-        BlockConstructionStage stage, final String clientname) {
+        BlockConstructionStage stage, final String clientname, Token<BlockTokenIdentifier> targetBlockToken) {
       this(targets, targetStorageTypes, targetStorageIds, source, stage, clientname);
       this.target = target;
       this.copyBlockCrossNamespace = true;
+      this.targetBlockToken = targetBlockToken;
     }
 
     /**
@@ -2632,9 +2634,10 @@ public class DataNode extends ReconfigurableBase
         //
         // Header info
         //
-        Token<BlockTokenIdentifier> accessToken = getBlockAccessToken(target,
-            EnumSet.of(BlockTokenIdentifier.AccessMode.WRITE),
-            targetStorageTypes, targetStorageIds);
+        Token<BlockTokenIdentifier> accessToken = targetBlockToken != null ?
+            targetBlockToken :
+            getBlockAccessToken(target, EnumSet.of(BlockTokenIdentifier.AccessMode.WRITE),
+                targetStorageTypes, targetStorageIds);
 
         long writeTimeout = dnConf.socketWriteTimeout + 
                             HdfsConstants.WRITE_TIMEOUT_EXTENSION * (targets.length-1);
@@ -3880,7 +3883,7 @@ public class DataNode extends ReconfigurableBase
     return blockPoolManager.isSlownode();
   }
 
-  public void copyBlockCrossNamespace(ExtendedBlock sourceBlk, ExtendedBlock targetBlk, DatanodeInfo targetDn)
+  public void copyBlockCrossNamespace(ExtendedBlock sourceBlk, ExtendedBlock targetBlk, DatanodeInfo targetDn, Token<BlockTokenIdentifier> targetBlockToken)
       throws IOException {
     BPOfferService bpos = getBPOSForBlock(sourceBlk);
     boolean replicaNotExist = false;
@@ -3935,7 +3938,7 @@ public class DataNode extends ReconfigurableBase
     if (this.getDatanodeUuid().equals(targetDn.getDatanodeUuid())) {
       result = xferService.submit(new LocalBlockCopy(sourceBlk, targetBlk));
     } else {
-      result = xferService.submit(new DataCopy(targetDn, sourceBlk, targetBlk).getDataTransfer());
+      result = xferService.submit(new DataCopy(targetDn, sourceBlk, targetBlk, targetBlockToken).getDataTransfer());
     }
     try {
       result.get(getDnConf().getCopyBlockCrossNamespaceSocketTimeout(), TimeUnit.MILLISECONDS);
@@ -3953,7 +3956,7 @@ public class DataNode extends ReconfigurableBase
     private String[] targetStorageIds;
     DataTransfer dataTransfer;
 
-    DataCopy(DatanodeInfo targetDn, ExtendedBlock sourceBlk, ExtendedBlock targetBlk) {
+    DataCopy(DatanodeInfo targetDn, ExtendedBlock sourceBlk, ExtendedBlock targetBlk, Token<BlockTokenIdentifier> targetBlockToken) {
       FsVolumeImpl volume = (FsVolumeImpl) data.getVolume(sourceBlk);
       StorageType storageType = volume.getStorageType();
       String storageId = volume.getStorageID();
@@ -3965,7 +3968,7 @@ public class DataNode extends ReconfigurableBase
       this.targetBlk = targetBlk;
       dataTransfer =
           new DataTransfer(targets, targetStorageTypes, targetStorageIds, sourceBlk, targetBlk,
-              PIPELINE_SETUP_CREATE, "");
+              PIPELINE_SETUP_CREATE, "", targetBlockToken);
     }
 
     public DataTransfer getDataTransfer() {
