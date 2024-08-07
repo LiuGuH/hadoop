@@ -161,6 +161,7 @@ public final class DistCpOptions {
   private final boolean directWrite;
 
   private final boolean useIterator;
+  private boolean useFastCopy;
 
   /**
    * File attributes for preserve.
@@ -227,6 +228,7 @@ public final class DistCpOptions {
     this.directWrite = builder.directWrite;
 
     this.useIterator = builder.useIterator;
+    this.useFastCopy = builder.useFastCopy;
   }
 
   public Path getSourceFileListing() {
@@ -283,6 +285,14 @@ public final class DistCpOptions {
 
   public boolean shouldSkipCRC() {
     return skipCRC;
+  }
+
+  public boolean setUseFastCopy(boolean useFastCopy) {
+    return this.useFastCopy = useFastCopy;
+  }
+
+  public boolean shouldUseFastCopy() {
+    return useFastCopy;
   }
 
   public boolean shouldBlock() {
@@ -397,6 +407,8 @@ public final class DistCpOptions {
         String.valueOf(useRdiff));
     DistCpOptionSwitch.addToConf(conf, DistCpOptionSwitch.SKIP_CRC,
         String.valueOf(skipCRC));
+    DistCpOptionSwitch.addToConf(conf, DistCpOptionSwitch.USE_FASTCOPY,
+        String.valueOf(useFastCopy));
     if (mapBandwidth > 0) {
       DistCpOptionSwitch.addToConf(conf, DistCpOptionSwitch.BANDWIDTH,
           String.valueOf(mapBandwidth));
@@ -464,6 +476,7 @@ public final class DistCpOptions {
         ", verboseLog=" + verboseLog +
         ", directWrite=" + directWrite +
         ", useiterator=" + useIterator +
+        ", usefastcopy=" + useFastCopy +
         '}';
   }
 
@@ -516,6 +529,8 @@ public final class DistCpOptions {
     private boolean directWrite = false;
 
     private boolean useIterator = false;
+
+    private boolean useFastCopy = false;
 
     public Builder(List<Path> sourcePaths, Path targetPath) {
       Preconditions.checkArgument(sourcePaths != null && !sourcePaths.isEmpty(),
@@ -777,6 +792,11 @@ public final class DistCpOptions {
 
     public Builder withUseIterator(boolean useItr) {
       this.useIterator = useItr;
+      return this;
+    }
+
+    public Builder withUseFastCopy(boolean useFastCopy) {
+      this.useFastCopy = useFastCopy;
       return this;
     }
   }

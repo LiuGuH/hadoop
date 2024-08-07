@@ -66,6 +66,7 @@ import org.apache.hadoop.hdfs.server.datanode.DataSetLockManager;
 import org.apache.hadoop.hdfs.server.datanode.FileIoProvider;
 import org.apache.hadoop.hdfs.server.datanode.FinalizedReplica;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
+import org.apache.hadoop.hdfs.server.datanode.LocalReplicaInPipeline;
 import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.apache.hadoop.hdfs.protocol.Block;
@@ -3740,6 +3741,69 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
   @Override
   public void setLastDirScannerFinishTime(long time) {
     this.lastDirScannerFinishTime = time;
+  }
+
+  @Override
+  public void hardLinkOneBlock(ExtendedBlock srcBlock, ExtendedBlock dstBlock) throws IOException {
+    BlockLocalPathInfo blpi = getBlockLocalPathInfo(srcBlock);
+    FsVolumeImpl v = getVolume(srcBlock);
+
+    String srcBlockPool = srcBlock.getBlockPoolId();
+    String dstBlockPool = dstBlock.getBlockPoolId();
+
+    if (srcBlockPool.compareTo(dstBlockPool) == 0) {
+      String srcDir = DatanodeUtil.idToBlockDirSuffixName(srcBlock.getBlockId());
+      String dstDir = DatanodeUtil.idToBlockDirSuffixName(dstBlock.getBlockId());
+      if (srcDir.compareTo(dstDir) == 0) {
+        try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.DIR, dstBlockPool,
+            v.getStorageID(), dstDir)) {
+          hardLinkOneBlock(blpi, v, dstBlock);
+        }
+      } else if (srcDir.compareTo(dstDir) > 0) {
+        try (AutoCloseableLock lock1 = lockManager.readLock(LockLevel.DIR, srcBlockPool,
+            v.getStorageID(), srcDir);
+            AutoCloseableLock lock2 = lockManager.writeLock(LockLevel.DIR, dstBlockPool,
+                v.getStorageID(), dstDir)) {
+          hardLinkOneBlock(blpi, v, dstBlock);
+        }
+      } else {
+        try (AutoCloseableLock lock1 = lockManager.writeLock(LockLevel.DIR, dstBlockPool,
+            v.getStorageID(), dstDir);
+            AutoCloseableLock lock2 = lockManager.readLock(LockLevel.DIR, srcBlockPool,
+                v.getStorageID(), srcDir)) {
+          hardLinkOneBlock(blpi, v, dstBlock);
+        }
+      }
+    } else if (srcBlockPool.compareTo(dstBlockPool) > 0) {
+      try (AutoCloseableLock lock1 = lockManager.readLock(LockLevel.DIR, srcBlockPool,
+          v.getStorageID(), DatanodeUtil.idToBlockDirSuffixName(srcBlock.getBlockId()));
+          AutoCloseableLock lock2 = lockManager.writeLock(LockLevel.DIR, dstBlockPool,
+              v.getStorageID(), DatanodeUtil.idToBlockDirSuffixName(dstBlock.getBlockId()))) {
+        hardLinkOneBlock(blpi, v, dstBlock);
+      }
+    } else {
+      try (AutoCloseableLock lock1 = lockManager.writeLock(LockLevel.DIR, dstBlockPool,
+          v.getStorageID(), DatanodeUtil.idToBlockDirSuffixName(dstBlock.getBlockId()));
+          AutoCloseableLock lock2 = lockManager.readLock(LockLevel.DIR, srcBlockPool,
+              v.getStorageID(), DatanodeUtil.idToBlockDirSuffixName(srcBlock.getBlockId()))) {
+        hardLinkOneBlock(blpi, v, dstBlock);
+      }
+    }
+  }
+
+  private void hardLinkOneBlock(BlockLocalPathInfo srcBlockPathInfo, FsVolumeImpl v, ExtendedBlock dstBlock)
+      throws IOException {
+    File src = new File(srcBlockPathInfo.getBlockPath());
+    File srcMeta = new File(srcBlockPathInfo.getMetaPath());
+    BlockPoolSlice dstBPS = v.getBlockPoolSlice(dstBlock.getBlockPoolId());
+
+    File dstBlockFile = dstBPS.hardLinkOneBlock(src, srcMeta, dstBlock.getLocalBlock());
+    ReplicaInfo replicaInfo =
+        new LocalReplicaInPipeline(dstBlock.getBlockId(), dstBlock.getGenerationStamp(), v,
+            dstBlockFile.getParentFile(), dstBlock.getLocalBlock().getNumBytes());
+    dstBlockFile = dstBPS.addFinalizedBlock(dstBlock.getLocalBlock(), replicaInfo);
+    replicaInfo = new FinalizedReplica(dstBlock.getLocalBlock(), v, dstBlockFile.getParentFile());
+    volumeMap.add(dstBlock.getBlockPoolId(), replicaInfo);
   }
 }
 

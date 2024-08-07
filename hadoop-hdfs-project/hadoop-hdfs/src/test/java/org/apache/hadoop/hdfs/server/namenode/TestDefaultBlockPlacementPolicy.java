@@ -20,7 +20,11 @@ package org.apache.hadoop.hdfs.server.namenode;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CreateFlag;
@@ -28,14 +32,21 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.AddBlockFlag;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hdfs.MiniDFSCluster.Builder;
 import org.apache.hadoop.hdfs.net.DFSNetworkTopology;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfoWithStorage;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.apache.hadoop.hdfs.protocol.HdfsFileStatus;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
+import org.apache.hadoop.hdfs.protocol.SystemErasureCodingPolicies;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
+import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStorageInfo;
+import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
 import org.apache.hadoop.net.StaticMapping;
 import org.junit.After;
@@ -60,7 +71,7 @@ public class TestDefaultBlockPlacementPolicy {
 
     conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, DEFAULT_BLOCK_SIZE);
     conf.setInt(DFSConfigKeys.DFS_BYTES_PER_CHECKSUM_KEY, DEFAULT_BLOCK_SIZE / 2);
-    cluster = new MiniDFSCluster.Builder(conf).numDataNodes(5).racks(racks)
+    cluster = new Builder(conf).numDataNodes(5).racks(racks)
         .hosts(hosts).build();
     cluster.waitActive();
     nameNodeRpc = cluster.getNameNodeRpc();
@@ -137,7 +148,7 @@ public class TestDefaultBlockPlacementPolicy {
     if (cluster != null) {
       cluster.shutdown();
     }
-    cluster = new MiniDFSCluster.Builder(conf).numDataNodes(5).racks(racks)
+    cluster = new Builder(conf).numDataNodes(5).racks(racks)
         .hosts(hosts).build();
     cluster.waitActive();
     nameNodeRpc = cluster.getNameNodeRpc();
@@ -225,4 +236,106 @@ public class TestDefaultBlockPlacementPolicy {
           src, clientMachine);
     }
   }
+
+  @Test
+  public void TestPlacementWithECFavoredNodes() throws IOException, InterruptedException {
+    Configuration conf = new HdfsConfiguration();
+    final String[] racks = {"/RACK0", "/RACK1", "/RACK2", "/RACK3", "/RACK2"};
+    final String[] hosts = {"/host0", "/host1", "/host2", "/host3", "/host4"};
+    // enables DFSNetworkTopology
+    conf.setBoolean(DFSConfigKeys.DFS_USE_DFS_NETWORK_TOPOLOGY_KEY, true);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 1024*1024);
+
+    MiniDFSCluster cluster = new Builder(conf).numDataNodes(hosts.length).racks(racks)
+        .hosts(hosts).build();
+    cluster.waitActive();
+    nameNodeRpc = cluster.getNameNodeRpc();
+    namesystem = cluster.getNamesystem();
+    ArrayList<DataNode> dataNodes = cluster.getDataNodes();
+
+    DFSTestUtil.enableAllECPolicies(cluster.getFileSystem());
+    ErasureCodingPolicy RS_3_2_SCHEMA = SystemErasureCodingPolicies.getPolicies().get(1);
+    int numBlocks = RS_3_2_SCHEMA.getNumDataUnits()+RS_3_2_SCHEMA.getNumParityUnits();
+
+
+    String[] favoredNodes = new String[numBlocks];
+    for (int i = 0; i < numBlocks; i++) {
+      favoredNodes[i] = ":"+dataNodes.get(i).getXferPort();
+    }
+
+    EnumSet<CreateFlag> flags = EnumSet.of(CreateFlag.CREATE);
+
+    String clientMachine = "/client";
+    String src = "/src";
+    HdfsFileStatus fileStatus = namesystem.startFile(src, perm,
+        clientMachine, clientMachine, flags, true, REPLICATION_FACTOR,
+        1024*1024, null, RS_3_2_SCHEMA.getName(), null, false);
+
+    LocatedBlock locatedBlock = nameNodeRpc.addBlock(src, clientMachine,
+        null, null, fileStatus.getFileId(), favoredNodes, null);
+
+    // /host4 is near with /host2 in network
+    assertNotEquals(favoredNodes[3], ":"+locatedBlock.getLocations()[3].getXferPort());
+
+    nameNodeRpc.abandonBlock(locatedBlock.getBlock(), fileStatus.getFileId(), src, clientMachine);
+
+
+    HdfsFileStatus fileStatus1 = namesystem.startFile("/src1", perm,
+        clientMachine, clientMachine, flags, true, REPLICATION_FACTOR,
+        1024*1024, null, RS_3_2_SCHEMA.getName(), null, false);
+    LocatedBlock locatedBlock1 = nameNodeRpc.addBlock(src, clientMachine,
+        null, null, fileStatus1.getFileId(), favoredNodes, EnumSet.of(AddBlockFlag.FAVOREDNODES_NO_SORT));
+
+    for (int i = 0; i < numBlocks; i++) {
+      assertEquals(favoredNodes[i], ":"+locatedBlock1.getLocations()[i].getXferPort());
+    }
+
+    cluster.shutdown();
+  }
+
+  @Test
+  public void TestPlacementWithEmptyFavoredNodes() throws IOException {
+    Configuration conf = new HdfsConfiguration();
+    final String[] racks = {"/RACK0", "/RACK1", "/RACK2", "/RACK3", "/RACK2"};
+    final String[] hosts = {"/host0", "/host1", "/host2", "/host3", "/host4"};
+    // enables DFSNetworkTopology
+    conf.setBoolean(DFSConfigKeys.DFS_USE_DFS_NETWORK_TOPOLOGY_KEY, true);
+    conf.setLong(DFSConfigKeys.DFS_BLOCK_SIZE_KEY, 1024*1024);
+
+    MiniDFSCluster cluster = new Builder(conf).numDataNodes(hosts.length).racks(racks)
+        .hosts(hosts).build();
+    cluster.waitActive();
+    nameNodeRpc = cluster.getNameNodeRpc();
+    namesystem = cluster.getNamesystem();
+    ArrayList<DataNode> dataNodes = cluster.getDataNodes();
+
+    DFSTestUtil.enableAllECPolicies(cluster.getFileSystem());
+    ErasureCodingPolicy RS_3_2_SCHEMA = SystemErasureCodingPolicies.getPolicies().get(1);
+    int numBlocks = RS_3_2_SCHEMA.getNumDataUnits()+RS_3_2_SCHEMA.getNumParityUnits();
+
+
+    String[] favoredNodes = new String[numBlocks];
+    for (int i = 0; i < numBlocks; i++) {
+      favoredNodes[i] = ":"+dataNodes.get(i).getXferPort();
+      if(i==1||i==2||i==numBlocks-1)
+        favoredNodes[i]="";
+    }
+
+    EnumSet<CreateFlag> flags = EnumSet.of(CreateFlag.CREATE);
+
+    String clientMachine = "/client";
+    String src = "/src";
+    HdfsFileStatus fileStatus = namesystem.startFile(src, perm,
+        clientMachine, clientMachine, flags, true, REPLICATION_FACTOR,
+        1024*1024, null, RS_3_2_SCHEMA.getName(), null, false);
+
+    LocatedBlock locatedBlock = nameNodeRpc.addBlock(src, clientMachine,
+        null, null, fileStatus.getFileId(), favoredNodes, null);
+
+    for (int i = 0; i < numBlocks; i++) {
+      assertNotEquals("",locatedBlock.getLocations()[i].getXferPort());
+    }
+    cluster.shutdown();
+  }
 }
+

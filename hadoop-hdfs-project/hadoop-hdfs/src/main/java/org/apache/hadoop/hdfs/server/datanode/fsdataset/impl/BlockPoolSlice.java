@@ -45,6 +45,7 @@ import java.util.concurrent.RecursiveAction;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hadoop.fs.HardLink;
 import org.apache.hadoop.hdfs.server.datanode.FSCachingGetSpaceUsed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1093,5 +1094,16 @@ class BlockPoolSlice {
   public static void reInitializeAddReplicaThreadPool() {
     addReplicaThreadPool.shutdown();
     addReplicaThreadPool = null;
+  }
+
+  public File hardLinkOneBlock(File src, File srcMeta, Block dstBlock) throws IOException {
+    File dstMeta = new File(tmpDir,
+        DatanodeUtil.getMetaName(dstBlock.getBlockName(), dstBlock.getGenerationStamp()));
+    HardLink.createHardLink(srcMeta, dstMeta);
+
+    File dstBlockFile = new File(tmpDir, dstBlock.getBlockName());
+    HardLink.createHardLink(src, dstBlockFile);
+
+    return dstBlockFile;
   }
 }

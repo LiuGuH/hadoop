@@ -120,6 +120,7 @@ import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.server.common.DataNodeLockManager.LockLevel;
 import org.apache.hadoop.hdfs.server.datanode.checker.DatasetVolumeChecker;
 import org.apache.hadoop.hdfs.server.datanode.checker.StorageLocationChecker;
+import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.FsVolumeImpl;
 import org.apache.hadoop.hdfs.util.DataTransferThrottler;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.util.AutoCloseableLock;
@@ -2123,7 +2124,7 @@ public class DataNode extends ReconfigurableBase
     // wait reconfiguration thread, if any, to exit
     shutdownReconfigurationTask();
 
-    LOG.info("Waiting up to 30 seconds for transfer threads to complete");
+    LOG.info("Waiting up to 15 seconds for transfer threads to complete");
     HadoopExecutors.shutdown(this.xferService, LOG, 15L, TimeUnit.SECONDS);
 
     // wait for all data receiver threads to exit
@@ -2554,7 +2555,8 @@ public class DataNode extends ReconfigurableBase
     final DatanodeInfo[] targets;
     final StorageType[] targetStorageTypes;
     final private String[] targetStorageIds;
-    final ExtendedBlock b;
+    final ExtendedBlock source;
+    ExtendedBlock target;
     final BlockConstructionStage stage;
     final private DatanodeRegistration bpReg;
     final String clientname;
@@ -2562,27 +2564,31 @@ public class DataNode extends ReconfigurableBase
 
     /** Throttle to block replication when data transfers or writes. */
     private DataTransferThrottler throttler;
+    private boolean copyBlockCrossNamespace;
+    private Token<BlockTokenIdentifier> targetBlockToken;
 
     /**
      * Connect to the first item in the target list.  Pass along the 
      * entire target list, the block, and the data.
      */
     DataTransfer(DatanodeInfo targets[], StorageType[] targetStorageTypes,
-        String[] targetStorageIds, ExtendedBlock b,
+        String[] targetStorageIds, ExtendedBlock source,
         BlockConstructionStage stage, final String clientname) {
       DataTransferProtocol.LOG.debug("{}: {} (numBytes={}), stage={}, " +
               "clientname={}, targets={}, target storage types={}, " +
-              "target storage IDs={}", getClass().getSimpleName(), b,
-          b.getNumBytes(), stage, clientname, Arrays.asList(targets),
+              "target storage IDs={}", getClass().getSimpleName(), source,
+          source.getNumBytes(), stage, clientname, Arrays.asList(targets),
           targetStorageTypes == null ? "[]" :
               Arrays.asList(targetStorageTypes),
           targetStorageIds == null ? "[]" : Arrays.asList(targetStorageIds));
       this.targets = targets;
       this.targetStorageTypes = targetStorageTypes;
       this.targetStorageIds = targetStorageIds;
-      this.b = b;
+      this.source = source;
+      this.target = source;
+      this.copyBlockCrossNamespace = false;
       this.stage = stage;
-      BPOfferService bpos = blockPoolManager.get(b.getBlockPoolId());
+      BPOfferService bpos = blockPoolManager.get(source.getBlockPoolId());
       bpReg = bpos.bpRegistration;
       this.clientname = clientname;
       this.cachingStrategy =
@@ -2592,6 +2598,15 @@ public class DataNode extends ReconfigurableBase
       } else if(isWrite(stage)) {
         this.throttler = xserver.getWriteThrottler();
       }
+    }
+
+    DataTransfer(DatanodeInfo targets[], StorageType[] targetStorageTypes,
+        String[] targetStorageIds, ExtendedBlock source, ExtendedBlock target,
+        BlockConstructionStage stage, final String clientname, Token<BlockTokenIdentifier> targetBlockToken) {
+      this(targets, targetStorageTypes, targetStorageIds, source, stage, clientname);
+      this.target = target;
+      this.copyBlockCrossNamespace = true;
+      this.targetBlockToken = targetBlockToken;
     }
 
     /**
@@ -2607,6 +2622,7 @@ public class DataNode extends ReconfigurableBase
       final boolean isClient = clientname.length() > 0;
       
       try {
+        DataNodeFaultInjector.get().transferThrowException();
         final String dnAddr = targets[0].getXferAddr(connectToDnViaHostname);
         InetSocketAddress curTarget = NetUtils.createSocketAddr(dnAddr);
         LOG.debug("Connecting to datanode {}", dnAddr);
@@ -2618,16 +2634,17 @@ public class DataNode extends ReconfigurableBase
         //
         // Header info
         //
-        Token<BlockTokenIdentifier> accessToken = getBlockAccessToken(b,
-            EnumSet.of(BlockTokenIdentifier.AccessMode.WRITE),
-            targetStorageTypes, targetStorageIds);
+        Token<BlockTokenIdentifier> accessToken = targetBlockToken != null ?
+            targetBlockToken :
+            getBlockAccessToken(target, EnumSet.of(BlockTokenIdentifier.AccessMode.WRITE),
+                targetStorageTypes, targetStorageIds);
 
         long writeTimeout = dnConf.socketWriteTimeout + 
                             HdfsConstants.WRITE_TIMEOUT_EXTENSION * (targets.length-1);
         OutputStream unbufOut = NetUtils.getOutputStream(sock, writeTimeout);
         InputStream unbufIn = NetUtils.getInputStream(sock);
         DataEncryptionKeyFactory keyFactory =
-          getDataEncryptionKeyFactoryForBlock(b);
+          getDataEncryptionKeyFactoryForBlock(source);
         IOStreamPair saslStreams = saslClient.socketSend(sock, unbufOut,
           unbufIn, keyFactory, accessToken, bpReg);
         unbufOut = saslStreams.out;
@@ -2636,14 +2653,14 @@ public class DataNode extends ReconfigurableBase
         out = new DataOutputStream(new BufferedOutputStream(unbufOut,
             DFSUtilClient.getSmallBufferSize(getConf())));
         in = new DataInputStream(unbufIn);
-        blockSender = new BlockSender(b, 0, b.getNumBytes(), 
+        blockSender = new BlockSender(source, 0, source.getNumBytes(),
             false, false, true, DataNode.this, null, cachingStrategy);
         DatanodeInfo srcNode = new DatanodeInfoBuilder().setNodeID(bpReg)
             .build();
 
         String storageId = targetStorageIds.length > 0 ?
             targetStorageIds[0] : null;
-        new Sender(out).writeBlock(b, targetStorageTypes[0], accessToken,
+        new Sender(out).writeBlock(target, targetStorageTypes[0], accessToken,
             clientname, targets, targetStorageTypes, srcNode,
             stage, 0, 0, 0, 0, blockSender.getChecksum(), cachingStrategy,
             false, false, null, storageId,
@@ -2654,8 +2671,7 @@ public class DataNode extends ReconfigurableBase
 
         // no response necessary
         LOG.info("{}, at {}: Transmitted {} (numBytes={}) to {}",
-            getClass().getSimpleName(), DataNode.this.getDisplayName(),
-            b, b.getNumBytes(), curTarget);
+            getClass().getSimpleName(), DataNode.this.getDisplayName(), source, source.getNumBytes(), curTarget);
 
         // read ack
         if (isClient) {
@@ -2673,14 +2689,26 @@ public class DataNode extends ReconfigurableBase
             }
           }
         } else {
-          metrics.incrBlocksReplicated();
+          if (copyBlockCrossNamespace) {
+            metrics.incrFastCopyBlocksReplicatedViaTransferSuccesses();
+          } else {
+            metrics.incrBlocksReplicated();
+          }
         }
       } catch (IOException ie) {
-        handleBadBlock(b, ie, false);
-        LOG.warn("{}:Failed to transfer {} to {} got",
-            bpReg, b, targets[0], ie);
+        handleBadBlock(source, ie, false);
+        LOG.warn("{}:Failed to transfer {} to {}  got",
+            bpReg, source, targets[0], ie);
+        if (copyBlockCrossNamespace) {
+          metrics.incrFastCopyBlocksReplicatedViaTransferFailures();
+          throw new RuntimeException(ie);
+        }
       } catch (Throwable t) {
-        LOG.error("Failed to transfer block {}", b, t);
+        LOG.error("Failed to transfer block {}", source, t);
+        if (copyBlockCrossNamespace) {
+          metrics.incrFastCopyBlocksReplicatedViaTransferFailures();
+          throw new RuntimeException(t);
+        }
       } finally {
         decrementXmitsInProgress();
         IOUtils.closeStream(blockSender);
@@ -2692,7 +2720,7 @@ public class DataNode extends ReconfigurableBase
 
     @Override
     public String toString() {
-      return "DataTransfer " + b + " to " + Arrays.asList(targets);
+      return "DataTransfer " + source + " to " + Arrays.asList(targets);
     }
   }
 
@@ -3853,5 +3881,132 @@ public class DataNode extends ReconfigurableBase
 
   boolean isSlownode() {
     return blockPoolManager.isSlownode();
+  }
+
+  public void copyBlockCrossNamespace(ExtendedBlock sourceBlk, ExtendedBlock targetBlk, DatanodeInfo targetDn, Token<BlockTokenIdentifier> targetBlockToken)
+      throws IOException {
+    BPOfferService bpos = getBPOSForBlock(sourceBlk);
+    boolean replicaNotExist = false;
+    boolean replicaStateNotFinalized = false;
+    boolean blockFileNotExist = false;
+    boolean lengthTooShort = false;
+
+    try {
+      data.checkBlock(sourceBlk, sourceBlk.getNumBytes(), ReplicaState.FINALIZED);
+    } catch (ReplicaNotFoundException e) {
+      replicaNotExist = true;
+    } catch (UnexpectedReplicaStateException e) {
+      replicaStateNotFinalized = true;
+    } catch (FileNotFoundException e) {
+      blockFileNotExist = true;
+    } catch (EOFException e) {
+      lengthTooShort = true;
+    } catch (IOException e) {
+      // The IOException indicates not being able to access block file,
+      // treat it the same here as blockFileNotExist, to trigger
+      // reporting it as a bad block
+      blockFileNotExist = true;
+    }
+
+    if (replicaNotExist || replicaStateNotFinalized) {
+      String errStr = "Can't send invalid block " + sourceBlk;
+      LOG.info(errStr);
+      bpos.trySendErrorReport(DatanodeProtocol.INVALID_BLOCK, errStr);
+      throw new IOException(errStr);
+    }
+    if (blockFileNotExist) {
+      // Report back to NN bad block caused by non-existent block file.
+      String errStr = "Can't replicate block " + sourceBlk
+          + " because the block file doesn't exist, or is not accessible";
+      reportBadBlock(bpos, sourceBlk, errStr);
+      throw new IOException(errStr);
+    }
+    if (lengthTooShort) {
+      // Check if NN recorded length matches on-disk length
+      // Shorter on-disk len indicates corruption so report NN the corrupt block
+      String errStr = "Can't replicate block " + sourceBlk
+          + " because on-disk length " + data.getLength(sourceBlk)
+          + " is shorter than NameNode recorded length " + sourceBlk.getNumBytes();
+      reportBadBlock(bpos, sourceBlk, errStr);
+      throw new IOException(errStr);
+    }
+
+    LOG.debug(
+        getDatanodeInfo() + " copyBlockCrossNamespace: Starting thread to transfer: " + "block:" + sourceBlk + " from "
+            + this.getDatanodeUuid() + " to " + targetDn.getDatanodeUuid() + "(" + targetDn + ")");
+    Future<?> result;
+    if (this.getDatanodeUuid().equals(targetDn.getDatanodeUuid())) {
+      result = xferService.submit(new LocalBlockCopy(sourceBlk, targetBlk));
+    } else {
+      result = xferService.submit(new DataCopy(targetDn, sourceBlk, targetBlk, targetBlockToken).getDataTransfer());
+    }
+    try {
+      result.get(getDnConf().getCopyBlockCrossNamespaceSocketTimeout(), TimeUnit.MILLISECONDS);
+    } catch (Exception e) {
+      LOG.error(e.getMessage());
+      throw new IOException(e);
+    }
+  }
+
+  private class DataCopy {
+    ExtendedBlock sourceBlk;
+    ExtendedBlock targetBlk;
+    DatanodeInfo[] targets;
+    StorageType[] targetStorageTypes;
+    private String[] targetStorageIds;
+    DataTransfer dataTransfer;
+
+    DataCopy(DatanodeInfo targetDn, ExtendedBlock sourceBlk, ExtendedBlock targetBlk, Token<BlockTokenIdentifier> targetBlockToken) {
+      FsVolumeImpl volume = (FsVolumeImpl) data.getVolume(sourceBlk);
+      StorageType storageType = volume.getStorageType();
+      String storageId = volume.getStorageID();
+
+      targets = new DatanodeInfo[] {targetDn};
+      targetStorageTypes = new StorageType[] {storageType};
+      targetStorageIds = new String[] {storageId};
+      this.sourceBlk = sourceBlk;
+      this.targetBlk = targetBlk;
+      dataTransfer =
+          new DataTransfer(targets, targetStorageTypes, targetStorageIds, sourceBlk, targetBlk,
+              PIPELINE_SETUP_CREATE, "", targetBlockToken);
+    }
+
+    public DataTransfer getDataTransfer() {
+      return dataTransfer;
+    }
+  }
+
+  class LocalBlockCopy implements Callable<Boolean> {
+    private ExtendedBlock sourceBlk = null;
+    private ExtendedBlock targetBlk = null;
+
+    public LocalBlockCopy(ExtendedBlock sourceBlk, ExtendedBlock targetBlk) {
+      this.sourceBlk = sourceBlk;
+      this.targetBlk = targetBlk;
+    }
+
+    public Boolean call() throws IOException {
+      try {
+        targetBlk.setNumBytes(sourceBlk.getNumBytes());
+        data.hardLinkOneBlock(sourceBlk, targetBlk);
+        FsVolumeSpi v = (FsVolumeSpi) (getFSDataset().getVolume(targetBlk));
+        closeBlock(targetBlk, null, v.getStorageID(), v.isTransientStorage());
+
+        BlockLocalPathInfo srcBlpi = data.getBlockLocalPathInfo(sourceBlk);
+        BlockLocalPathInfo dstBlpi = data.getBlockLocalPathInfo(targetBlk);
+        LOG.info(
+            getClass().getSimpleName() + ": Hardlinked " + sourceBlk + "( " + srcBlpi.getBlockPath()
+                + " " + srcBlpi.getMetaPath() + " ) " + "to " + targetBlk + "( "
+                + dstBlpi.getBlockPath() + " " + dstBlpi.getMetaPath() + " ) ");
+
+        metrics.incrFastCopyBlocksReplicatedViaHardlinkSuccesses();
+      } catch (IOException e) {
+        LOG.warn("Local block copy for src : " + sourceBlk.getBlockName() + ", dst : "
+            + targetBlk.getBlockName() + " failed", e);
+        metrics.incrFastCopyBlocksReplicatedViaHardlinkFailures();
+        throw e;
+      }
+      return true;
+    }
   }
 }

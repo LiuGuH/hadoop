@@ -130,6 +130,7 @@ public class DFSOutputStream extends FSOutputSummer
   private FileEncryptionInfo fileEncryptionInfo;
   private int writePacketSize;
   private boolean leaseRecovered = false;
+  private ExtendedBlock userAssignmentLastBlock;
 
   /** Use {@link ByteArrayManager} to create buffer for non-heartbeat packets.*/
   protected DFSPacket createPacket(int packetSize, int chunksPerPkt,
@@ -211,6 +212,9 @@ public class DFSOutputStream extends FSOutputSummer
     }
     if (flag.contains(CreateFlag.IGNORE_CLIENT_LOCALITY)) {
       this.addBlockFlags.add(AddBlockFlag.IGNORE_CLIENT_LOCALITY);
+    }
+    if (flag.contains(CreateFlag.FAVOREDNODES_NO_SORT)) {
+      this.addBlockFlags.add(AddBlockFlag.FAVOREDNODES_NO_SORT);
     }
     if (progress != null) {
       DFSClient.LOG.debug("Set non-null progress callback on DFSOutputStream "
@@ -935,6 +939,9 @@ public class DFSOutputStream extends FSOutputSummer
   void completeFile() throws IOException {
     // get last block before destroying the streamer
     ExtendedBlock lastBlock = getStreamer().getBlock();
+    if (lastBlock == null) {
+      lastBlock = getUserAssignmentLastBlock();
+    }
     try (TraceScope ignored = dfsClient.getTracer()
         .newScope("DFSOutputStream#completeFile")) {
       completeFile(lastBlock);
@@ -1081,6 +1088,14 @@ public class DFSOutputStream extends FSOutputSummer
     return getStreamer().getBlock();
   }
 
+  public ExtendedBlock getUserAssignmentLastBlock() {
+    return userAssignmentLastBlock;
+  }
+
+  public void setUserAssignmentLastBlock(ExtendedBlock userAssignmentLastBlock) {
+    this.userAssignmentLastBlock = userAssignmentLastBlock;
+  }
+
   @VisibleForTesting
   public long getFileId() {
     return fileId;
@@ -1179,5 +1194,17 @@ public class DFSOutputStream extends FSOutputSummer
   private static long calculateDelayForNextRetry(long previousDelay,
                                                  long maxDelay) {
     return Math.min(previousDelay * 2, maxDelay);
+  }
+
+  public DFSClient getDfsClient() {
+    return dfsClient;
+  }
+
+  protected void copyBlockCrossNamespace(ExtendedBlock sourceBlk,
+      Token<BlockTokenIdentifier> sourceBlockToken, DatanodeInfo sourceDatanode,
+      ExtendedBlock targetBlk, Token<BlockTokenIdentifier> targetBlockToken,
+      DatanodeInfo targetDatanode) throws IOException {
+    dfsClient.copyBlockCrossNamespace(sourceBlk, sourceBlockToken, sourceDatanode, targetBlk,
+        targetBlockToken, targetDatanode);
   }
 }

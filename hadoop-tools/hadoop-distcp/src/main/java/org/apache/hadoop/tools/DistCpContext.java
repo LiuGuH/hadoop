@@ -21,11 +21,18 @@ package org.apache.hadoop.tools;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.apache.hadoop.tools.DistCpOptions.FileAttribute;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This is the context of the distcp at runtime.
@@ -35,6 +42,7 @@ import java.util.Set;
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class DistCpContext {
+  static final Logger LOG = LoggerFactory.getLogger(DistCpContext.class);
   private final DistCpOptions options;
 
   /** The source paths can be set at runtime via snapshots. */
@@ -46,9 +54,10 @@ public class DistCpContext {
   /** Indicate that raw.* xattrs should be preserved if true. */
   private boolean preserveRawXattrs = false;
 
-  public DistCpContext(DistCpOptions options) {
+  public DistCpContext(DistCpOptions options) throws IOException {
     this.options = options;
     this.sourcePaths = options.getSourcePaths();
+    checkSourceAndTargetPath();
   }
 
   public void setSourcePaths(List<Path> sourcePaths) {
@@ -97,6 +106,10 @@ public class DistCpContext {
 
   public boolean shouldSkipCRC() {
     return options.shouldSkipCRC();
+  }
+
+  public boolean shouldUseFastCopy() {
+    return options.shouldUseFastCopy();
   }
 
   public boolean shouldBlock() {
@@ -197,6 +210,61 @@ public class DistCpContext {
 
   public void appendToConf(Configuration conf) {
     options.appendToConf(conf);
+  }
+
+  public void checkSourceAndTargetPath() throws IOException {
+    boolean sourceEC = true;
+    boolean isFirst = true;
+    for (Path path : sourcePaths) {
+      FileSystem srcFileSystem = path.getFileSystem(new Configuration());
+      if (srcFileSystem instanceof DistributedFileSystem) {
+        ErasureCodingPolicy erasureCodingPolicy =
+            ((DistributedFileSystem) srcFileSystem).getErasureCodingPolicy(path);
+        if (isFirst) {
+          isFirst = false;
+          sourceEC = erasureCodingPolicy != null;
+        } else {
+          boolean flag = erasureCodingPolicy != null;
+          if (sourceEC != flag) {
+            options.setUseFastCopy(false);
+            LOG.info(
+                "SourcePaths have different storage strategy, both erasureCoding and replication exist. FastCopy will be ignored.");
+            return;
+          }
+        }
+      } else {
+        options.setUseFastCopy(false);
+        LOG.info("{} is not HDFS path. FastCopy will be ignored.", path);
+        return;
+      }
+    }
+
+    boolean targetEC = true;
+    Path targetPath = getTargetPath();
+    FileSystem targetFilesystem = targetPath.getFileSystem(new Configuration());
+    while (targetPath != null) {
+      if (!targetFilesystem.exists(targetPath)) {
+        targetPath = targetPath.getParent();
+      } else {
+        break;
+      }
+    }
+
+    if (targetFilesystem instanceof DistributedFileSystem) {
+      ErasureCodingPolicy erasureCodingPolicy =
+          ((DistributedFileSystem) targetFilesystem).getErasureCodingPolicy(targetPath);
+      targetEC = erasureCodingPolicy != null;
+    } else {
+      options.setUseFastCopy(false);
+      LOG.info("{} is not HDFS path. FastCopy will be ignored.", targetPath);
+      return;
+    }
+
+    if (sourceEC != targetEC) {
+      options.setUseFastCopy(false);
+      LOG.info(
+          "SourcePaths and targetPath has different storage strategy, both erasureCoding and replication exist. FastCopy will be ignored.");
+    }
   }
 
   @Override

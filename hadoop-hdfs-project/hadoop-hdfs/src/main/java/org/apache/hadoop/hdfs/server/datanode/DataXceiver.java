@@ -1133,6 +1133,31 @@ class DataXceiver extends Receiver implements Runnable {
   }
 
   @Override
+  public void copyBlockCrossNamespace(ExtendedBlock sourceBlk,
+      Token<BlockTokenIdentifier> sourceBlockToken, ExtendedBlock targetBlk,
+      Token<BlockTokenIdentifier> targetBlockToken, DatanodeInfo targetDatanode) throws IOException {
+    updateCurrentThreadName("Copying block " + sourceBlk + " to " + targetBlk);
+
+    DataOutputStream reply = getBufferedOutputStream();
+    checkAccess(reply, true, sourceBlk, sourceBlockToken, Op.COPY_BLOCK_CROSSNAMESPACE,
+        BlockTokenIdentifier.AccessMode.READ);
+
+    try {
+      datanode.copyBlockCrossNamespace(sourceBlk, targetBlk, targetDatanode, targetBlockToken);
+      sendResponse(SUCCESS, null);
+    } catch (IOException ioe) {
+      LOG.warn("copyBlockCrossNamespace from {} to {} to {} received exception,", sourceBlk,
+          targetBlk, targetDatanode, ioe);
+      incrDatanodeNetworkErrors();
+      throw ioe;
+    } finally {
+      IOUtils.closeStream(reply);
+    }
+
+    datanode.metrics.addCopyBlockCrossNamespaceOp(elapsed());
+  }
+
+  @Override
   public void copyBlock(final ExtendedBlock block,
       final Token<BlockTokenIdentifier> blockToken) throws IOException {
     updateCurrentThreadName("Copying block " + block);

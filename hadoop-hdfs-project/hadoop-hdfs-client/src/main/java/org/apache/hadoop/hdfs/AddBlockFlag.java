@@ -59,8 +59,13 @@ public enum AddBlockFlag {
    *
    * @see CreateFlag#NO_LOCAL_WRITE
    */
-  NO_LOCAL_RACK((short) 0x03);
+  NO_LOCAL_RACK((short) 0x03),
 
+  /**
+   * Advise that a block replica not sort when user specified favorednodes and
+   * used for fastcopy.
+   */
+  FAVOREDNODES_NO_SORT((short) 0x100);
   private final short mode;
 
   AddBlockFlag(short mode) {
