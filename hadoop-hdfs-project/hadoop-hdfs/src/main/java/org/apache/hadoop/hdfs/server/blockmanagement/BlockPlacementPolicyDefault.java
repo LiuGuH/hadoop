@@ -263,7 +263,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
           maxNodesPerRack, results, avoidStaleNodes, storageTypes);
 
       if (target == null) {
-        LOG.warn("Could not find a target for file " + src
+        LOG.debug("[Warning] Could not find a target for file " + src
             + " with favored node " + favoredNode);
         continue;
       }

@@ -4758,10 +4758,20 @@
 
 <property>
   <name>dfs.datanode.copy.block.cross.namespace.socket-timeout.ms</name>
-  <value>300000</value>
+  <value>360000</value>
   <description>
     Default timeout value in milliseconds for datanode copying block cross namespace.
   </description>
+</property>
+
+<property>
+  <name>dfs.datanode.copy.block.cross.namespace.executor.nthreads</name>
+  <value>200</value>
+</property>
+
+<property>
+  <name>dfs.datanode.copy.block.cross.namespace.executor.queue.size</name>
+  <value>2000</value>
 </property>
 
 <property>
@@ -6144,7 +6154,7 @@
 
   <property>
     <name>dfs.fast.copy.block.executor.poolsize</name>
-    <value>2</value>
+    <value>3</value>
     <description>
       The thread num of fastcopy block executor.
     </description>

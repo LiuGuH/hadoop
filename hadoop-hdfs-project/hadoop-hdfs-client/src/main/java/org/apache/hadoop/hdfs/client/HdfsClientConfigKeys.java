@@ -287,7 +287,7 @@ public interface HdfsClientConfigKeys {
   String DFS_FAST_COPY_BLOCK_WAIT_TIME_MS = "dfs.fast.copy.block.wait.time.ms";
   int DFS_FAST_COPY_BLOCK_WAIT_TIME_MS_DEFAULT = 5 * 60 * 1000;
   String DFS_FAST_COPY_BLOCK_EXECUTOR_POOLSIZE = "dfs.fast.copy.block.executor.poolsize";
-  int DFS_FAST_COPY_BLOCK_EXECUTOR_POOLSIZE_DEFAULT = 2;
+  int DFS_FAST_COPY_BLOCK_EXECUTOR_POOLSIZE_DEFAULT = 3;
 
   /**
    * These are deprecated config keys to client code.
