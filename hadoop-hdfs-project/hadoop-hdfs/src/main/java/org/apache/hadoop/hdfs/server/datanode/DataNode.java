@@ -20,6 +20,12 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_ADDRESS_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_ADDRESS_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD_DEFAULT_MS;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DATA_DIR_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DIRECTORYSCAN_INTERVAL_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DIRECTORYSCAN_INTERVAL_KEY;
@@ -64,6 +70,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.lang.management.ManagementFactory;
@@ -93,8 +100,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.annotation.Nullable;
@@ -221,6 +231,8 @@ import org.apache.hadoop.util.Timer;
 import org.apache.hadoop.util.VersionInfo;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
 import org.apache.hadoop.tracing.Tracer;
+import org.apache.hadoop.util.concurrent.HadoopThreadPoolExecutor;
+
 import org.eclipse.jetty.util.ajax.JSON;
 
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -334,6 +346,8 @@ public class DataNode extends ReconfigurableBase
   private String clusterId = null;
 
   final AtomicInteger xmitsInProgress = new AtomicInteger();
+  // fastCopyInProgress uses for fastCopy. And xmitsInProgress = fastCopyInProgress + (NNCommand for transfer).
+  final AtomicInteger fastCopyInProgress = new AtomicInteger();
   Daemon dataXceiverServer = null;
   DataXceiverServer xserver = null;
   Daemon localDataXceiverServer = null;
@@ -407,6 +421,7 @@ public class DataNode extends ReconfigurableBase
   private DataSetLockManager dataSetLockManager;
 
   private final ExecutorService xferService;
+  private final CopyBlockCrossNamespaceExecutorManager copyBlockCrossNamespaceExecutorManager;
 
   @Nullable
   private final StorageLocationChecker storageLocationChecker;
@@ -454,6 +469,9 @@ public class DataNode extends ReconfigurableBase
     volumeChecker = new DatasetVolumeChecker(conf, new Timer());
     this.xferService =
         HadoopExecutors.newCachedThreadPool(new Daemon.DaemonFactory());
+    this.copyBlockCrossNamespaceExecutorManager =
+        new CopyBlockCrossNamespaceExecutorManager();
+    this.copyBlockCrossNamespaceExecutorManager.start();
   }
 
   /**
@@ -495,6 +513,9 @@ public class DataNode extends ReconfigurableBase
     this.volumeChecker = new DatasetVolumeChecker(conf, new Timer());
     this.xferService =
         HadoopExecutors.newCachedThreadPool(new Daemon.DaemonFactory());
+    this.copyBlockCrossNamespaceExecutorManager =
+        new CopyBlockCrossNamespaceExecutorManager();
+    this.copyBlockCrossNamespaceExecutorManager.start();
 
     // Determine whether we should try to pass file descriptors to clients.
     if (conf.getBoolean(HdfsClientConfigKeys.Read.ShortCircuit.KEY,
@@ -2330,7 +2351,17 @@ public class DataNode extends ReconfigurableBase
   public int getXmitsInProgress() {
     return xmitsInProgress.get();
   }
-  
+
+  @Override //DataNodeMXBean
+  public int getFastCopyInProgress() {
+    return fastCopyInProgress.get();
+  }
+
+  @Override //DataNodeMXBean
+  public int getFastCopyExecutorQueueSize() {
+    return copyBlockCrossNamespaceExecutorManager.getQueueSize();
+  }
+
   /**
    * Increments the xmitsInProgress count. xmitsInProgress count represents the
    * number of data replication/reconstruction tasks running currently.
@@ -2365,6 +2396,14 @@ public class DataNode extends ReconfigurableBase
   public void decrementXmitsInProgress(int delta) {
     Preconditions.checkArgument(delta >= 0);
     xmitsInProgress.getAndAdd(0 - delta);
+  }
+
+  public void incrementFastCopyInProgress() {
+    fastCopyInProgress.getAndIncrement();
+  }
+
+  public void decrementFastCopyInProgress() {
+    fastCopyInProgress.getAndDecrement();
   }
 
   private void reportBadBlock(final BPOfferService bpos,
@@ -2615,6 +2654,10 @@ public class DataNode extends ReconfigurableBase
     @Override
     public void run() {
       incrementXmitsInProgress();
+      if (copyBlockCrossNamespace) {
+        incrementFastCopyInProgress();
+      }
+
       Socket sock = null;
       DataOutputStream out = null;
       DataInputStream in = null;
@@ -2711,6 +2754,9 @@ public class DataNode extends ReconfigurableBase
         }
       } finally {
         decrementXmitsInProgress();
+        if (copyBlockCrossNamespace) {
+          decrementFastCopyInProgress();
+        }
         IOUtils.closeStream(blockSender);
         IOUtils.closeStream(out);
         IOUtils.closeStream(in);
@@ -3934,16 +3980,38 @@ public class DataNode extends ReconfigurableBase
     LOG.debug(
         getDatanodeInfo() + " copyBlockCrossNamespace: Starting thread to transfer: " + "block:" + sourceBlk + " from "
             + this.getDatanodeUuid() + " to " + targetDn.getDatanodeUuid() + "(" + targetDn + ")");
-    Future<?> result;
+
     if (this.getDatanodeUuid().equals(targetDn.getDatanodeUuid())) {
-      result = xferService.submit(new LocalBlockCopy(sourceBlk, targetBlk));
-    } else {
-      result = xferService.submit(new DataCopy(targetDn, sourceBlk, targetBlk, targetBlockToken).getDataTransfer());
+      new LocalBlockCopy(sourceBlk, targetBlk).hardLink();
+      return;
     }
+
+    Future<?> result;
+    try {
+      result = copyBlockCrossNamespaceExecutorManager.submitTask(
+          new DataCopy(targetDn, sourceBlk, targetBlk, targetBlockToken).getDataTransfer());
+    } catch (RejectedExecutionException e) {
+      metrics.incrFastCopyExecutorQueueFull();
+      throw new IOException("CopyBlockCrossNamespaceExecutor is full.");
+    }
+
     try {
       result.get(getDnConf().getCopyBlockCrossNamespaceSocketTimeout(), TimeUnit.MILLISECONDS);
-    } catch (Exception e) {
-      LOG.error(e.getMessage());
+    } catch (InterruptedException e) {
+      LOG.warn("copyBlockCrossNamespace: copy {} to {} interrupted.", sourceBlk, targetBlk, e);
+      throw new IOException(e);
+    } catch (ExecutionException e) {
+      Throwable cause = e.getCause();
+      LOG.warn("copyBlockCrossNamespace: copy {} to {} execution failed.", sourceBlk, targetBlk, cause);
+      if (cause instanceof IOException) {
+        throw (IOException) (cause);
+      } else {
+        throw new IOException(cause);
+      }
+    } catch (TimeoutException e) {
+      LOG.warn("copyBlockCrossNamespace: copy {} to {} execution timeout.", sourceBlk, targetBlk, e);
+      result.cancel(true);
+      metrics.incrFastCopyBlocksReplicatedTimeout();
       throw new IOException(e);
     }
   }
@@ -3976,7 +4044,7 @@ public class DataNode extends ReconfigurableBase
     }
   }
 
-  class LocalBlockCopy implements Callable<Boolean> {
+  class LocalBlockCopy {
     private ExtendedBlock sourceBlk = null;
     private ExtendedBlock targetBlk = null;
 
@@ -3985,7 +4053,7 @@ public class DataNode extends ReconfigurableBase
       this.targetBlk = targetBlk;
     }
 
-    public Boolean call() throws IOException {
+    public Boolean hardLink() throws IOException {
       try {
         targetBlk.setNumBytes(sourceBlk.getNumBytes());
         data.hardLinkOneBlock(sourceBlk, targetBlk);
@@ -4007,6 +4075,87 @@ public class DataNode extends ReconfigurableBase
         throw e;
       }
       return true;
+    }
+  }
+
+  private class CopyBlockCrossNamespaceExecutorManager extends Thread {
+    private HadoopThreadPoolExecutor copyBlockCrossNamespaceExecutor;
+    int nThreads;
+    int queueSize;
+
+    public CopyBlockCrossNamespaceExecutorManager() {
+      this.nThreads = BzlDynamicConfiguration.getInstance()
+          .getInt(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS,
+              DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_DEFAULT);
+      this.queueSize = BzlDynamicConfiguration.getInstance()
+          .getInt(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE,
+              DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE_DEFAULT);
+      this.copyBlockCrossNamespaceExecutor =
+          new HadoopThreadPoolExecutor(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS,
+              new LinkedBlockingQueue<Runnable>(queueSize), new Daemon.DaemonFactory());
+    }
+
+    public synchronized int getQueueSize() {
+      return copyBlockCrossNamespaceExecutor.getQueue().size();
+    }
+
+    public synchronized Future<?> submitTask(Runnable runnable) {
+      return copyBlockCrossNamespaceExecutor.submit(runnable);
+    }
+
+    @Override
+    public void run() {
+      LOG.info("RefreshCopyBlockCrossNamespaceExecutorThread start.");
+      while (true) {
+        int newNThreads = BzlDynamicConfiguration.getInstance()
+            .getInt(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS,
+                DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_DEFAULT);
+        int newQueueSize = BzlDynamicConfiguration.getInstance()
+            .getInt(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE,
+                DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE_DEFAULT);
+
+        try {
+          if (nThreads != newNThreads || queueSize != newQueueSize) {
+            synchronized (this) {
+              ExecutorService oldCopyBlockCrossNamespaceExecutor = copyBlockCrossNamespaceExecutor;
+              copyBlockCrossNamespaceExecutor =
+                  new HadoopThreadPoolExecutor(newNThreads, newNThreads, 0L, TimeUnit.MILLISECONDS,
+                      new LinkedBlockingQueue<Runnable>(newQueueSize), new Daemon.DaemonFactory());
+              nThreads = newNThreads;
+              queueSize = newQueueSize;
+
+              new Daemon(new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    oldCopyBlockCrossNamespaceExecutor.shutdown();
+                    oldCopyBlockCrossNamespaceExecutor.awaitTermination(
+                        getDnConf().getCopyBlockCrossNamespaceSocketTimeout(),
+                        TimeUnit.MILLISECONDS);
+                  } catch (InterruptedException e) {
+                    oldCopyBlockCrossNamespaceExecutor.shutdownNow();
+                    throw new RuntimeException(e);
+                  }
+                }
+              }).start();
+            }
+          }
+        } catch (Exception e) {
+          LOG.warn(
+              "RefreshCopyBlockCrossNamespaceExecutorThread catch exception. The detail is {}.",
+              e.getMessage());
+        }
+
+        try {
+          Thread.sleep(BzlDynamicConfiguration.getInstance()
+              .getLong(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD,
+                  DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD_DEFAULT_MS));
+        } catch (InterruptedException e) {
+          LOG.warn("RefreshCopyBlockCrossNamespaceExecutorThread interruptedException. The detail is {}.",
+              e.getMessage());
+          Thread.currentThread().interrupt();
+        }
+      }
     }
   }
 }

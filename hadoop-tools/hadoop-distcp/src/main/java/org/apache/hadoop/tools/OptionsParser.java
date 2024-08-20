@@ -31,6 +31,8 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
@@ -73,6 +75,10 @@ public class OptionsParser {
         "Must provide both the starting and ending snapshot names");
   }
 
+  public static DistCpOptions parse(String[] args) {
+    return parse(args, new Configuration());
+  }
+
   /**
    * The parse method parses the command-line options, and creates
    * a corresponding Options object.
@@ -81,7 +87,7 @@ public class OptionsParser {
    * @return The Options object, corresponding to the specified command-line.
    * @throws IllegalArgumentException Thrown if the parse fails.
    */
-  public static DistCpOptions parse(String[] args)
+  public static DistCpOptions parse(String[] args, Configuration conf)
       throws IllegalArgumentException {
 
     CommandLineParser parser = new CustomParser();
@@ -121,6 +127,10 @@ public class OptionsParser {
         .withUseFastCopy(
             command.hasOption(DistCpOptionSwitch.USE_FASTCOPY.getSwitch()));
 
+    if (!command.hasOption(DistCpOptionSwitch.USE_FASTCOPY.getSwitch()) && conf.getBoolean(
+        DistCpConstants.CONF_LABEL_USE_FAST_COPY, false)) {
+      builder.withUseFastCopy(true);
+    }
     if (command.hasOption(DistCpOptionSwitch.DIFF.getSwitch())) {
       String[] snapshots = getVals(command,
           DistCpOptionSwitch.DIFF.getSwitch());

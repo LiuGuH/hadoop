@@ -132,9 +132,23 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final long DFS_DATANODE_EC_RECONSTRUCT_WRITE_BANDWIDTHPERSEC_DEFAULT =
       0; // A value of zero indicates no limit
   public static final String DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_SOCKET_TIMEOUT_MS_KEY =
-      "dfs.datanode.copy.block.cross.namespace.socket-timeout";
+      "dfs.datanode.copy.block.cross.namespace.socket-timeout.ms";
   public static final int DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_SOCKET_TIMEOUT_MS_DEFAULT =
-      10 * 60 * 1000;
+      30 * 60 * 1000;
+  public static final String DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS =
+      "dfs.datanode.copy.block.cross.namespace.executor.nthreads";
+  public static final int DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_DEFAULT =
+      200;
+  public static final String DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE =
+      "dfs.datanode.copy.block.cross.namespace.executor.queue.size";
+  public static final int DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_QUEUE_SIZE_DEFAULT =
+      2000;
+  public static final String
+      DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD =
+      "dfs.datanode.copy.block.cross.namespace.executor.nthreads.refresh.period";
+  public static final int
+      DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_EXECUTOR_NTHREADS_FRESH_PERIOD_DEFAULT_MS =
+      60 * 1000;
 
   @Deprecated
   public static final String  DFS_DATANODE_READAHEAD_BYTES_KEY =

@@ -138,7 +138,7 @@ public class DistCp extends Configured implements Tool {
     }
     
     try {
-      context = new DistCpContext(OptionsParser.parse(argv));
+      context = new DistCpContext(OptionsParser.parse(argv, getConf()));
       checkSplitLargeFile();
       setTargetPathExists();
       LOG.info("Input Options: " + context);

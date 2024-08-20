@@ -119,6 +119,10 @@ public interface DataNodeMXBean {
    */
   public int getXmitsInProgress();
 
+  public int getFastCopyInProgress();
+
+  public int getFastCopyExecutorQueueSize();
+
   /**
    * Gets the network error counts on a per-Datanode basis.
    */

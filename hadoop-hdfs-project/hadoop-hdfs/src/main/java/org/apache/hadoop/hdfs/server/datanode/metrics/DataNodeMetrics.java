@@ -68,6 +68,8 @@ public class DataNodeMetrics {
   @Metric MutableCounterLong fastCopyBlocksReplicatedViaHardlinkFailures;
   @Metric MutableCounterLong fastCopyBlocksReplicatedViaTransferSuccesses;
   @Metric MutableCounterLong fastCopyBlocksReplicatedViaTransferFailures;
+  @Metric MutableCounterLong fastCopyBlocksReplicatedTimeout;
+  @Metric MutableCounterLong fastCopyExecutorQueueFull;
   @Metric MutableCounterLong blocksRemoved;
   @Metric MutableCounterLong blocksVerified;
   @Metric MutableCounterLong blockVerificationFailures;
@@ -371,6 +373,14 @@ public class DataNodeMetrics {
 
   public void incrFastCopyBlocksReplicatedViaTransferFailures() {
     fastCopyBlocksReplicatedViaTransferFailures.incr();
+  }
+
+  public void incrFastCopyBlocksReplicatedTimeout() {
+    fastCopyBlocksReplicatedTimeout.incr();
+  }
+
+  public void incrFastCopyExecutorQueueFull() {
+    fastCopyExecutorQueueFull.incr();
   }
 
   public void incrBlocksWritten() {

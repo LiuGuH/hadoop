@@ -19,14 +19,17 @@ package org.apache.hadoop.hdfs;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.InterruptedIOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -361,10 +364,22 @@ public class FastCopy {
     ExtendedBlock srcBlock = src.getBlock();
     ExtendedBlock dstBlock = dst.getBlock();
     initializeBlockStatus(dstBlock, blocksToCopy, false);
+    ArrayList<Future<?>> futureList =  new ArrayList<>();
     for (int i = 0; i < blocksToCopy; i++) {
-      copyBlockExecutor.submit(
+      Future<?> future = copyBlockExecutor.submit(
           new CopyBlockCrossNamespace(srcBlock, dstBlock, srcLocations[i], dstLocations[i],
               src.getBlockToken(), dst.getBlockToken(), false, out));
+      futureList.add(future);
+    }
+
+    for (Future<?> future : futureList) {
+      try {
+        future.get(BLK_WAIT_TIME, TimeUnit.MILLISECONDS);
+      } catch (InterruptedException | TimeoutException e) {
+        LOG.warn("Copy {} to {} failed.", srcBlock, dstBlock, e);
+      } catch (ExecutionException e) {
+        LOG.warn("Copy {} to {} failed.", srcBlock, dstBlock, e.getCause());
+      }
     }
   }
 
@@ -390,41 +405,44 @@ public class FastCopy {
 
     initializeBlockStatus(destinationLocatedBlock.getBlock(), notEmptyBlocks, true);
 
+    ArrayList<Future<?>> futureList =  new ArrayList<>();
     for (int i = 0; i < srcBlocks.length; i++) {
       if (srcBlocks[i] != null) {
-        copyBlockExecutor.submit(
+        Future<?> future = copyBlockExecutor.submit(
             new CopyBlockCrossNamespace(srcBlocks[i].getBlock(), dstBlocks[i].getBlock(),
                 srcBlocks[i].getLocations()[0], dstBlocks[i].getLocations()[0],
                 srcBlocks[i].getBlockToken(), dstBlocks[i].getBlockToken(), true, out));
+        futureList.add(future);
+      }
+    }
+
+    for (Future<?> future : futureList) {
+      try {
+        future.get(BLK_WAIT_TIME, TimeUnit.MILLISECONDS);
+      } catch (InterruptedException | TimeoutException e) {
+        LOG.warn("Copy {} to {} failed.", srcLocatedBlock, destinationLocatedBlock, e);
+      } catch (ExecutionException e) {
+        LOG.warn("Copy {} to {} failed.", srcLocatedBlock, destinationLocatedBlock, e.getCause());
       }
     }
   }
 
   /**
-   * Waits for the blocks of the file to be completed to a particular
+   * Check the blocks of the file to be completed to a particular
    * threshold.
    *
    * @param blocksAdded the number of blocks already added to the nameNode.
    * @throws IOException throw IOException if timeout or copyBlockException has exception.
    */
-  private void waitForBlockCopy(int blocksAdded) throws IOException {
-    long startTime = Time.monotonicNow();
-
-    while (true) {
-      // If the dataNodes are not lagging or this is the first block that will
-      // be added to the nameNode, no need to wait longer.
-      int blocksDone = fileStatus.getBlocksDone();
-      if (blocksAdded == blocksDone || blocksAdded == 0) {
-        break;
-      }
-      if (copyBlockException != null) {
-        throw copyBlockException;
-      }
-      if (Time.monotonicNow() - startTime > BLK_WAIT_TIME) {
-        throw new IOException("Timeout waiting for block to be copied.");
-      }
-      sleepFor(100);
+  private void checkBlockCopyDone(int blocksAdded) throws IOException {
+    int blocksDone = fileStatus.getBlocksDone();
+    if (blocksAdded == blocksDone || blocksAdded == 0) {
+      return;
     }
+    if (copyBlockException != null) {
+      throw copyBlockException;
+    }
+    throw new IOException(fileStatus.getFileName() + " copy block failed.");
   }
 
   /**
@@ -442,12 +460,7 @@ public class FastCopy {
    * Shuts down the block rpc executor.
    */
   private void terminateExecutor() throws IOException {
-    copyBlockExecutor.shutdown();
-    try {
-      copyBlockExecutor.awaitTermination(FILE_WAIT_TIME, TimeUnit.MILLISECONDS);
-    } catch (InterruptedException e) {
-      throw new InterruptedIOException(e.getMessage());
-    }
+    copyBlockExecutor.shutdownNow();
   }
 
   /**
@@ -500,8 +513,8 @@ public class FastCopy {
             copyECGroupBlocks(erasureCodingPolicy, previous, srcLocatedBlock, out);
 
         blocksAdded++;
-        // Wait for the block copies to reach a threshold.
-        waitForBlockCopy(blocksAdded);
+        // Check block copies to reach a threshold.
+        checkBlockCopyDone(blocksAdded);
 
         previous = dstLocatedBlock.getBlock();
         previous.setNumBytes(srcLocatedBlock.getBlockSize());

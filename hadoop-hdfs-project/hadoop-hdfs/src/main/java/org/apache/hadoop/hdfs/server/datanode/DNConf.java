@@ -399,9 +399,9 @@ public class DNConf {
    *
    * @return int socket timeout
    */
-  public int getCopyBlockCrossNamespaceSocketTimeout() {
+  public long getCopyBlockCrossNamespaceSocketTimeout() {
     return BzlDynamicConfiguration.getInstance()
-        .getInt(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_SOCKET_TIMEOUT_MS_KEY,
+        .getLong(DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_SOCKET_TIMEOUT_MS_KEY,
             DFS_DATANODE_COPY_BLOCK_CROSS_NAMESPACE_SOCKET_TIMEOUT_MS_DEFAULT);
   }
 

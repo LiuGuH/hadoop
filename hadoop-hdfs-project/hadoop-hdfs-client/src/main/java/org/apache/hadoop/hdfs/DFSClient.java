@@ -1974,20 +1974,23 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
       Token<BlockTokenIdentifier> targetBlockToken, DatanodeInfo targetDatanode)
       throws IOException {
 
-    IOStreamPair pair =  DFSUtilClient.connectToDN(sourceDatanode, getConf().getSocketTimeout(), conf, saslClient,
-        socketFactory, getConf().isConnectToDnViaHostname(), this, sourceBlockToken);
+    IOStreamPair pair =
+        DFSUtilClient.connectToDN(sourceDatanode, getConf().getSocketTimeout(), conf, saslClient,
+            socketFactory, getConf().isConnectToDnViaHostname(), this, sourceBlockToken);
+    try {
+      new Sender((DataOutputStream) pair.out).copyBlockCrossNamespace(sourceBlk, sourceBlockToken,
+          targetBlk, targetBlockToken, targetDatanode);
 
-    new Sender((DataOutputStream) pair.out).copyBlockCrossNamespace(sourceBlk, sourceBlockToken,
-        targetBlk, targetBlockToken, targetDatanode);
+      pair.out.flush();
 
-    pair.out.flush();
-
-    DataInputStream reply = new DataInputStream(pair.in);
-    BlockOpResponseProto proto =
-        BlockOpResponseProto.parseFrom(PBHelperClient.vintPrefixed(reply));
-    DataTransferProtoUtil.checkBlockOpStatus(proto,
-        "copyBlockCrossNamespace " + sourceBlk + " to " + targetBlk + " from " + sourceDatanode + " to "
-            + targetDatanode);
+      BlockOpResponseProto proto =
+          BlockOpResponseProto.parseFrom(PBHelperClient.vintPrefixed(pair.in));
+      DataTransferProtoUtil.checkBlockOpStatus(proto,
+          "copyBlockCrossNamespace " + sourceBlk + " to " + targetBlk + " from " + sourceDatanode
+              + " to " + targetDatanode);
+    } finally {
+      IOUtilsClient.cleanupWithLogger(LOG, pair.in, pair.out);
+    }
   }
 
   /**
