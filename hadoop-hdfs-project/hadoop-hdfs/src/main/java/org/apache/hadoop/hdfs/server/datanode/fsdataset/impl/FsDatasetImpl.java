@@ -1518,6 +1518,7 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
       try (AutoCloseableLock l = lockManager.writeLock(LockLevel.DIR,
           b.getBlockPoolId(), v.getStorageID(),
           DatanodeUtil.idToBlockDirSuffixName(b.getBlockId()))) {
+        startHoldLockTimeMs = Time.monotonicNow();
         newReplicaInfo = v.createRbw(b);
         if (newReplicaInfo.getReplicaInfo().getState() != ReplicaState.RBW) {
           throw new IOException("CreateRBW returned a replica of state "
