@@ -75,6 +75,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor.CachedBl
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor.CachedBlocksList.Type;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory.DirOp;
 import org.apache.hadoop.hdfs.server.namenode.FsImageProto.CacheManagerSection;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.metrics.NameNodeMetrics;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.server.namenode.startupprogress.Phase;
@@ -102,6 +103,11 @@ import org.apache.hadoop.thirdparty.com.google.common.collect.Multimap;
  * It maintains the mapping of cached blocks to datanodes via processing
  * datanode cache reports. Based on these reports and addition and removal of
  * caching directives, we will schedule caching and uncaching work.
+ * 
+ * Notice: We don't use CacheManager feature in our BZL production envirnment.
+ * So, we delete some codes in removeStoredBlocks and processCachedBlocks method
+ * and so on.
+ * 
  */
 @InterfaceAudience.LimitedPrivate({"HDFS"})
 public class CacheManager {
@@ -288,7 +294,7 @@ public class CacheManager {
   }
 
   public void clearDirectiveStats() {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     for (CacheDirective directive : directivesById.values()) {
       directive.resetStatistics();
     }
@@ -298,7 +304,7 @@ public class CacheManager {
    * @return Unmodifiable view of the collection of CachePools.
    */
   public Collection<CachePool> getCachePools() {
-    assert namesystem.hasReadLock();
+    assert namesystem.hasReadLock(FSNamesystemLockMode.GLOBAL);
     return Collections.unmodifiableCollection(cachePools.values());
   }
 
@@ -306,18 +312,19 @@ public class CacheManager {
    * @return Unmodifiable view of the collection of CacheDirectives.
    */
   public Collection<CacheDirective> getCacheDirectives() {
-    assert namesystem.hasReadLock();
+    assert namesystem.hasReadLock(FSNamesystemLockMode.GLOBAL);
     return Collections.unmodifiableCollection(directivesById.values());
   }
   
   @VisibleForTesting
   public GSet<CachedBlock, CachedBlock> getCachedBlocks() {
-    assert namesystem.hasReadLock();
+    // FBR -> removeStoredBlock -> getCachedBlocks. Only needs BM lock.
+    assert namesystem.hasReadLock(FSNamesystemLockMode.GLOBAL);
     return cachedBlocks;
   }
 
   private long getNextDirectiveId() throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     if (nextDirectiveId >= Long.MAX_VALUE - 1) {
       throw new IOException("No more available IDs.");
     }
@@ -545,7 +552,7 @@ public class CacheManager {
   public CacheDirectiveInfo addDirective(
       CacheDirectiveInfo info, FSPermissionChecker pc, EnumSet<CacheFlag> flags)
       throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     CacheDirective directive;
     try {
       CachePool pool = getCachePool(validatePoolName(info));
@@ -623,7 +630,7 @@ public class CacheManager {
 
   public void modifyDirective(CacheDirectiveInfo info,
       FSPermissionChecker pc, EnumSet<CacheFlag> flags) throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     String idString =
         (info.getId() == null) ?
             "(null)" : info.getId().toString();
@@ -674,7 +681,7 @@ public class CacheManager {
 
   private void removeInternal(CacheDirective directive)
       throws InvalidRequestException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     // Remove the corresponding entry in directivesByPath.
     String path = directive.getPath();
     if (!directivesByPath.remove(path, directive)) {
@@ -695,7 +702,7 @@ public class CacheManager {
 
   public void removeDirective(long id, FSPermissionChecker pc)
       throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     try {
       CacheDirective directive = getById(id);
       checkWritePermission(pc, directive.getPool());
@@ -711,7 +718,7 @@ public class CacheManager {
         listCacheDirectives(long prevId,
             CacheDirectiveInfo filter,
             FSPermissionChecker pc) throws IOException {
-    assert namesystem.hasReadLock();
+    assert namesystem.hasReadLock(FSNamesystemLockMode.GLOBAL);
     final int NUM_PRE_ALLOCATED_ENTRIES = 16;
     String filterPath = null;
     if (filter.getPath() != null) {
@@ -786,7 +793,7 @@ public class CacheManager {
    */
   public CachePoolInfo addCachePool(CachePoolInfo info)
       throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     CachePool pool;
     try {
       CachePoolInfo.validate(info);
@@ -816,7 +823,7 @@ public class CacheManager {
    */
   public void modifyCachePool(CachePoolInfo info)
       throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     StringBuilder bld = new StringBuilder();
     try {
       CachePoolInfo.validate(info);
@@ -886,7 +893,7 @@ public class CacheManager {
    */
   public void removeCachePool(String poolName)
       throws IOException {
-    assert namesystem.hasWriteLock();
+    assert namesystem.hasWriteLock(FSNamesystemLockMode.GLOBAL);
     try {
       CachePoolInfo.validateName(poolName);
       CachePool pool = cachePools.remove(poolName);
@@ -912,7 +919,7 @@ public class CacheManager {
 
   public BatchedListEntries<CachePoolEntry>
       listCachePools(FSPermissionChecker pc, String prevKey) {
-    assert namesystem.hasReadLock();
+    assert namesystem.hasReadLock(FSNamesystemLockMode.GLOBAL);
     final int NUM_PRE_ALLOCATED_ENTRIES = 16;
     ArrayList<CachePoolEntry> results = 
         new ArrayList<CachePoolEntry>(NUM_PRE_ALLOCATED_ENTRIES);
@@ -980,7 +987,7 @@ public class CacheManager {
               DFS_NAMENODE_CACHING_ENABLED_KEY, blockIds.size());
       return;
     }
-    namesystem.writeLock();
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
     final long startTime = Time.monotonicNow();
     final long endTime;
     try {
@@ -994,7 +1001,7 @@ public class CacheManager {
       processCacheReportImpl(datanode, blockIds);
     } finally {
       endTime = Time.monotonicNow();
-      namesystem.writeUnlock("processCacheReport");
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "processCacheReport");
     }
 
     // Log the block report processing stats from Namenode perspective

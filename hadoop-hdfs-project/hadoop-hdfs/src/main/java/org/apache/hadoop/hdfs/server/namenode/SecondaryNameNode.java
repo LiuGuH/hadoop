@@ -38,6 +38,7 @@ import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.cli.PosixParser;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -1094,11 +1095,11 @@ public class SecondaryNameNode implements Runnable,
             sig.mostRecentCheckpointTxId + " even though it should have " +
             "just been downloaded");
       }
-      dstNamesystem.writeLock();
+      dstNamesystem.writeLock(FSNamesystemLockMode.GLOBAL);
       try {
         dstImage.reloadFromImageFile(file, dstNamesystem);
       } finally {
-        dstNamesystem.writeUnlock();
+        dstNamesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "reloadFromImageFile");
       }
       dstNamesystem.imageLoadComplete();
     }

@@ -29,8 +29,8 @@ import org.apache.hadoop.fs.XAttr;
 import org.apache.hadoop.fs.XAttrSetFlag;
 import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.hdfs.XAttrHelper;
-import org.apache.hadoop.hdfs.server.blockmanagement.BlockManager;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory.DirOp;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.sps.StoragePolicySatisfyManager;
 
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
@@ -62,15 +62,14 @@ final class FSDirSatisfyStoragePolicyOp {
    * @return file status info
    * @throws IOException
    */
-  static FileStatus satisfyStoragePolicy(FSDirectory fsd, BlockManager bm,
+  static FileStatus satisfyStoragePolicy(FSDirectory fsd,
       String src, boolean logRetryCache) throws IOException {
 
-    assert fsd.getFSNamesystem().hasWriteLock();
+    assert fsd.getFSNamesystem().hasWriteLock(FSNamesystemLockMode.FS);
     FSPermissionChecker pc = fsd.getPermissionChecker();
     INodesInPath iip;
     fsd.writeLock();
     try {
-
       // check operation permission.
       iip = fsd.resolvePath(pc, src, DirOp.WRITE);
       if (fsd.isPermissionEnabled()) {

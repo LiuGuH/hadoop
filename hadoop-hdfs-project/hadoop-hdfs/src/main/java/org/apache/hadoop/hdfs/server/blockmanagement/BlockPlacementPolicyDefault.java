@@ -158,15 +158,14 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
   }
 
   @Override
-  public DatanodeStorageInfo[] chooseTarget(String srcPath,
-                                    int numOfReplicas,
-                                    Node writer,
-                                    List<DatanodeStorageInfo> chosenNodes,
-                                    boolean returnChosenNodes,
-                                    Set<Node> excludedNodes,
-                                    long blocksize,
-                                    final BlockStoragePolicy storagePolicy,
-                                    EnumSet<AddBlockFlag> flags) {
+  public DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
+      Node writer,
+      List<DatanodeStorageInfo> chosenNodes,
+      boolean returnChosenNodes,
+      Set<Node> excludedNodes,
+      long blocksize,
+      final BlockStoragePolicy storagePolicy,
+      EnumSet<AddBlockFlag> flags) {
     return chooseTarget(numOfReplicas, writer, chosenNodes, returnChosenNodes,
         excludedNodes, blocksize, storagePolicy, flags, null);
   }
@@ -192,7 +191,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
     try {
       if (favoredNodes == null || favoredNodes.size() == 0) {
         // Favored nodes not specified, fall back to regular block placement.
-        return chooseTarget(src, numOfReplicas, writer,
+        return chooseTarget(numOfReplicas, writer,
             new ArrayList<DatanodeStorageInfo>(numOfReplicas), false, 
             excludedNodes, blocksize, storagePolicy, flags);
       }
@@ -241,7 +240,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
       LOG.debug("Failed to choose with favored nodes (={}), disregard favored"
           + " nodes hint and retry.", favoredNodes, nr);
       // Fall back to regular block placement disregarding favored nodes hint
-      return chooseTarget(src, numOfReplicas, writer, 
+      return chooseTarget(numOfReplicas, writer, 
           new ArrayList<DatanodeStorageInfo>(numOfReplicas), false, 
           excludedNodes, blocksize, storagePolicy, flags);
     }

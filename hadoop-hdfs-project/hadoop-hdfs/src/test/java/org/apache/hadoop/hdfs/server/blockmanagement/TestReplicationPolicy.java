@@ -66,6 +66,7 @@ import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.INodeFile;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
 import org.apache.hadoop.hdfs.server.namenode.TestINodeFile;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.net.Node;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -296,7 +297,7 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
     chosenNodes.clear();
     excludedNodes.add(dataNodes[1]); 
     chosenNodes.add(storages[2]);
-    targets = replicator.chooseTarget(filename, 1, dataNodes[0], chosenNodes, true,
+    targets = replicator.chooseTarget(1, dataNodes[0], chosenNodes, true,
         excludedNodes, BLOCK_SIZE, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY,
         null);
     System.out.println("targets=" + Arrays.asList(targets));
@@ -673,7 +674,7 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
           .getDatanode(miniCluster.getDataNodes().get(0).getDatanodeId());
       BlockPlacementPolicy replicator = miniCluster.getNameNode()
           .getNamesystem().getBlockManager().getBlockPlacementPolicy();
-      DatanodeStorageInfo[] targets = replicator.chooseTarget(filename, 3,
+      DatanodeStorageInfo[] targets = replicator.chooseTarget(3,
           staleNodeInfo, new ArrayList<DatanodeStorageInfo>(), false, null,
           BLOCK_SIZE, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY,
           null);
@@ -700,7 +701,7 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
       assertFalse(miniCluster.getNameNode().getNamesystem().getBlockManager()
           .getDatanodeManager().shouldAvoidStaleDataNodesForWrite());
       // Call chooseTarget
-      targets = replicator.chooseTarget(filename, 3, staleNodeInfo,
+      targets = replicator.chooseTarget(3, staleNodeInfo,
           new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
           TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
       assertEquals(targets.length, 3);
@@ -1404,8 +1405,14 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
   public void testAddStoredBlockDoesNotCauseSkippedReplication()
       throws IOException {
     FSNamesystem mockNS = mock(FSNamesystem.class);
-    when(mockNS.hasWriteLock()).thenReturn(true);
-    when(mockNS.hasReadLock()).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
+    when(mockNS.hasReadLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
+    when(mockNS.hasReadLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.BM)).thenReturn(true);
+    when(mockNS.hasReadLock(FSNamesystemLockMode.BM)).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.FS)).thenReturn(true);
+    when(mockNS.hasReadLock(FSNamesystemLockMode.FS)).thenReturn(true);
     BlockManager bm = new BlockManager(mockNS, false, new HdfsConfiguration());
     LowRedundancyBlocks lowRedundancyBlocks = bm.neededReconstruction;
 
@@ -1454,7 +1461,8 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
       testConvertLastBlockToUnderConstructionDoesNotCauseSkippedReplication()
           throws IOException {
     Namesystem mockNS = mock(Namesystem.class);
-    when(mockNS.hasWriteLock()).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
+    when(mockNS.hasWriteLock(FSNamesystemLockMode.BM)).thenReturn(true);
 
     BlockManager bm = new BlockManager(mockNS, false, new HdfsConfiguration());
     LowRedundancyBlocks lowRedundancyBlocks = bm.neededReconstruction;
@@ -1526,7 +1534,7 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
   public void testupdateNeededReplicationsDoesNotCauseSkippedReplication()
       throws IOException {
     Namesystem mockNS = mock(Namesystem.class);
-    when(mockNS.hasReadLock()).thenReturn(true);
+    when(mockNS.hasReadLock(FSNamesystemLockMode.GLOBAL)).thenReturn(true);
 
     BlockManager bm = new BlockManager(mockNS, false, new HdfsConfiguration());
     LowRedundancyBlocks lowRedundancyBlocks = bm.neededReconstruction;
@@ -1714,7 +1722,7 @@ public class TestReplicationPolicy extends BaseReplicationPolicyTest {
     final Logger logger = Logger.getRootLogger();
     logger.addAppender(appender);
 
-    DatanodeStorageInfo[] targets = replicator.chooseTarget(filename, 1,
+    DatanodeStorageInfo[] targets = replicator.chooseTarget(1,
         dataNodes[0], new ArrayList<DatanodeStorageInfo>(), false, null,
         BLOCK_SIZE, TestBlockStoragePolicy.POLICY_SUITE.getPolicy(
             HdfsConstants.COLD_STORAGE_POLICY_ID), null);

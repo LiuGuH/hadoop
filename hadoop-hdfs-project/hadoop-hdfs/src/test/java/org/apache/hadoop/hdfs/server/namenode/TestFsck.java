@@ -109,6 +109,7 @@ import org.apache.hadoop.hdfs.server.namenode.NamenodeFsck.Result;
 import org.apache.hadoop.hdfs.server.namenode.NamenodeFsck.ReplicationResult;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory.DirOp;
 import org.apache.hadoop.hdfs.server.namenode.NamenodeFsck.ErasureCodingResult;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.ha.HATestUtil;
 import org.apache.hadoop.hdfs.server.protocol.NamenodeProtocols;
 import org.apache.hadoop.hdfs.tools.DFSck;
@@ -1551,11 +1552,11 @@ public class TestFsck {
     ExtendedBlock eb = util.getFirstBlock(dfs, path);
     BlockCollection bc = null;
     try {
-      fsn.writeLock();
+      fsn.writeLock(FSNamesystemLockMode.GLOBAL);
       BlockInfo bi = bm.getStoredBlock(eb.getLocalBlock());
       bc = fsn.getBlockCollection(bi);
     } finally {
-      fsn.writeUnlock();
+      fsn.writeUnlock(FSNamesystemLockMode.GLOBAL, "testBlockIdCKDecommission");
     }
     DatanodeDescriptor dn = bc.getBlocks()[0].getDatanode(0);
     bm.getDatanodeManager().getDatanodeAdminManager().startDecommission(dn);
@@ -1867,11 +1868,11 @@ public class TestFsck {
     ExtendedBlock eb = util.getFirstBlock(dfs, path);
     BlockCollection bc = null;
     try {
-      fsn.writeLock();
+      fsn.writeLock(FSNamesystemLockMode.GLOBAL);
       BlockInfo bi = bm.getStoredBlock(eb.getLocalBlock());
       bc = fsn.getBlockCollection(bi);
     } finally {
-      fsn.writeUnlock();
+      fsn.writeUnlock(FSNamesystemLockMode.GLOBAL, "testFsckWithDecommissionedReplicas");
     }
     DatanodeDescriptor dn = bc.getBlocks()[0]
         .getDatanode(0);

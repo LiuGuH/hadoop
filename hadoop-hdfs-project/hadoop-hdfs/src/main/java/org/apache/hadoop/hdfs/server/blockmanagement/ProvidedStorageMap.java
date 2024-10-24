@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -146,7 +147,7 @@ public class ProvidedStorageMap {
 
   private void processProvidedStorageReport()
       throws IOException {
-    assert lock.hasWriteLock() : "Not holding write lock";
+    assert lock.hasWriteLock(FSNamesystemLockMode.GLOBAL) : "Not holding write lock";
     if (providedStorageInfo.getBlockReportCount() == 0
         || providedDescriptor.activeProvidedDatanodes() == 0) {
       LOG.info("Calling process first blk report from storage: "
@@ -175,7 +176,7 @@ public class ProvidedStorageMap {
 
   public void removeDatanode(DatanodeDescriptor dnToRemove) {
     if (providedEnabled) {
-      assert lock.hasWriteLock() : "Not holding write lock";
+      assert lock.hasWriteLock(FSNamesystemLockMode.BM) : "Not holding write lock";
       providedDescriptor.remove(dnToRemove);
       // if all datanodes fail, set the block report count to 0
       if (providedDescriptor.activeProvidedDatanodes() == 0) {
@@ -204,7 +205,7 @@ public class ProvidedStorageMap {
     node.updateStorage(storage);
   }
 
-  private boolean isProvidedStorage(String dnStorageId) {
+  public boolean isProvidedStorage(String dnStorageId) {
     return providedEnabled && storageId.equals(dnStorageId);
   }
 

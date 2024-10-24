@@ -62,6 +62,10 @@ import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
  * Some members are currently public for the benefit of the Offline Image Viewer
  * which is located outside of this package. These members should be made
  * package-protected when the OIV is refactored.
+ *
+ * Notice: this class can not be used by NameNode, since it does not initialize
+ * the storage policy id of INodeFile object when loading FSImage. This will conflict with
+ * the lock-separation of FS layer and BM layer.
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving

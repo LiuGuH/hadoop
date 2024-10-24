@@ -443,9 +443,9 @@ public class FSDirAttrOp {
               + " cannot be set after file creation.");
         }
       }
-
+      byte oldPolicyID = inode.getLocalStoragePolicyID();
       BlockStoragePolicy currentPolicy =
-          bm.getStoragePolicy(inode.getLocalStoragePolicyID());
+          bm.getStoragePolicy(oldPolicyID);
 
       if (currentPolicy != null && currentPolicy.isCopyOnCreateFile()) {
         throw new HadoopIllegalArgumentException(
@@ -453,6 +453,9 @@ public class FSDirAttrOp {
                 " cannot be changed after file creation.");
       }
       inode.asFile().setStoragePolicyID(policyId, snapshotId);
+      for (BlockInfo b : inode.asFile().getBlocks()) {
+        bm.setStoragePolicyId(oldPolicyID, policyId, b);
+      }
     } else if (inode.isDirectory()) {
       FSDirectory.LOG.debug("DIR* FSDirAAr.unprotectedSetStoragePolicy for " +
               "Directory.");

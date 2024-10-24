@@ -64,7 +64,7 @@ abstract public class HAState {
       s.enterState(context);
       s.updateLastHATransitionTime();
     } finally {
-      context.writeUnlock();
+      context.writeUnlock("HAState");
     }
   }
 

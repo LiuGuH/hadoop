@@ -60,7 +60,6 @@ public abstract class BlockPlacementPolicy {
    * to re-replicate a block with size <i>blocksize</i> 
    * If not, return as many as we can.
    *
-   * @param srcPath the file to which this chooseTargets is being invoked.
    * @param numOfReplicas additional number of replicas wanted.
    * @param writer the writer's machine, null if not in the cluster.
    * @param chosen datanodes that have been chosen as targets.
@@ -71,15 +70,14 @@ public abstract class BlockPlacementPolicy {
    * @return array of DatanodeDescriptor instances chosen as target
    * and sorted as a pipeline.
    */
-  public abstract DatanodeStorageInfo[] chooseTarget(String srcPath,
-                                             int numOfReplicas,
-                                             Node writer,
-                                             List<DatanodeStorageInfo> chosen,
-                                             boolean returnChosenNodes,
-                                             Set<Node> excludedNodes,
-                                             long blocksize,
-                                             BlockStoragePolicy storagePolicy,
-                                             EnumSet<AddBlockFlag> flags);
+  public abstract DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
+                                                     Node writer,
+                                                     List<DatanodeStorageInfo> chosen,
+                                                     boolean returnChosenNodes,
+                                                     Set<Node> excludedNodes,
+                                                     long blocksize,
+                                                     BlockStoragePolicy storagePolicy,
+                                                     EnumSet<AddBlockFlag> flags);
   
   /**
    * @param favoredNodes datanodes that should be favored as targets. This
@@ -97,7 +95,7 @@ public abstract class BlockPlacementPolicy {
     // a block in favored datanodes. The implementations of this class
     // are expected to provide this functionality
 
-    return chooseTarget(src, numOfReplicas, writer, 
+    return chooseTarget(numOfReplicas, writer, 
         new ArrayList<DatanodeStorageInfo>(numOfReplicas), false,
         excludedNodes, blocksize, storagePolicy, flags);
   }
@@ -109,7 +107,7 @@ public abstract class BlockPlacementPolicy {
       Node writer, List<DatanodeStorageInfo> chosen, boolean returnChosenNodes,
       Set<Node> excludedNodes, long blocksize, BlockStoragePolicy storagePolicy,
       EnumSet<AddBlockFlag> flags, EnumMap<StorageType, Integer> storageTypes) {
-    return chooseTarget(srcPath, numOfReplicas, writer, chosen,
+    return chooseTarget(numOfReplicas, writer, chosen,
         returnChosenNodes, excludedNodes, blocksize, storagePolicy, flags);
   }
 

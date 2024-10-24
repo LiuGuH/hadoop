@@ -28,6 +28,8 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockPlacementPolicyDefault
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockPlacementPolicyRackFaultTolerant;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.RamDiskReplicaLruTracker;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReservedSpaceCalculator;
+import org.apache.hadoop.hdfs.server.namenode.lock.AbstractFSNamesystemLock;
+import org.apache.hadoop.hdfs.server.namenode.lock.LegacyFSNamesystemLock;
 import org.apache.hadoop.hdfs.web.URLConnectionFactory;
 import org.apache.hadoop.http.HttpConfig;
 
@@ -493,7 +495,7 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final long    DFS_NAMENODE_PATH_BASED_CACHE_REFRESH_INTERVAL_MS_DEFAULT = 30000L;
   public static final String  DFS_NAMENODE_CACHING_ENABLED_KEY =
       "dfs.namenode.caching.enabled";
-  public static final boolean DFS_NAMENODE_CACHING_ENABLED_DEFAULT = true;
+  public static final boolean DFS_NAMENODE_CACHING_ENABLED_DEFAULT = false;
 
   /** Pending period of block deletion since NameNode startup */
   public static final String  DFS_NAMENODE_STARTUP_DELAY_BLOCK_DELETION_SEC_KEY = "dfs.namenode.startup.delay.block.deletion.sec";
@@ -978,6 +980,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String  DFS_NAMENODE_INODE_ATTRIBUTES_PROVIDER_KEY = "dfs.namenode.inode.attributes.provider.class";
   public static final String  DFS_NAMENODE_INODE_ATTRIBUTES_PROVIDER_BYPASS_USERS_KEY = "dfs.namenode.inode.attributes.provider.bypass.users";
   public static final String  DFS_NAMENODE_INODE_ATTRIBUTES_PROVIDER_BYPASS_USERS_DEFAULT = "";
+  public static final String DFS_NAMENODE_FSNAMESYSTEM_LOCK_PROVIDER_KEY =
+      "dfs.namenode.fsnamesystem.lock.provider.class";
+  public static final Class<? extends AbstractFSNamesystemLock> DFS_NAMENODE_FSNAMESYSTEM_LOCK_PROVIDER_DEFAULT =
+      LegacyFSNamesystemLock.class;
 
   public static final String  DFS_DATANODE_BP_READY_TIMEOUT_KEY = "dfs.datanode.bp-ready.timeout";
   public static final long    DFS_DATANODE_BP_READY_TIMEOUT_DEFAULT = 20;

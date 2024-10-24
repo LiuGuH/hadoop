@@ -78,7 +78,7 @@ public class TestRedundancyMonitor {
 
       // Trigger chooseTarget
       Future<Void> chooseTargetFuture = pool.submit(() -> {
-        replicator.chooseTarget(FILENAME, 2, dns.iterator().next(),
+        replicator.chooseTarget(2, dns.iterator().next(),
             new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
             TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
         return null;

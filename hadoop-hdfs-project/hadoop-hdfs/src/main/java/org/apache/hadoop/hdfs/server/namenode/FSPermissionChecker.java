@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Stack;
 
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.ipc.CallerContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +46,7 @@ import org.apache.hadoop.security.UserGroupInformation;
  * The state of this class need not be synchronized as it has data structures that
  * are read-only.
  * 
- * Some of the helper methods are guarded by {@link FSNamesystem#readLock()}.
+ * Some of the helper methods are guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}.
  */
 public class FSPermissionChecker implements AccessControlEnforcer {
   static final Logger LOG = LoggerFactory.getLogger(UserGroupInformation.class);
@@ -184,7 +185,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
    * @param ignoreEmptyDir Ignore permission checking for empty directory?
    * @throws AccessControlException
    * 
-   * Guarded by {@link FSNamesystem#readLock()}
+   * Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}
    * Caller of this method must hold that lock.
    */
   void checkPermission(INodesInPath inodesInPath, boolean doCheckOwner,
@@ -398,7 +399,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
     return inodeAttrs;
   }
 
-  /** Guarded by {@link FSNamesystem#readLock()} */
+  /** Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}. */
   private void checkOwner(INodeAttributes[] inodes, byte[][] components, int i)
       throws AccessControlException {
     if (getUser().equals(inodes[i].getUserName())) {
@@ -409,7 +410,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
         " is not the owner of inode=" + getPath(components, 0, i));
   }
 
-  /** Guarded by {@link FSNamesystem#readLock()}
+  /** Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}.
    * @throws AccessControlException
    * @throws ParentNotDirectoryException
    * @throws UnresolvedPathException
@@ -423,7 +424,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
     }
   }
 
-  /** Guarded by {@link FSNamesystem#readLock()} */
+  /** Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}. */
   private void checkSubAccess(byte[][] components, int pathIdx,
       INode inode, int snapshotId, FsAction access, boolean ignoreEmptyDir)
       throws AccessControlException {
@@ -497,7 +498,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
     }
   }
 
-  /** Guarded by {@link FSNamesystem#readLock()} */
+  /** Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}. */
   private void check(INodeAttributes[] inodes, byte[][] components, int i,
       FsAction access) throws AccessControlException {
     INodeAttributes inode = (i >= 0) ? inodes[i] : null;
@@ -612,7 +613,7 @@ public class FSPermissionChecker implements AccessControlEnforcer {
     return !foundMatch && mode.getOtherAction().implies(access);
   }
 
-  /** Guarded by {@link FSNamesystem#readLock()} */
+  /** Guarded by {@link FSNamesystem#readLock(FSNamesystemLockMode)}. */
   private void checkStickyBit(INodeAttributes[] inodes, byte[][] components,
       int index) throws AccessControlException {
     INodeAttributes parent = inodes[index];

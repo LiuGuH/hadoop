@@ -156,7 +156,7 @@ public class TestAvailableSpaceRackFaultTolerantBPP {
     for (int i = 0; i < CHOOSE_TIMES; i++) {
       DatanodeStorageInfo[] targets =
           namenode.getNamesystem().getBlockManager().getBlockPlacementPolicy()
-              .chooseTarget(FILE, REPLICA, null,
+              .chooseTarget(REPLICA, null,
                   new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
                   TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
 
@@ -196,7 +196,7 @@ public class TestAvailableSpaceRackFaultTolerantBPP {
   public void testMaxRackAllocation() {
     DatanodeStorageInfo[] targets =
         namenode.getNamesystem().getBlockManager().getBlockPlacementPolicy()
-            .chooseTarget(FILE, REPLICA, null,
+            .chooseTarget(REPLICA, null,
                 new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
                 TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
     HashSet<String> racks = new HashSet<String>();

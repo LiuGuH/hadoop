@@ -36,14 +36,13 @@ class ErasureCodingWork extends BlockReconstructionWork {
   private final String blockPoolId;
 
   public ErasureCodingWork(String blockPoolId, BlockInfo block,
-      BlockCollection bc,
       DatanodeDescriptor[] srcNodes,
       List<DatanodeDescriptor> containingNodes,
       List<DatanodeStorageInfo> liveReplicaStorages,
       int additionalReplRequired, int priority,
       byte[] liveBlockIndices, byte[] liveBusyBlockIndices,
       byte[] excludeReconstrutedIndices) {
-    super(block, bc, srcNodes, containingNodes,
+    super(block, srcNodes, containingNodes,
         liveReplicaStorages, additionalReplRequired, priority);
     this.blockPoolId = blockPoolId;
     this.liveBlockIndices = liveBlockIndices;
@@ -63,7 +62,7 @@ class ErasureCodingWork extends BlockReconstructionWork {
       Set<Node> excludedNodes) {
     // TODO: new placement policy for EC considering multiple writers
     DatanodeStorageInfo[] chosenTargets = blockplacement.chooseTarget(
-        getSrcPath(), getAdditionalReplRequired(), getSrcNodes()[0],
+        getAdditionalReplRequired(), getSrcNodes()[0],
         getLiveReplicaStorages(), false, excludedNodes, getBlockSize(),
         storagePolicySuite.getPolicy(getStoragePolicyID()), null);
     setTargets(chosenTargets);

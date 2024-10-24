@@ -24,6 +24,7 @@ import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.LiveNodesMetric
 import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.SlowDisksMetrics;
 import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.SlowPeersMetrics;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.thirdparty.com.google.common.base.Joiner;
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
@@ -130,6 +131,12 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_NN_NOT_BECOME_ACTIVE_I
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HA_NN_NOT_BECOME_ACTIVE_IN_SAFEMODE_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_IMAGE_PARALLEL_LOAD_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_IMAGE_PARALLEL_LOAD_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_LOCK_DETAILED_METRICS_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_LOCK_DETAILED_METRICS_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_NAMENODE_RPC_PORT_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_ENABLED_KEY;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_CALLER_CONTEXT_ENABLED_DEFAULT;
@@ -345,7 +352,10 @@ public class NameNode extends ReconfigurableBase implements
           DFS_NAMENODE_AVOID_SLOW_DATANODE_FOR_READ_KEY,
           DFS_NAMENODE_BLOCKPLACEMENTPOLICY_EXCLUDE_SLOW_NODES_ENABLED_KEY,
           DFS_NAMENODE_MAX_SLOWPEER_COLLECT_NODES_KEY,
-          DFS_NAMENODE_RECONSTRUCTION_PENDING_TIMEOUT_SEC_KEY));
+          DFS_NAMENODE_RECONSTRUCTION_PENDING_TIMEOUT_SEC_KEY,
+          DFS_NAMENODE_LOCK_DETAILED_METRICS_KEY,
+          DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_KEY,
+          DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_KEY));
 
   private static final String USAGE = "Usage: hdfs namenode ["
       + StartupOption.BACKUP.getName() + "] | \n\t["
@@ -1032,7 +1042,7 @@ public class NameNode extends ReconfigurableBase implements
         haContext.writeLock();
         state.enterState(haContext);
       } finally {
-        haContext.writeUnlock();
+        haContext.writeUnlock("HAState");
       }
     } catch (IOException e) {
       this.stopAtException(e);
@@ -2118,25 +2128,19 @@ public class NameNode extends ReconfigurableBase implements
         doImmediateShutdown(t);
       }
     }
-    
+
     @Override
     public void writeLock() {
-      namesystem.writeLock();
+      namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
       namesystem.lockRetryCache();
-    }
-    
-    @Override
-    public void writeUnlock() {
-      namesystem.unlockRetryCache();
-      namesystem.writeUnlock();
     }
 
     @Override
     public void writeUnlock(String opName) {
       namesystem.unlockRetryCache();
-      namesystem.writeUnlock(opName);
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, opName);
     }
-    
+
     /** Check if an operation of given category is allowed */
     @Override
     public void checkOperation(final OperationCategory op)
@@ -2264,6 +2268,10 @@ public class NameNode extends ReconfigurableBase implements
           || (property.equals(DFS_NAMENODE_BLOCKPLACEMENTPOLICY_EXCLUDE_SLOW_NODES_ENABLED_KEY))
           || (property.equals(DFS_NAMENODE_MAX_SLOWPEER_COLLECT_NODES_KEY))) {
       return reconfigureSlowNodesParameters(datanodeManager, property, newVal);
+    } else if (property.equals(DFS_NAMENODE_LOCK_DETAILED_METRICS_KEY)
+        || property.equals(DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_KEY)
+        || property.equals(DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_KEY)) {
+      return reconfigureFSNamesystemLockMetricsParameters(property, newVal);
     } else {
       throw new ReconfigurationException(property, newVal, getConf().get(
           property));
@@ -2274,7 +2282,7 @@ public class NameNode extends ReconfigurableBase implements
       final String property) throws ReconfigurationException {
     BlockManager bm = namesystem.getBlockManager();
     int newSetting;
-    namesystem.writeLock();
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
     try {
       if (property.equals(DFS_NAMENODE_REPLICATION_MAX_STREAMS_KEY)) {
         bm.setMaxReplicationStreams(
@@ -2312,7 +2320,7 @@ public class NameNode extends ReconfigurableBase implements
       throw new ReconfigurationException(property, newVal, getConf().get(
           property), e);
     } finally {
-      namesystem.writeUnlock();
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "reconfReplicationParameters");
     }
   }
 
@@ -2332,7 +2340,7 @@ public class NameNode extends ReconfigurableBase implements
   private String reconfHeartbeatInterval(final DatanodeManager datanodeManager,
       final String property, final String newVal)
       throws ReconfigurationException {
-    namesystem.writeLock();
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
     try {
       if (newVal == null) {
         // set to default
@@ -2349,7 +2357,7 @@ public class NameNode extends ReconfigurableBase implements
       throw new ReconfigurationException(property, newVal, getConf().get(
           property), nfe);
     } finally {
-      namesystem.writeUnlock();
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "reconfHeartbeatInterval");
       LOG.info("RECONFIGURE* changed heartbeatInterval to "
           + datanodeManager.getHeartbeatInterval());
     }
@@ -2358,7 +2366,7 @@ public class NameNode extends ReconfigurableBase implements
   private String reconfHeartbeatRecheckInterval(
       final DatanodeManager datanodeManager, final String property,
       final String newVal) throws ReconfigurationException {
-    namesystem.writeLock();
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
     try {
       if (newVal == null) {
         // set to default
@@ -2373,7 +2381,7 @@ public class NameNode extends ReconfigurableBase implements
       throw new ReconfigurationException(property, newVal, getConf().get(
           property), nfe);
     } finally {
-      namesystem.writeUnlock();
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "reconfHeartbeatRecheckInterval");
       LOG.info("RECONFIGURE* changed heartbeatRecheckInterval to "
           + datanodeManager.getHeartbeatRecheckInterval());
     }
@@ -2461,7 +2469,7 @@ public class NameNode extends ReconfigurableBase implements
   String reconfigureSlowNodesParameters(final DatanodeManager datanodeManager,
       final String property, final String newVal) throws ReconfigurationException {
     BlockManager bm = namesystem.getBlockManager();
-    namesystem.writeLock();
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
     String result;
     try {
       if (property.equals(DFS_NAMENODE_AVOID_SLOW_DATANODE_FOR_READ_KEY)) {
@@ -2492,7 +2500,49 @@ public class NameNode extends ReconfigurableBase implements
       throw new ReconfigurationException(property, newVal, getConf().get(
           property), e);
     } finally {
-      namesystem.writeUnlock();
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "reconfigureSlowNodesParameters");
+    }
+  }
+
+  private String reconfigureFSNamesystemLockMetricsParameters(final String property,
+      final String newVal) throws ReconfigurationException {
+    String result;
+    try {
+      switch (property) {
+      case DFS_NAMENODE_LOCK_DETAILED_METRICS_KEY: {
+        if (newVal != null && !newVal.equalsIgnoreCase("true") &&
+            !newVal.equalsIgnoreCase("false")) {
+          throw new IllegalArgumentException(newVal + " is not boolean value");
+        }
+        boolean enable = (newVal == null ?
+            DFS_NAMENODE_LOCK_DETAILED_METRICS_DEFAULT : Boolean.parseBoolean(newVal));
+        result = Boolean.toString(enable);
+        namesystem.setMetricsEnabled(enable);
+        break;
+      }
+      case DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_KEY: {
+        long readLockReportingThresholdMs = (newVal == null ?
+            DFS_NAMENODE_READ_LOCK_REPORTING_THRESHOLD_MS_DEFAULT : Long.parseLong(newVal));
+        result = Long.toString(readLockReportingThresholdMs);
+        namesystem.setReadLockReportingThresholdMs(readLockReportingThresholdMs);
+        break;
+      }
+      case DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_KEY: {
+        long writeLockReportingThresholdMs = (newVal == null ?
+            DFS_NAMENODE_WRITE_LOCK_REPORTING_THRESHOLD_MS_DEFAULT : Long.parseLong(newVal));
+        result = Long.toString(writeLockReportingThresholdMs);
+        namesystem.setWriteLockReportingThresholdMs(writeLockReportingThresholdMs);
+        break;
+      }
+      default: {
+        throw new IllegalArgumentException("Unexpected property " + property + " in " +
+            "reconfigureFSNamesystemLockMetricsParameters");
+      }
+      }
+      LOG.info("RECONFIGURE* changed FSNamesystemLockMetricsParameters {} to {}", property, result);
+      return result;
+    } catch (IllegalArgumentException e){
+      throw new ReconfigurationException(property, newVal, getConf().get(property), e);
     }
   }
 

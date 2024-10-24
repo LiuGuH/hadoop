@@ -17,31 +17,38 @@
  */
 package org.apache.hadoop.hdfs.util;
 
-/** Read-write lock interface. */
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
+
+/** Read-write lock interface for FSNamesystem. */
 public interface RwLock {
+
   /** Acquire read lock. */
-  public void readLock();
+  void readLock(FSNamesystemLockMode lockMode);
 
-  /** Acquire read lock, unless interrupted while waiting  */
-  void readLockInterruptibly() throws InterruptedException;
+  /** Acquire read lock, unless interrupted while waiting.  */
+  void readLockInterruptibly(FSNamesystemLockMode lockMode) throws InterruptedException;
 
-  /** Release read lock. */
-  public void readUnlock();
+  /**
+   * Release read lock with operation name.
+   * @param opName Option name.
+   */
+  void readUnlock(FSNamesystemLockMode lockMode, String opName);
 
   /** Check if the current thread holds read lock. */
-  public boolean hasReadLock();
+  boolean hasReadLock(FSNamesystemLockMode lockMode);
 
   /** Acquire write lock. */
-  public void writeLock();
-  
-  /** Acquire write lock, unless interrupted while waiting  */
-  void writeLockInterruptibly() throws InterruptedException;
+  void writeLock(FSNamesystemLockMode lockMode);
 
-  /** Release write lock. */
-  public void writeUnlock();
+  /** Acquire write lock, unless interrupted while waiting.  */
+  void writeLockInterruptibly(FSNamesystemLockMode lockMode) throws InterruptedException;
 
-  public void writeUnlock(String opName);
+  /**
+   * Release write lock with operation name.
+   * @param opName Option name.
+   */
+  void writeUnlock(FSNamesystemLockMode lockMode, String opName);
 
   /** Check if the current thread holds write lock. */
-  public boolean hasWriteLock();
+  boolean hasWriteLock(FSNamesystemLockMode lockMode);
 }

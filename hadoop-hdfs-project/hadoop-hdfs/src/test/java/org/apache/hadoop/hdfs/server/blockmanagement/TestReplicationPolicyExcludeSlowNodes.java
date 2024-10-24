@@ -22,6 +22,7 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.TestBlockStoragePolicy;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -78,7 +79,7 @@ public class TestReplicationPolicyExcludeSlowNodes
    */
   @Test
   public void testChooseTargetExcludeSlowNodes() throws Exception {
-    namenode.getNamesystem().writeLock();
+    namenode.getNamesystem().writeLock(FSNamesystemLockMode.BM);
     try {
       // add nodes
       for (int i = 0; i < dataNodes.length; i++) {
@@ -111,7 +112,7 @@ public class TestReplicationPolicyExcludeSlowNodes
 
       // call chooseTarget()
       DatanodeStorageInfo[] targets = namenode.getNamesystem().getBlockManager()
-          .getBlockPlacementPolicy().chooseTarget("testFile.txt", 3,
+          .getBlockPlacementPolicy().chooseTarget(3,
               writerDn, new ArrayList<DatanodeStorageInfo>(), false, null,
               1024, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
 
@@ -122,9 +123,9 @@ public class TestReplicationPolicyExcludeSlowNodes
             .getDatanodeUuid()));
       }
     } finally {
-      namenode.getNamesystem().writeUnlock();
+      namenode.getNamesystem().writeUnlock(FSNamesystemLockMode.BM,
+          "testChooseTargetExcludeSlowNodes");
     }
     NameNode.LOG.info("Done working on it");
   }
-
 }

@@ -24,11 +24,11 @@ import java.util.List;
 import java.util.Set;
 
 class ReplicationWork extends BlockReconstructionWork {
-  public ReplicationWork(BlockInfo block, BlockCollection bc,
+  public ReplicationWork(BlockInfo block,
       DatanodeDescriptor[] srcNodes, List<DatanodeDescriptor> containingNodes,
       List<DatanodeStorageInfo> liveReplicaStorages, int additionalReplRequired,
       int priority) {
-    super(block, bc, srcNodes, containingNodes,
+    super(block, srcNodes, containingNodes,
         liveReplicaStorages, additionalReplRequired, priority);
     assert getSrcNodes().length == 1 :
         "There should be exactly 1 source node that have been selected";
@@ -48,7 +48,7 @@ class ReplicationWork extends BlockReconstructionWork {
       // BlockCommand.NO_ACK (LONG.MAX_VALUE) . This kind of block we don't need
       // to send for replication or reconstruction
       if (getBlock().getNumBytes() != BlockCommand.NO_ACK) {
-        chosenTargets = blockplacement.chooseTarget(getSrcPath(),
+        chosenTargets = blockplacement.chooseTarget(
             getAdditionalReplRequired(), getSrcNodes()[0],
             getLiveReplicaStorages(), false, excludedNodes, getBlockSize(),
             storagePolicySuite.getPolicy(getStoragePolicyID()), null);

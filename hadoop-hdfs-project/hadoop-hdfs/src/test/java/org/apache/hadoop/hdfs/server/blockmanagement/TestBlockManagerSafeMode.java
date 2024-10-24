@@ -27,6 +27,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockManagerSafeMode.BMSafe
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NamenodeRole;
 import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.test.Whitebox;
 
@@ -92,8 +93,10 @@ public class TestBlockManagerSafeMode {
         DATANODE_NUM);
 
     fsn = mock(FSNamesystem.class);
-    doReturn(true).when(fsn).hasWriteLock();
-    doReturn(true).when(fsn).hasReadLock();
+    doReturn(true).when(fsn).hasWriteLock(FSNamesystemLockMode.GLOBAL);
+    doReturn(true).when(fsn).hasReadLock(FSNamesystemLockMode.GLOBAL);
+    doReturn(true).when(fsn).hasWriteLock(FSNamesystemLockMode.BM);
+    doReturn(true).when(fsn).hasReadLock(FSNamesystemLockMode.BM);
     doReturn(true).when(fsn).isRunning();
     NameNode.initMetrics(conf, NamenodeRole.NAMENODE);
 

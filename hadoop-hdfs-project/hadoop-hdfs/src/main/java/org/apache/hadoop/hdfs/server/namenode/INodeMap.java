@@ -18,15 +18,17 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import java.util.Iterator;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
-import org.apache.hadoop.util.GSet;
 import org.apache.hadoop.util.LightWeightGSet;
 
 import org.apache.hadoop.thirdparty.com.google.common.base.Preconditions;
+import org.apache.hadoop.util.ThreadSafeLightWeightGSet;
 
 /**
  * Storing all the {@link INode}s and maintaining the mapping between INode ID
@@ -37,20 +39,33 @@ public class INodeMap {
   static INodeMap newInstance(INodeDirectory rootDir) {
     // Compute the map capacity by allocating 1% of total memory
     int capacity = LightWeightGSet.computeCapacity(1, "INodeMap");
-    GSet<INode, INodeWithAdditionalFields> map =
-        new LightWeightGSet<>(capacity);
+    ThreadSafeLightWeightGSet<INode, INodeWithAdditionalFields> map =
+        new ThreadSafeLightWeightGSet<>(capacity);
     map.put(rootDir);
     return new INodeMap(map);
   }
 
   /** Synchronized by external lock. */
-  private final GSet<INode, INodeWithAdditionalFields> map;
-  
+  private final ThreadSafeLightWeightGSet<INode, INodeWithAdditionalFields> map;
+
+  /**
+   * This methos is not thread-safe, please use
+   * {@link #mapIteratorForRead(Consumer)} instead.
+   */
+  @Deprecated
   public Iterator<INodeWithAdditionalFields> getMapIterator() {
     return map.iterator();
   }
 
-  private INodeMap(GSet<INode, INodeWithAdditionalFields> map) {
+  public void mapIteratorForRead(Consumer<Iterator<INodeWithAdditionalFields>> consumer) throws RuntimeException {
+    map.iterateGsetForRead(consumer);
+  }
+
+  public void mapIteratorForUpdate(Consumer<Iterator<INodeWithAdditionalFields>> consumer) throws RuntimeException {
+    map.iterateGsetForUpdate(consumer);
+  }
+
+  private INodeMap(ThreadSafeLightWeightGSet<INode, INodeWithAdditionalFields> map) {
     Preconditions.checkArgument(map != null);
     this.map = map;
   }

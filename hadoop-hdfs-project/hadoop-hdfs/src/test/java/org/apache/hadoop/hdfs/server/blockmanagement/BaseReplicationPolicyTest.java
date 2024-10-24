@@ -159,7 +159,7 @@ abstract public class BaseReplicationPolicyTest {
   DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
      DatanodeDescriptor writer, List<DatanodeStorageInfo> chosenNodes,
      Set<Node> excludedNodes) {
-    return replicator.chooseTarget(filename, numOfReplicas, writer,
+    return replicator.chooseTarget(numOfReplicas, writer,
         chosenNodes, false, excludedNodes, BLOCK_SIZE,
         TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
   }

@@ -39,6 +39,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockUnderConstructionFeature;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -287,7 +288,7 @@ public class NamenodeFsck implements DataEncryptionKeyFactory {
       return;
     }
 
-    namenode.getNamesystem().readLock();
+    namenode.getNamesystem().readLock(FSNamesystemLockMode.GLOBAL);
     try {
       //get blockInfo
       Block block = new Block(Block.getBlockId(blockId));
@@ -351,7 +352,7 @@ public class NamenodeFsck implements DataEncryptionKeyFactory {
       out.print("\n\n" + errMsg);
       LOG.warn("Error in looking up block", e);
     } finally {
-      namenode.getNamesystem().readUnlock("fsck");
+      namenode.getNamesystem().readUnlock(FSNamesystemLockMode.GLOBAL, "fsck");
     }
   }
 
@@ -578,7 +579,7 @@ public class NamenodeFsck implements DataEncryptionKeyFactory {
     final String operationName = "fsckGetBlockLocations";
     FSPermissionChecker.setOperationType(operationName);
     FSPermissionChecker pc = fsn.getPermissionChecker();
-    fsn.readLock();
+    fsn.readLock(FSNamesystemLockMode.GLOBAL);
     try {
       blocks = FSDirStatAndListingOp.getBlockLocations(
           fsn.getFSDirectory(), pc,
@@ -587,7 +588,7 @@ public class NamenodeFsck implements DataEncryptionKeyFactory {
     } catch (FileNotFoundException fnfe) {
       blocks = null;
     } finally {
-      fsn.readUnlock(operationName);
+      fsn.readUnlock(FSNamesystemLockMode.GLOBAL, operationName);
     }
     return blocks;
   }
@@ -734,7 +735,7 @@ public class NamenodeFsck implements DataEncryptionKeyFactory {
         continue;
       }
 
-      final BlockInfo storedBlock = blockManager.getStoredBlock(
+      final BlockInfo storedBlock = blockManager.getStoredBlockNonThreadSafe(
           block.getLocalBlock());
       final int minReplication = blockManager.getMinStorageNum(storedBlock);
       // count decommissionedReplicas / decommissioningReplicas

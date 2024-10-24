@@ -37,6 +37,10 @@ public class BlockInfoContiguous extends BlockInfo {
     super(blk, size);
   }
 
+  public BlockInfoContiguous(Block blk, short size, byte storagePolicyId) {
+    super(blk, size, storagePolicyId);
+  }
+
   /**
    * Ensure that there is enough  space to include num more triplets.
    * @return first free triplet index.
