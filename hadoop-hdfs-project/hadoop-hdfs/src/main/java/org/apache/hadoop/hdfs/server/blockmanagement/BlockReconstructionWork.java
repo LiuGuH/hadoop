@@ -38,7 +38,6 @@ abstract class BlockReconstructionWork {
 
   private final BlockInfo block;
 
-  private final String srcPath;
   private final long blockSize;
   private final byte storagePolicyID;
 
@@ -58,16 +57,14 @@ abstract class BlockReconstructionWork {
   private boolean notEnoughRack = false;
 
   public BlockReconstructionWork(BlockInfo block,
-      BlockCollection bc,
       DatanodeDescriptor[] srcNodes,
       List<DatanodeDescriptor> containingNodes,
       List<DatanodeStorageInfo> liveReplicaStorages,
       int additionalReplRequired,
       int priority) {
     this.block = block;
-    this.srcPath = bc.getName();
     this.blockSize = block.getNumBytes();
-    this.storagePolicyID = bc.getStoragePolicyID();
+    this.storagePolicyID = block.getStoragePolicyId();
     this.srcNodes = srcNodes;
     this.containingNodes = containingNodes;
     this.liveReplicaStorages = liveReplicaStorages;
@@ -102,10 +99,6 @@ abstract class BlockReconstructionWork {
 
   public DatanodeDescriptor[] getSrcNodes() {
     return srcNodes;
-  }
-
-  public String getSrcPath() {
-    return srcPath;
   }
 
   public long getBlockSize() {

@@ -56,9 +56,9 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockManagerTestUtil;
 import org.apache.hadoop.hdfs.server.common.Storage;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.DataNodeFaultInjector;
-import org.apache.hadoop.hdfs.server.datanode.DirectoryScanner;
 import org.apache.hadoop.hdfs.server.datanode.StorageLocation;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.ipc.RemoteException;
 import org.apache.hadoop.security.AccessControlException;
@@ -79,7 +79,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -477,7 +476,7 @@ public class TestDFSAdmin {
     final List<String> outs = Lists.newArrayList();
     final List<String> errs = Lists.newArrayList();
     getReconfigurableProperties("namenode", address, outs, errs);
-    assertEquals(17, outs.size());
+    assertEquals(20, outs.size());
     assertTrue(outs.get(0).contains("Reconfigurable properties:"));
     assertEquals(DFS_BLOCK_PLACEMENT_EC_CLASSNAME_KEY, outs.get(1));
     assertEquals(DFS_HEARTBEAT_INTERVAL_KEY, outs.get(3));
@@ -760,14 +759,14 @@ public class TestDFSAdmin {
       LocatedStripedBlock bg =
           (LocatedStripedBlock)(lbs.get(0));
 
-      miniCluster.getNamesystem().writeLock();
+      miniCluster.getNamesystem().writeLock(FSNamesystemLockMode.BM);
       try {
         BlockManager bm = miniCluster.getNamesystem().getBlockManager();
         bm.findAndMarkBlockAsCorrupt(bg.getBlock(), bg.getLocations()[0],
             "STORAGE_ID", "TEST");
         BlockManagerTestUtil.updateState(bm);
       } finally {
-        miniCluster.getNamesystem().writeUnlock();
+        miniCluster.getNamesystem().writeUnlock(FSNamesystemLockMode.BM, "testReportCommand");
       }
       waitForCorruptBlock(miniCluster, client, file);
 

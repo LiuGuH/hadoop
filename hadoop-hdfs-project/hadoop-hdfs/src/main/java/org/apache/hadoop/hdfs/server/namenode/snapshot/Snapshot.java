@@ -44,7 +44,11 @@ import org.apache.hadoop.hdfs.util.ReadOnlyList;
 
 import org.apache.hadoop.security.AccessControlException;
 
-/** Snapshot of a sub-tree in the namesystem. */
+/**
+ * Snapshot of a sub-tree in the namesystem.
+ * We don't use snapshot in BZL-production environment as so far.
+ * If we use snapshot in future, we should analysis snapshot related logic!
+ */
 @InterfaceAudience.Private
 public class Snapshot implements Comparable<byte[]> {
   /**

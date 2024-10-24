@@ -1245,12 +1245,12 @@ public class TestBlockStoragePolicy {
         cluster.add(datanode);
       }
 
-      DatanodeStorageInfo[] targets = replicator.chooseTarget("/foo", 3,
+      DatanodeStorageInfo[] targets = replicator.chooseTarget(3,
               dataNodes[0], Collections.<DatanodeStorageInfo>emptyList(), false,
               new HashSet<Node>(), 0, policy1, null);
       System.out.println(Arrays.asList(targets));
       Assert.assertEquals(3, targets.length);
-      targets = replicator.chooseTarget("/foo", 3,
+      targets = replicator.chooseTarget(3,
               dataNodes[0], Collections.<DatanodeStorageInfo>emptyList(), false,
               new HashSet<Node>(), 0, policy2, null);
       System.out.println(Arrays.asList(targets));
@@ -1298,7 +1298,7 @@ public class TestBlockStoragePolicy {
         cluster.add(datanode);
       }
 
-      DatanodeStorageInfo[] targets = replicator.chooseTarget("/foo", 3,
+      DatanodeStorageInfo[] targets = replicator.chooseTarget(3,
               dataNodes[0], Collections.<DatanodeStorageInfo>emptyList(), false,
               new HashSet<Node>(), 0, policy, null);
       System.out.println(policy.getName() + ": " + Arrays.asList(targets));
@@ -1360,7 +1360,7 @@ public class TestBlockStoragePolicy {
       List<DatanodeStorageInfo> chsenDs = new ArrayList<>();
       chsenDs.add(diskStorages[0]);
       chsenDs.add(diskStorages[1]);
-      DatanodeStorageInfo[] targets = replicator.chooseTarget("/foo", 1,
+      DatanodeStorageInfo[] targets = replicator.chooseTarget(1,
               null, chsenDs, true,
               new HashSet<Node>(), 0, policy, null);
       Assert.assertEquals(3, targets.length);

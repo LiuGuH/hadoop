@@ -52,8 +52,7 @@ public class TestRefreshBlockPlacementPolicy {
   private static int counter = 0;
   static class MockBlockPlacementPolicy extends BlockPlacementPolicyDefault {
     @Override
-    public DatanodeStorageInfo[] chooseTarget(String srcPath,
-        int numOfReplicas,
+    public DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
         Node writer,
         List<DatanodeStorageInfo> chosen,
         boolean returnChosenNodes,
@@ -62,7 +61,7 @@ public class TestRefreshBlockPlacementPolicy {
         BlockStoragePolicy storagePolicy,
         EnumSet<AddBlockFlag> flags) {
       counter++;
-      return super.chooseTarget(srcPath, numOfReplicas, writer, chosen,
+      return super.chooseTarget(numOfReplicas, writer, chosen,
           returnChosenNodes, excludedNodes, blocksize, storagePolicy, flags);
     }
   }

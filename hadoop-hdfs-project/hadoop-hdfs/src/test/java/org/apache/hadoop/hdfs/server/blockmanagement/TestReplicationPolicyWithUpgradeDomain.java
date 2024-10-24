@@ -185,7 +185,7 @@ public class TestReplicationPolicyWithUpgradeDomain
     chosenNodes.clear();
     excludedNodes.add(dataNodes[1]);
     chosenNodes.add(storages[2]);
-    targets = replicator.chooseTarget(filename, 1, dataNodes[0], chosenNodes,
+    targets = replicator.chooseTarget(1, dataNodes[0], chosenNodes,
         true, excludedNodes, BLOCK_SIZE,
         TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
     System.out.println("targets=" + Arrays.asList(targets));

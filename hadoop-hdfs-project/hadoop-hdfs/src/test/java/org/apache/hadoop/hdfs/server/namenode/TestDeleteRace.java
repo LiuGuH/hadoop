@@ -52,6 +52,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
 import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStorageInfo;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.InternalDataNodeTestUtils;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.SnapshotTestHelper;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.net.Node;
@@ -131,16 +132,15 @@ public class TestDeleteRace {
   private static class SlowBlockPlacementPolicy extends
       BlockPlacementPolicyDefault {
     @Override
-    public DatanodeStorageInfo[] chooseTarget(String srcPath,
-                                      int numOfReplicas,
-                                      Node writer,
-                                      List<DatanodeStorageInfo> chosenNodes,
-                                      boolean returnChosenNodes,
-                                      Set<Node> excludedNodes,
-                                      long blocksize,
-                                      final BlockStoragePolicy storagePolicy,
-                                      EnumSet<AddBlockFlag> flags) {
-      DatanodeStorageInfo[] results = super.chooseTarget(srcPath,
+    public DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
+        Node writer,
+        List<DatanodeStorageInfo> chosenNodes,
+        boolean returnChosenNodes,
+        Set<Node> excludedNodes,
+        long blocksize,
+        final BlockStoragePolicy storagePolicy,
+        EnumSet<AddBlockFlag> flags) {
+      DatanodeStorageInfo[] results = super.chooseTarget(
           numOfReplicas, writer, chosenNodes, returnChosenNodes, excludedNodes,
           blocksize, storagePolicy, flags);
       try {
@@ -471,7 +471,7 @@ public class TestDeleteRace {
         } catch (InterruptedException e) {
         }
       });
-      fsn.writeLock();
+      fsn.writeLock(FSNamesystemLockMode.GLOBAL);
       open.start();
       openSem.acquire();
       Thread.yield();
@@ -479,7 +479,7 @@ public class TestDeleteRace {
       rename.start();
       renameSem.acquire();
       Thread.yield();
-      fsn.writeUnlock();
+      fsn.writeUnlock(FSNamesystemLockMode.GLOBAL, "testOpenRenameRace");
 
       // wait open and rename threads finish.
       open.join();

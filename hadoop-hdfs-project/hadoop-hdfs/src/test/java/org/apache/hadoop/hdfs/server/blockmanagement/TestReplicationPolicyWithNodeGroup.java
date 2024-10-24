@@ -354,7 +354,7 @@ public class TestReplicationPolicyWithNodeGroup extends BaseReplicationPolicyTes
 
     Set<Node> excludedNodes = new HashSet<>();
     excludedNodes.add(dataNodes[1]);
-    targets = repl.chooseTarget(filename, 4, dataNodes[0], chosenNodes, false, 
+    targets = repl.chooseTarget(4, dataNodes[0], chosenNodes, false, 
         excludedNodes, BLOCK_SIZE, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY,
         null);
     assertEquals(targets.length, 4);
@@ -373,7 +373,7 @@ public class TestReplicationPolicyWithNodeGroup extends BaseReplicationPolicyTes
     chosenNodes.clear();
     excludedNodes.add(dataNodes[1]); 
     chosenNodes.add(storages[2]);
-    targets = repl.chooseTarget(filename, 1, dataNodes[0], chosenNodes, true,
+    targets = repl.chooseTarget(1, dataNodes[0], chosenNodes, true,
         excludedNodes, BLOCK_SIZE, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY,
         null);
     System.out.println("targets=" + Arrays.asList(targets));

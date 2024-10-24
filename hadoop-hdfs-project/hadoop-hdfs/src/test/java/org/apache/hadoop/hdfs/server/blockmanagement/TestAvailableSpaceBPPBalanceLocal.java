@@ -134,7 +134,7 @@ public class TestAvailableSpaceBPPBalanceLocal {
     for (int i = 0; i < CHOOSE_TIMES; i++) {
       DatanodeStorageInfo[] targets =
           namenode.getNamesystem().getBlockManager().getBlockPlacementPolicy()
-              .chooseTarget(FILE, 1, localNode,
+              .chooseTarget(1, localNode,
                   new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
                   TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
       Assert.assertEquals(1, targets.length);
@@ -150,7 +150,7 @@ public class TestAvailableSpaceBPPBalanceLocal {
     for (int i = 0; i < CHOOSE_TIMES; i++) {
       DatanodeStorageInfo[] targets =
           namenode.getNamesystem().getBlockManager().getBlockPlacementPolicy()
-              .chooseTarget(FILE, 1, localNode,
+              .chooseTarget(1, localNode,
                   new ArrayList<DatanodeStorageInfo>(), false, null, BLOCK_SIZE,
                   TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
 

@@ -31,6 +31,7 @@ import org.apache.hadoop.hdfs.client.HdfsDataOutputStream.SyncFlag;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.SafeModeAction;
 import org.apache.hadoop.hdfs.protocol.SnapshottableDirectoryStatus;
 import org.apache.hadoop.hdfs.server.namenode.NNStorage.NameNodeFile;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.DiffList;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.DirectoryWithSnapshotFeature.DirectoryDiff;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
@@ -146,11 +147,11 @@ public class TestFSImageWithSnapshot {
         conf);
     FSImageCompression compression = FSImageCompression.createCompression(conf);
     File imageFile = getImageFile(testDir, txid);
-    fsn.readLock();
+    fsn.readLock(FSNamesystemLockMode.GLOBAL);
     try {
       saver.save(imageFile, compression);
     } finally {
-      fsn.readUnlock();
+      fsn.readUnlock(FSNamesystemLockMode.GLOBAL, "saveFSImage");
     }
     return imageFile;
   }
@@ -158,14 +159,14 @@ public class TestFSImageWithSnapshot {
   /** Load the fsimage from a temp file */
   private void loadFSImageFromTempFile(File imageFile) throws IOException {
     FSImageFormat.LoaderDelegator loader = FSImageFormat.newLoader(conf, fsn);
-    fsn.writeLock();
+    fsn.writeLock(FSNamesystemLockMode.GLOBAL);
     fsn.getFSDirectory().writeLock();
     try {
       loader.load(imageFile, false);
       fsn.getFSDirectory().updateCountForQuota();
     } finally {
       fsn.getFSDirectory().writeUnlock();
-      fsn.writeUnlock();
+      fsn.writeUnlock(FSNamesystemLockMode.GLOBAL, "loadFSImageFromTempFile");
     }
   }
   

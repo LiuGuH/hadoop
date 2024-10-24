@@ -31,10 +31,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.hadoop.hdfs.server.namenode.WrappedRunTimeIOException;
 import org.apache.hadoop.thirdparty.com.google.common.collect.ImmutableList;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.permission.PermissionStatus;
@@ -260,7 +260,7 @@ public class FSImageFormatPBSnapshot {
           if(storedBlock == null) {
             storedBlock = (BlockInfoContiguous) fsn.getBlockManager()
                 .addBlockCollectionWithCheck(new BlockInfoContiguous(blk,
-                    copy.getFileReplication()), file);
+                    copy.getFileReplication(), file.getStoragePolicyID()), file);
           }
           blocks[j] = storedBlock;
         }
@@ -516,24 +516,36 @@ public class FSImageFormatPBSnapshot {
       INodeMap inodesMap = fsn.getFSDirectory().getINodeMap();
       final List<INodeReference> refList = parent.getSaverContext()
           .getRefList();
-      int i = 0;
-      Iterator<INodeWithAdditionalFields> iter = inodesMap.getMapIterator();
-      while (iter.hasNext()) {
-        INodeWithAdditionalFields inode = iter.next();
-        if (inode.isFile()) {
-          serializeFileDiffList(inode.asFile(), out);
-        } else if (inode.isDirectory()) {
-          serializeDirDiffList(inode.asDirectory(), refList, out);
-        }
-        ++i;
-        if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
-          context.checkCancelled();
-        }
-        if (i % parent.getInodesPerSubSection() == 0) {
-          parent.commitSubSection(headers,
-              FSImageFormatProtobuf.SectionName.SNAPSHOT_DIFF_SUB);
+      try {
+        inodesMap.mapIteratorForRead((iter) -> {
+          int i = 0;
+          try {
+            while (iter.hasNext()) {
+              INodeWithAdditionalFields inode = iter.next();
+              if (inode.isFile()) {
+                serializeFileDiffList(inode.asFile(), out);
+              } else if (inode.isDirectory()) {
+                serializeDirDiffList(inode.asDirectory(), refList, out);
+              }
+              ++i;
+              if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+                context.checkCancelled();
+              }
+              if (i % parent.getInodesPerSubSection() == 0) {
+                parent.commitSubSection(headers,
+                    FSImageFormatProtobuf.SectionName.SNAPSHOT_DIFF_SUB);
+              }
+            }
+          } catch (IOException e) {
+            throw new WrappedRunTimeIOException(e);
+          }
+        });
+      } catch (RuntimeException e) {
+        if (e instanceof WrappedRunTimeIOException) {
+          throw (IOException) e.getCause();
         }
       }
+
       parent.commitSectionAndSubSection(headers,
           FSImageFormatProtobuf.SectionName.SNAPSHOT_DIFF,
           FSImageFormatProtobuf.SectionName.SNAPSHOT_DIFF_SUB);

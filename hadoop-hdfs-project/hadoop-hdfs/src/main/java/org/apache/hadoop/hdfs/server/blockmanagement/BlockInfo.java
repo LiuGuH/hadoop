@@ -50,6 +50,11 @@ public abstract class BlockInfo extends Block
   private short replication;
 
   /**
+   * Storage policy id.
+   */
+  private byte storagePolicyId;
+
+  /**
    * Block collection ID.
    */
   private volatile long bcId;
@@ -90,6 +95,11 @@ public abstract class BlockInfo extends Block
     this.bcId = INVALID_INODE_ID;
     this.replication = isStriped() ? 0 : size;
   }
+  
+  public BlockInfo(Block blk, short size, byte storagePolicyId) {
+    this(blk, size);
+    this.storagePolicyId = storagePolicyId;
+  }
 
   public short getReplication() {
     return replication;
@@ -97,6 +107,14 @@ public abstract class BlockInfo extends Block
 
   public void setReplication(short repl) {
     this.replication = repl;
+  }
+  
+  public byte getStoragePolicyId() {
+    return storagePolicyId;
+  }
+
+  public void setStoragePolicyId(byte storagePolicyid) {
+    this.storagePolicyId = storagePolicyid;
   }
 
   public long getBlockCollectionId() {

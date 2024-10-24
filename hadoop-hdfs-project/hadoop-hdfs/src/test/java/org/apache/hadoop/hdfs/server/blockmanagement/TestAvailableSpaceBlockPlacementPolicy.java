@@ -145,7 +145,7 @@ public class TestAvailableSpaceBlockPlacementPolicy {
               .getNamesystem()
               .getBlockManager()
               .getBlockPlacementPolicy()
-              .chooseTarget(file, replica, null, new ArrayList<DatanodeStorageInfo>(), false, null,
+              .chooseTarget(replica, null, new ArrayList<DatanodeStorageInfo>(), false, null,
                 blockSize, TestBlockStoragePolicy.DEFAULT_STORAGE_POLICY, null);
 
       assertTrue(targets.length == replica);

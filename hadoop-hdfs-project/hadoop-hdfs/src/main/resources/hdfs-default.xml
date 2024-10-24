@@ -2787,7 +2787,7 @@
 
 <property>
   <name>dfs.namenode.caching.enabled</name>
-  <value>true</value>
+  <value>false</value>
   <description>
     Set to true to enable block caching.  This flag enables the NameNode to
     maintain a mapping of cached blocks to DataNodes via processing DataNode
@@ -3777,6 +3777,15 @@
     ensures each replica has an unique upgrade domain. When the number of
     replicas is greater than this value, the policy ensures the number of
     unique domains is at least this value.
+  </description>
+</property>
+
+<property>
+  <name>dfs.namenode.fsnamesystem.lock.provider.class</name>
+  <value>org.apache.hadoop.hdfs.server.namenode.lock.LegacyFSNamesystemLock</value>
+  <description>
+    An implementation class of FSNamesystem lock.
+    Defaults to LegacyFSNamesystemLock.class.
   </description>
 </property>
 

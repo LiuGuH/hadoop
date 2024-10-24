@@ -282,7 +282,7 @@ public class TestNamenodeStorageDirectives {
     static DatanodeStorageInfo[] dnStorageInfosToReturn;
 
     @Override
-    public DatanodeStorageInfo[] chooseTarget(String srcPath, int numOfReplicas,
+    public DatanodeStorageInfo[] chooseTarget(int numOfReplicas,
         Node writer, List<DatanodeStorageInfo> chosenNodes,
         boolean returnChosenNodes, Set<Node> excludedNodes, long blocksize,
         final BlockStoragePolicy storagePolicy, EnumSet<AddBlockFlag> flags) {

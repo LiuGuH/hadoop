@@ -1,0 +1,352 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.server.namenode.lock;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystemLock;
+import org.apache.hadoop.hdfs.server.namenode.NameNode;
+import org.apache.hadoop.metrics2.lib.MutableRatesWithAggregation;
+
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Supplier;
+
+/**
+ * Splitting the global FSN lock into FSLock and BMLock.
+ * FSLock is used to protect directory tree-related operations.
+ * BMLock is used to protect block-related and dn-related operations.
+ * The lock order should be: FSLock,BMLock.
+ */
+public class FineGrainedFSNamesystemLock implements AbstractFSNamesystemLock {
+  // Notice that FSNamesystemLock is not a filesystem-specific lock but an abstraction from the base lock model.
+  private final FSNamesystemLock fsLock;
+  private final FSNamesystemLock bmLock;
+
+  public FineGrainedFSNamesystemLock(Configuration conf, MutableRatesWithAggregation aggregation) {
+    this.fsLock = new FSNamesystemLock(conf, "FS", aggregation);
+    this.bmLock = new FSNamesystemLock(conf, "BM", aggregation);
+  }
+
+  @Override
+  public void readLock(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      assert (hasReadLock(FSNamesystemLockMode.FS) && hasReadLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM));
+      if (!((hasReadLock(FSNamesystemLockMode.FS) && hasReadLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM)))) {
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement e : stackTrace) {
+          NameNode.LOG.error(e.toString());
+        }
+      }
+      this.fsLock.readLock();
+      this.bmLock.readLock();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      assert !hasReadLock(FSNamesystemLockMode.BM);
+      this.fsLock.readLock();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.readLock();
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  public void readLockInterruptibly(FSNamesystemLockMode lockMode) throws InterruptedException  {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      assert (hasReadLock(FSNamesystemLockMode.FS) && hasReadLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM));
+      if (!((hasReadLock(FSNamesystemLockMode.FS) && hasReadLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM)))) {
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement e : stackTrace) {
+          NameNode.LOG.error(e.toString());
+        }
+      }
+      this.fsLock.readLockInterruptibly();
+      try {
+        this.bmLock.readLockInterruptibly();
+      } catch (InterruptedException e) {
+        // The held FSLock should be released if the current thread is interrupted
+        // while acquiring the BMLock.
+        this.fsLock.readUnlock("BMReadLockInterruptiblyFailed");
+        throw e;
+      }
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.readLockInterruptibly();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.readLockInterruptibly();
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public void readUnlock(FSNamesystemLockMode lockMode, String opName) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      this.bmLock.readUnlock(opName);
+      this.fsLock.readUnlock(opName);
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.readUnlock(opName);
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.readUnlock(opName);
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  public void readUnlock(FSNamesystemLockMode lockMode, String opName,
+      Supplier<String> lockReportInfoSupplier) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      this.bmLock.readUnlock(opName, lockReportInfoSupplier);
+      this.fsLock.readUnlock(opName, lockReportInfoSupplier);
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.readUnlock(opName, lockReportInfoSupplier);
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.readUnlock(opName, lockReportInfoSupplier);
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public void writeLock(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      assert (hasWriteLock(FSNamesystemLockMode.FS) && hasWriteLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.FS)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM));
+
+      if (!((hasWriteLock(FSNamesystemLockMode.FS) && hasWriteLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.FS)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM)))) {
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement e : stackTrace) {
+          NameNode.LOG.error(e.toString());
+        }
+      }
+      this.fsLock.writeLock();
+      this.bmLock.writeLock();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      assert !hasReadLock(FSNamesystemLockMode.BM);
+      this.fsLock.writeLock();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.writeLock();
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public void writeUnlock(FSNamesystemLockMode lockMode, String opName) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      this.bmLock.writeUnlock(opName);
+      this.fsLock.writeUnlock(opName);
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.writeUnlock(opName);
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.writeUnlock(opName);
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public void writeUnlock(FSNamesystemLockMode lockMode, String opName,
+      boolean suppressWriteLockReport) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      this.bmLock.writeUnlock(opName, suppressWriteLockReport);
+      this.fsLock.writeUnlock(opName, suppressWriteLockReport);
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.writeUnlock(opName, suppressWriteLockReport);
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.writeUnlock(opName, suppressWriteLockReport);
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  public void writeUnlock(FSNamesystemLockMode lockMode, String opName,
+      Supplier<String> lockReportInfoSupplier) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      this.bmLock.writeUnlock(opName, lockReportInfoSupplier);
+      this.fsLock.writeUnlock(opName, lockReportInfoSupplier);
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.writeUnlock(opName, lockReportInfoSupplier);
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.writeUnlock(opName, lockReportInfoSupplier);
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public void writeLockInterruptibly(FSNamesystemLockMode lockMode)
+      throws InterruptedException {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      assert (hasWriteLock(FSNamesystemLockMode.FS) && hasWriteLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.FS)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM));
+
+      if (!((hasWriteLock(FSNamesystemLockMode.FS) && hasWriteLock(FSNamesystemLockMode.BM)) ||
+          (!hasReadLock(FSNamesystemLockMode.FS)) ||
+          (!hasReadLock(FSNamesystemLockMode.BM)))) {
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement e : stackTrace) {
+          NameNode.LOG.error(e.toString());
+        }
+      }
+      
+      this.fsLock.writeLockInterruptibly();
+      try {
+        this.bmLock.writeLockInterruptibly();
+      } catch (InterruptedException e) {
+        // The held FSLock should be released if the current thread is interrupted
+        // while acquiring the BMLock.
+        this.fsLock.writeUnlock("BMWriteLockInterruptiblyFailed");
+        throw e;
+      }
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      this.fsLock.writeLockInterruptibly();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      this.bmLock.writeLockInterruptibly();
+    } else {
+      throw new RuntimeException("Unsupported lockMode: " + lockMode);
+    }
+  }
+
+  @Override
+  public boolean hasWriteLock(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.isWriteLockedByCurrentThread() &&
+          this.bmLock.isWriteLockedByCurrentThread();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.isWriteLockedByCurrentThread();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.isWriteLockedByCurrentThread();
+    }
+    return false;
+  }
+
+  @Override
+  public boolean hasReadLock(FSNamesystemLockMode lockMode) {
+    if (hasWriteLock(lockMode)) {
+      return true;
+    }
+
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getReadHoldCount() > 0 && this.bmLock.getReadHoldCount() > 0;
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getReadHoldCount() > 0;
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getReadHoldCount() > 0;
+    }
+    return false;
+  }
+
+  @Override
+  /**
+   * This method is only used for ComputeDirectoryContentSummary.
+   * For the GLOBAL mode, just return the FSLock's ReadHoldCount.
+   */
+  public int getReadHoldCount(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getReadHoldCount();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getReadHoldCount();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getReadHoldCount();
+    }
+    return -1;
+  }
+
+  @Override
+  public int getQueueLength(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getQueueLength() + this.bmLock.getQueueLength();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getQueueLength();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getQueueLength();
+    }
+    return -1;
+  }
+
+  @Override
+  public long getNumOfReadLockLongHold(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getNumOfReadLockLongHold() + this.bmLock.getNumOfReadLockLongHold();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getNumOfReadLockLongHold();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getNumOfReadLockLongHold();
+    }
+    return -1;
+  }
+
+  @Override
+  public long getNumOfWriteLockLongHold(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getNumOfWriteLockLongHold() + this.bmLock.getNumOfWriteLockLongHold();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getNumOfWriteLockLongHold();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getNumOfWriteLockLongHold();
+    }
+    return -1;
+  }
+
+  @Override
+  public boolean isMetricsEnabled() {
+    return this.fsLock.isMetricsEnabled();
+  }
+
+  public void setMetricsEnabled(boolean metricsEnabled) {
+    this.fsLock.setMetricsEnabled(metricsEnabled);
+    this.bmLock.setMetricsEnabled(metricsEnabled);
+  }
+
+  @Override
+  public void setReadLockReportingThresholdMs(long readLockReportingThresholdMs) {
+    this.fsLock.setReadLockReportingThresholdMs(readLockReportingThresholdMs);
+    this.bmLock.setReadLockReportingThresholdMs(readLockReportingThresholdMs);
+  }
+
+  @Override
+  public long getReadLockReportingThresholdMs() {
+    return this.fsLock.getReadLockReportingThresholdMs();
+  }
+
+  @Override
+  public void setWriteLockReportingThresholdMs(long writeLockReportingThresholdMs) {
+    this.fsLock.setWriteLockReportingThresholdMs(writeLockReportingThresholdMs);
+    this.bmLock.setWriteLockReportingThresholdMs(writeLockReportingThresholdMs);
+  }
+
+  @Override
+  public long getWriteLockReportingThresholdMs() {
+    return this.fsLock.getWriteLockReportingThresholdMs();
+  }
+
+  @Override
+  public void setLockForTests(ReentrantReadWriteLock lock) {
+    throw new UnsupportedOperationException("SetLockTests is unsupported");
+  }
+
+  @Override
+  public ReentrantReadWriteLock getLockForTests() {
+    throw new UnsupportedOperationException("SetLockTests is unsupported");
+  }
+}

@@ -59,6 +59,13 @@ public class BlockInfoStriped extends BlockInfo {
     this.ecPolicy = ecPolicy;
   }
 
+  public BlockInfoStriped(Block blk, ErasureCodingPolicy ecPolicy, byte storagePolicyId) {
+    super(blk, (short) (ecPolicy.getNumDataUnits() + ecPolicy.getNumParityUnits()), storagePolicyId);
+    indices = new byte[ecPolicy.getNumDataUnits() + ecPolicy.getNumParityUnits()];
+    initIndices();
+    this.ecPolicy = ecPolicy;
+  }
+
   public short getTotalBlockNum() {
     return (short) (ecPolicy.getNumDataUnits() + ecPolicy.getNumParityUnits());
   }

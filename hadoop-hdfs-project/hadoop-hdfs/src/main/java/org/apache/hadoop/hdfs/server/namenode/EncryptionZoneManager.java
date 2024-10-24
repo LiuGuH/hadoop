@@ -53,6 +53,7 @@ import org.apache.hadoop.hdfs.protocol.ZoneReencryptionStatus;
 import org.apache.hadoop.hdfs.protocol.proto.HdfsProtos;
 import org.apache.hadoop.hdfs.protocolPB.PBHelperClient;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory.DirOp;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.security.AccessControlException;
 import org.slf4j.Logger;
@@ -187,11 +188,12 @@ public class EncryptionZoneManager {
       final int count) throws IOException {
     INodesInPath iip;
     final FSPermissionChecker pc = dir.getPermissionChecker();
-    dir.getFSNamesystem().readLock();
+    dir.getFSNamesystem().readLock(FSNamesystemLockMode.FS);
     try {
       iip = dir.resolvePath(pc, zone, DirOp.READ);
     } finally {
-      dir.getFSNamesystem().readUnlock();
+      dir.getFSNamesystem().readUnlock(
+          FSNamesystemLockMode.FS, "pauseForTestingAfterNthCheckpoint");
     }
     reencryptionHandler
         .pauseForTestingAfterNthCheckpoint(iip.getLastINode().getId(), count);
@@ -212,7 +214,7 @@ public class EncryptionZoneManager {
       throws IOException {
     final FSPermissionChecker pc = dir.getPermissionChecker();
     final INode inode;
-    dir.getFSNamesystem().readLock();
+    dir.getFSNamesystem().readLock(FSNamesystemLockMode.FS);
     dir.readLock();
     try {
       final INodesInPath iip = dir.resolvePath(pc, zone, DirOp.READ);
@@ -223,7 +225,7 @@ public class EncryptionZoneManager {
       return getReencryptionStatus().getZoneStatus(inode.getId());
     } finally {
       dir.readUnlock();
-      dir.getFSNamesystem().readUnlock();
+      dir.getFSNamesystem().readUnlock(FSNamesystemLockMode.FS, "getZoneStatus");
     }
   }
 
@@ -280,11 +282,11 @@ public class EncryptionZoneManager {
     if (getProvider() == null || reencryptionHandler == null) {
       return;
     }
-    dir.getFSNamesystem().writeLock();
+    dir.getFSNamesystem().writeLock(FSNamesystemLockMode.FS);
     try {
       reencryptionHandler.stopThreads();
     } finally {
-      dir.getFSNamesystem().writeUnlock();
+      dir.getFSNamesystem().writeUnlock(FSNamesystemLockMode.FS, "stopReencryptThread");
     }
     if (reencryptHandlerExecutor != null) {
       reencryptHandlerExecutor.shutdownNow();

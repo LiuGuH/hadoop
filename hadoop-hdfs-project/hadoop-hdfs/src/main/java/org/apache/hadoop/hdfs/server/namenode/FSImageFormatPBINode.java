@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -534,10 +533,11 @@ public final class FSImageFormatPBINode {
           Preconditions.checkState(ecPolicy.getId() > 0,
               "File with ID " + n.getId() +
               " has an invalid erasure coding policy ID " + ecPolicy.getId());
-          blocks[i] = new BlockInfoStriped(PBHelperClient.convert(b), ecPolicy);
+          blocks[i] = new BlockInfoStriped(PBHelperClient.convert(b), ecPolicy,
+              (byte)f.getStoragePolicyID());
         } else {
           blocks[i] = new BlockInfoContiguous(PBHelperClient.convert(b),
-              replication);
+              replication, (byte)f.getStoragePolicyID());
         }
       }
 
@@ -572,10 +572,10 @@ public final class FSImageFormatPBINode {
           final BlockInfo ucBlk;
           if (isStriped) {
             BlockInfoStriped striped = (BlockInfoStriped) lastBlk;
-            ucBlk = new BlockInfoStriped(striped, ecPolicy);
+            ucBlk = new BlockInfoStriped(striped, ecPolicy, (byte)f.getStoragePolicyID());
           } else {
             ucBlk = new BlockInfoContiguous(lastBlk,
-                replication);
+                replication, (byte)f.getStoragePolicyID());
           }
           ucBlk.convertToBlockUnderConstruction(
               HdfsServerConstants.BlockUCState.UNDER_CONSTRUCTION, null);
@@ -742,59 +742,70 @@ public final class FSImageFormatPBINode {
 
     void serializeINodeDirectorySection(OutputStream out) throws IOException {
       FSDirectory dir = fsn.getFSDirectory();
-      Iterator<INodeWithAdditionalFields> iter = dir.getINodeMap()
-          .getMapIterator();
       final ArrayList<INodeReference> refList = parent.getSaverContext()
           .getRefList();
-      int i = 0;
-      int outputInodes = 0;
-      while (iter.hasNext()) {
-        INodeWithAdditionalFields n = iter.next();
-        if (!n.isDirectory()) {
-          continue;
-        }
+      try {
+        dir.getINodeMap().mapIteratorForRead((iter) -> {
+          try {
+            int i = 0;
+            int outputInodes = 0;
+            while (iter.hasNext()) {
+              INodeWithAdditionalFields n = iter.next();
+              if (!n.isDirectory()) {
+                continue;
+              }
 
-        ReadOnlyList<INode> children = n.asDirectory().getChildrenList(
-            Snapshot.CURRENT_STATE_ID);
-        if (children.size() > 0) {
-          INodeDirectorySection.DirEntry.Builder b = INodeDirectorySection.
-              DirEntry.newBuilder().setParent(n.getId());
-          for (INode inode : children) {
-            // Error if the child inode doesn't exist in inodeMap
-            if (dir.getInode(inode.getId()) == null) {
-              FSImage.LOG.error(
-                  "FSImageFormatPBINode#serializeINodeDirectorySection: " +
-                      "Dangling child pointer found. Missing INode in " +
-                      "inodeMap: id=" + inode.getId() +
-                      "; path=" + inode.getFullPathName() +
-                      "; parent=" + (inode.getParent() == null ? "null" :
-                      inode.getParent().getFullPathName()));
-              ++numImageErrors;
+              ReadOnlyList<INode> children = n.asDirectory().getChildrenList(
+                  Snapshot.CURRENT_STATE_ID);
+              if (children.size() > 0) {
+                INodeDirectorySection.DirEntry.Builder b = INodeDirectorySection.
+                    DirEntry.newBuilder().setParent(n.getId());
+                for (INode inode : children) {
+                  // Error if the child inode doesn't exist in inodeMap
+                  if (dir.getInode(inode.getId()) == null) {
+                    FSImage.LOG.error(
+                        "FSImageFormatPBINode#serializeINodeDirectorySection: " +
+                            "Dangling child pointer found. Missing INode in " +
+                            "inodeMap: id=" + inode.getId() +
+                            "; path=" + inode.getFullPathName() +
+                            "; parent=" + (inode.getParent() == null ? "null" :
+                            inode.getParent().getFullPathName()));
+                    ++numImageErrors;
+                  }
+                  if (!inode.isReference()) {
+                    // Serialization must ensure that children are in order, related
+                    // to HDFS-13693
+                    b.addChildren(inode.getId());
+                  } else {
+                    refList.add(inode.asReference());
+                    b.addRefChildren(refList.size() - 1);
+                  }
+                  outputInodes++;
+                }
+                INodeDirectorySection.DirEntry e = b.build();
+                e.writeDelimitedTo(out);
+              }
+
+              ++i;
+              if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+                context.checkCancelled();
+              }
+              if (outputInodes >= parent.getInodesPerSubSection()) {
+                outputInodes = 0;
+                parent.commitSubSection(summary,
+                    FSImageFormatProtobuf.SectionName.INODE_DIR_SUB);
+              }
             }
-            if (!inode.isReference()) {
-              // Serialization must ensure that children are in order, related
-              // to HDFS-13693
-              b.addChildren(inode.getId());
-            } else {
-              refList.add(inode.asReference());
-              b.addRefChildren(refList.size() - 1);
-            }
-            outputInodes++;
+          } catch (IOException e) {
+            throw new WrappedRunTimeIOException(e);
           }
-          INodeDirectorySection.DirEntry e = b.build();
-          e.writeDelimitedTo(out);
-        }
-
-        ++i;
-        if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
-          context.checkCancelled();
-        }
-        if (outputInodes >= parent.getInodesPerSubSection()) {
-          outputInodes = 0;
-          parent.commitSubSection(summary,
-              FSImageFormatProtobuf.SectionName.INODE_DIR_SUB);
+        });
+      } catch (RuntimeException e) {
+        if (e instanceof WrappedRunTimeIOException) {
+          throw (IOException) e.getCause();
         }
       }
+
       parent.commitSectionAndSubSection(summary,
           FSImageFormatProtobuf.SectionName.INODE_DIR,
           FSImageFormatProtobuf.SectionName.INODE_DIR_SUB);
@@ -807,21 +818,32 @@ public final class FSImageFormatPBINode {
           .setLastInodeId(fsn.dir.getLastInodeId()).setNumInodes(inodesMap.size());
       INodeSection s = b.build();
       s.writeDelimitedTo(out);
-
-      int i = 0;
-      Iterator<INodeWithAdditionalFields> iter = inodesMap.getMapIterator();
-      while (iter.hasNext()) {
-        INodeWithAdditionalFields n = iter.next();
-        save(out, n);
-        ++i;
-        if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
-          context.checkCancelled();
-        }
-        if (i % parent.getInodesPerSubSection() == 0) {
-          parent.commitSubSection(summary,
-              FSImageFormatProtobuf.SectionName.INODE_SUB);
+      try {
+        inodesMap.mapIteratorForRead((iter) -> {
+          int i = 0;
+          try {
+            while (iter.hasNext()) {
+              INodeWithAdditionalFields n = iter.next();
+              save(out, n);
+              ++i;
+              if (i % FSImageFormatProtobuf.Saver.CHECK_CANCEL_INTERVAL == 0) {
+                context.checkCancelled();
+              }
+              if (i % parent.getInodesPerSubSection() == 0) {
+                parent.commitSubSection(summary,
+                    FSImageFormatProtobuf.SectionName.INODE_SUB);
+              }
+            }
+          } catch (IOException e) {
+            throw new WrappedRunTimeIOException(e);
+          }
+        });
+      } catch (RuntimeException e) {
+        if (e instanceof WrappedRunTimeIOException) {
+          throw (IOException) e.getCause();
         }
       }
+
       parent.commitSectionAndSubSection(summary,
           FSImageFormatProtobuf.SectionName.INODE,
           FSImageFormatProtobuf.SectionName.INODE_SUB);

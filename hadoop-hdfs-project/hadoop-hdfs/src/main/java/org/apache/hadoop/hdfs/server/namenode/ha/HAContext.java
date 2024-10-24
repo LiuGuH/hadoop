@@ -60,12 +60,6 @@ public interface HAContext {
 
   /**
    * Unlock the lock taken by {@link #writeLock()}
-   */
-  void writeUnlock();
-
-
-  /**
-   * Unlock the lock taken by {@link #writeLock()}
    * @param opName operation name which unlocks write lock.
    */
   void writeUnlock(String opName);

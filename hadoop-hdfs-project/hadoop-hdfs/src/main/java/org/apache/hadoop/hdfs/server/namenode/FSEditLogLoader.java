@@ -27,6 +27,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -170,7 +171,7 @@ public class FSEditLogLoader {
     StartupProgress prog = NameNode.getStartupProgress();
     Step step = createStartupProgressStep(edits);
     prog.beginStep(Phase.LOADING_EDITS, step);
-    fsNamesys.writeLock();
+    fsNamesys.writeLock(FSNamesystemLockMode.GLOBAL);
     try {
       long startTime = timer.monotonicNow();
       LogAction preLogAction = loadEditsLogHelper.record("pre", startTime);
@@ -195,7 +196,7 @@ public class FSEditLogLoader {
       return numEdits;
     } finally {
       edits.close();
-      fsNamesys.writeUnlock("loadFSEdits");
+      fsNamesys.writeUnlock(FSNamesystemLockMode.GLOBAL, "loadFSEdits");
       prog.endStep(Phase.LOADING_EDITS, step);
     }
   }
@@ -217,7 +218,7 @@ public class FSEditLogLoader {
       LOG.trace("Acquiring write lock to replay edit log");
     }
 
-    fsNamesys.writeLock();
+    fsNamesys.writeLock(FSNamesystemLockMode.GLOBAL);
     FSDirectory fsDir = fsNamesys.dir;
     fsDir.writeLock();
 
@@ -341,7 +342,7 @@ public class FSEditLogLoader {
         in.close();
       }
       fsDir.writeUnlock();
-      fsNamesys.writeUnlock("loadEditRecords");
+      fsNamesys.writeUnlock(FSNamesystemLockMode.GLOBAL, "loadEditRecords");
 
       if (LOG.isTraceEnabled()) {
         LOG.trace("replaying edit log finished");
@@ -1105,10 +1106,10 @@ public class FSEditLogLoader {
     final BlockInfo newBlockInfo;
     boolean isStriped = ecPolicy != null;
     if (isStriped) {
-      newBlockInfo = new BlockInfoStriped(newBlock, ecPolicy);
+      newBlockInfo = new BlockInfoStriped(newBlock, ecPolicy, file.getStoragePolicyID());
     } else {
       newBlockInfo = new BlockInfoContiguous(newBlock,
-          file.getPreferredBlockReplication());
+          file.getPreferredBlockReplication(), file.getStoragePolicyID());
     }
     newBlockInfo.convertToBlockUnderConstruction(
         BlockUCState.UNDER_CONSTRUCTION, null);
@@ -1196,10 +1197,10 @@ public class FSEditLogLoader {
           // what about an old-version fsync() where fsync isn't called
           // until several blocks in?
           if (isStriped) {
-            newBI = new BlockInfoStriped(newBlock, ecPolicy);
+            newBI = new BlockInfoStriped(newBlock, ecPolicy, file.getStoragePolicyID());
           } else {
             newBI = new BlockInfoContiguous(newBlock,
-                file.getPreferredBlockReplication());
+                file.getPreferredBlockReplication(), file.getStoragePolicyID());
           }
           newBI.convertToBlockUnderConstruction(
               BlockUCState.UNDER_CONSTRUCTION, null);
@@ -1209,10 +1210,10 @@ public class FSEditLogLoader {
           // versions of Hadoop. Current versions always log
           // OP_ADD operations as each block is allocated.
           if (isStriped) {
-            newBI = new BlockInfoStriped(newBlock, ecPolicy);
+            newBI = new BlockInfoStriped(newBlock, ecPolicy, file.getStoragePolicyID());
           } else {
             newBI = new BlockInfoContiguous(newBlock,
-                file.getFileReplication());
+                file.getFileReplication(), file.getStoragePolicyID());
           }
         }
         fsNamesys.getBlockManager().addBlockCollectionWithCheck(newBI, file);
