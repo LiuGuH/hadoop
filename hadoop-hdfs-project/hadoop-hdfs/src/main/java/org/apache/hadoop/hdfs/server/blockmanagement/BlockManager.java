@@ -2775,8 +2775,6 @@ public class BlockManager implements BlockStatsMXBean {
       } else {
         storageInfo = node.getStorageInfo(storage.getStorageID());
       }
-
-      assert !namesystem.hasWriteLock(FSNamesystemLockMode.FS);
       assert namesystem.hasWriteLock(FSNamesystemLockMode.BM);
 
       if (storageInfo == null) {
