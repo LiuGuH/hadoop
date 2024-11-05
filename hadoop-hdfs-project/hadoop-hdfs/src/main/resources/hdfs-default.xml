@@ -6080,7 +6080,7 @@
   </property>
 
   <property>
-    <name>dfs.namenode.blockreport.max.lock.hold.time</name>
+    <name>dfs.namenode.blockreport.max.lock.hold.time.ms</name>
     <value>4</value>
     <description>
       The BlockReportProcessingThread max write lock hold time in ms.
