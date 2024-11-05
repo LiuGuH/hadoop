@@ -88,7 +88,6 @@ import org.apache.hadoop.hdfs.server.blockmanagement.PendingDataNodeMessages.Rep
 import org.apache.hadoop.hdfs.server.blockmanagement.PendingReconstructionBlocks.PendingBlockInfo;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
-import org.apache.hadoop.hdfs.server.namenode.CachedBlock;
 import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
@@ -111,13 +110,13 @@ import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
-import org.apache.hadoop.hdfs.server.namenode.CacheManager;
 
 import static org.apache.hadoop.hdfs.util.StripedBlockUtil.getInternalBlockLength;
 
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.net.Node;
 import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Daemon;
 import org.apache.hadoop.util.ExitUtil;
@@ -411,9 +410,6 @@ public class BlockManager implements BlockStatsMXBean {
   // Max number of blocks to log info about during a block report.
   private final long maxNumBlocksToLog;
 
-  // Max write lock hold time for BlockReportProcessingThread(ms).
-  private final long maxLockHoldTime;
-
   /**
    * When running inside a Standby node, the node may receive block reports
    * from datanodes before receiving the corresponding namespace edits from
@@ -562,10 +558,7 @@ public class BlockManager implements BlockStatsMXBean {
     this.maxNumBlocksToLog =
         conf.getLong(DFSConfigKeys.DFS_MAX_NUM_BLOCKS_TO_LOG_KEY,
             DFSConfigKeys.DFS_MAX_NUM_BLOCKS_TO_LOG_DEFAULT);
-    this.maxLockHoldTime = conf.getTimeDuration(
-        DFSConfigKeys.DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME,
-        DFSConfigKeys.DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_DEFAULT,
-        TimeUnit.MILLISECONDS);
+
     this.numBlocksPerIteration = conf.getInt(
         DFSConfigKeys.DFS_BLOCK_MISREPLICATION_PROCESSING_LIMIT,
         DFSConfigKeys.DFS_BLOCK_MISREPLICATION_PROCESSING_LIMIT_DEFAULT);
@@ -5366,7 +5359,9 @@ public class BlockManager implements BlockStatsMXBean {
             do {
               processed++;
               action.run();
-              if (Time.monotonicNow() - start > maxLockHoldTime) {
+              if (Time.monotonicNow() - start > BzlDynamicConfiguration.getInstance().
+                  getLong(DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_MS,
+                      DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_MS_DEFAULT)) {
                 break;
               }
               action = queue.poll();

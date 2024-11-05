@@ -330,10 +330,11 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       = "dfs.namenode.blockreport.queue.size";
   public static final int    DFS_NAMENODE_BLOCKREPORT_QUEUE_SIZE_DEFAULT
       = 1024;
-  public static final String DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME
-      = "dfs.namenode.blockreport.max.lock.hold.time";
+  // Max write lock hold time for BlockReportProcessingThread(ms).
+  public static final String DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_MS
+      = "dfs.namenode.blockreport.max.lock.hold.time.ms";
   public static final long
-      DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_DEFAULT = 4;
+      DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_MS_DEFAULT = 4;
 
   public static final String
       DFS_NAMENODE_CORRUPT_BLOCK_DELETE_IMMEDIATELY_ENABLED =
