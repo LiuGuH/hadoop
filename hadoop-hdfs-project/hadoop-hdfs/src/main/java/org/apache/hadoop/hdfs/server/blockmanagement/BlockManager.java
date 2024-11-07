@@ -5367,7 +5367,7 @@ public class BlockManager implements BlockStatsMXBean {
               action = queue.poll();
             } while (action != null);
           } finally {
-            namesystem.writeUnlock(FSNamesystemLockMode.BM, "processQueue");
+            namesystem.writeUnlock(FSNamesystemLockMode.BM, "blockReportProcessQueue");
             metrics.addBlockOpsBatched(processed - 1);
           }
         } catch (InterruptedException e) {
