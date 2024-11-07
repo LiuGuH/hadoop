@@ -283,6 +283,18 @@ public class FineGrainedFSNamesystemLock implements AbstractFSNamesystemLock {
     }
     return -1;
   }
+  
+  @Override
+  public int getReadLockCount(FSNamesystemLockMode lockMode) {
+    if (lockMode.equals(FSNamesystemLockMode.GLOBAL)) {
+      return this.fsLock.getReadLockCounts() + this.bmLock.getReadLockCounts();
+    } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
+      return this.fsLock.getReadLockCounts();
+    } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
+      return this.bmLock.getReadLockCounts();
+    }
+    return -1;
+  }
 
   @Override
   public long getNumOfReadLockLongHold(FSNamesystemLockMode lockMode) {

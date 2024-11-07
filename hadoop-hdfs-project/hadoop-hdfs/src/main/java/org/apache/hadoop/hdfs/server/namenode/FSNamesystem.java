@@ -5000,6 +5000,16 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     return fsLock.getQueueLength(FSNamesystemLockMode.BM);
   }
   
+  @Metric({"FSReadLockCounts", "Number of read locks held for FS lock"})
+  public int getFsReadLockCount() {
+    return fsLock.getReadLockCount(FSNamesystemLockMode.FS);
+  }
+
+  @Metric({"BMReadLockCounts", "Number of read locks held for BM lock"})
+  public int getBmReadLockCount() {
+    return fsLock.getReadLockCount(FSNamesystemLockMode.BM);
+  }
+  
   @Metric(value = {"FSReadLockLongHoldCount", "The number of time " +
           "the read lock has been held for longer than the threshold"},
           type = Metric.Type.COUNTER)

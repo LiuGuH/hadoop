@@ -121,6 +121,13 @@ public interface AbstractFSNamesystemLock {
   int getQueueLength(FSNamesystemLockMode lockMode);
 
   /**
+   * Queries the number of read locks held for this lock. 
+   * @param lockMode locking mode
+   * @return int - Number of read locks held for this lock.
+   */
+  int getReadLockCount(FSNamesystemLockMode lockMode);
+
+  /**
    * Returns the number of time the read lock
    * has been held longer than the threshold.
    *
