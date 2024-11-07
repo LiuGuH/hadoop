@@ -358,6 +358,10 @@ public class FSNamesystemLock {
     return coarseLock.getReadHoldCount();
   }
   
+  public int getReadLockCounts() {
+    return coarseLock.getReadLockCount();
+  }
+  
   public int getWriteHoldCount() {
     return coarseLock.getWriteHoldCount();
   }

@@ -99,6 +99,11 @@ public class LegacyFSNamesystemLock implements AbstractFSNamesystemLock {
   }
 
   @Override
+  public int getReadLockCount(FSNamesystemLockMode lockMode) {
+    return this.lock.getReadLockCounts();
+  }
+
+  @Override
   public long getNumOfReadLockLongHold(FSNamesystemLockMode lockMode) {
     return this.lock.getNumOfReadLockLongHold();
   }
