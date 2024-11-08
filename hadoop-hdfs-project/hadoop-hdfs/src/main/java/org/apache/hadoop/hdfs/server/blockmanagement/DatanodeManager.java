@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.blockmanagement;
 import static org.apache.hadoop.hdfs.server.protocol.DatanodeProtocol.DNA_ERASURE_CODING_RECONSTRUCTION;
 import static org.apache.hadoop.util.Time.monotonicNow;
 
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -1830,12 +1831,14 @@ public class DatanodeManager {
       VolumeFailureSummary volumeFailureSummary,
       @Nonnull SlowPeerReports slowPeers,
       @Nonnull SlowDiskReports slowDisks) throws IOException {
+    long startTimeNanos = Time.monotonicNowNanos();
     final DatanodeDescriptor nodeinfo;
     try {
       nodeinfo = getDatanode(nodeReg);
     } catch (UnregisteredNodeException e) {
       return new DatanodeCommand[]{RegisterCommand.REGISTER};
     }
+    ((FSNamesystem)namesystem).getDmGetDatanodeProcessingTime().add(Time.monotonicNowNanos() - startTimeNanos);
 
     // Check if this datanode should actually be shutdown instead.
     if (nodeinfo != null && nodeinfo.isDisallowed()) {
@@ -1848,6 +1851,8 @@ public class DatanodeManager {
     }
     heartbeatManager.updateHeartbeat(nodeinfo, reports, cacheCapacity,
         cacheUsed, xceiverCount, failedVolumes, volumeFailureSummary);
+    ((FSNamesystem)namesystem).getHeartbeatManagerUpdateHeartbeatProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
 
     // If we are in safemode, do not send back any recovery / replication
     // requests. Don't even drain the existing queue of work.
@@ -1959,7 +1964,8 @@ public class DatanodeManager {
       }
       slowDiskTracker.checkAndUpdateReportIfNecessary();
     }
-
+    ((FSNamesystem)namesystem).getCommandGenerateProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
     if (!cmds.isEmpty()) {
       return cmds.toArray(new DatanodeCommand[cmds.size()]);
     }

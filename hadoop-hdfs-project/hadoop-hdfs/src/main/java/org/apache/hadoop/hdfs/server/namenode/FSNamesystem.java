@@ -406,8 +406,28 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   @Metric("internal release lease ops") MutableCounterLong internalReleaseLease;
   @Metric final MutableRate heartbeatProcessingTime =
       registry.newRate("heartbeatProcessingTime");
+  @Metric final MutableRate dmHandleHeartbeatProcessingTime =
+      registry.newRate("dmHandleHeartbeatProcessingTime");
+  @Metric final MutableRate requestBlockReportLeaseIdProcessingTime =
+      registry.newRate("requestBlockReportLeaseIdProcessingTime");
+  @Metric final MutableRate dmGetDatanodeProcessingTime =
+      registry.newRate("dmGetDatanodeProcessingTime");
+  @Metric final MutableRate heartbeatManagerUpdateHeartbeatProcessingTime =
+      registry.newRate("heartbeatManagerUpdateHeartbeatProcessingTime");
+  @Metric final MutableRate commandGenerateProcessingTime =
+      registry.newRate("commandGenerateProcessingTime");
 
+  public MutableRate getDmGetDatanodeProcessingTime() {
+    return dmGetDatanodeProcessingTime;
+  }
 
+  public MutableRate getHeartbeatManagerUpdateHeartbeatProcessingTime() {
+    return heartbeatManagerUpdateHeartbeatProcessingTime;
+  }
+
+  public MutableRate getCommandGenerateProcessingTime() {
+    return commandGenerateProcessingTime;
+  }
 
   private final String contextFieldSeparator;
 
@@ -4513,11 +4533,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           nodeReg, reports, getBlockPoolId(), cacheCapacity, cacheUsed,
           xceiverCount, xmitsInProgress, failedVolumes, volumeFailureSummary,
           slowPeers, slowDisks);
+      dmHandleHeartbeatProcessingTime.add(Time.monotonicNowNanos() - startHbTimeNanos);
       long blockReportLeaseId = 0;
       if (requestFullBlockReportLease) {
         blockReportLeaseId =  blockManager.requestBlockReportLeaseId(nodeReg);
       }
-
+      requestBlockReportLeaseIdProcessingTime.add(Time.monotonicNowNanos() - startHbTimeNanos);
       //create ha status
       final NNHAStatusHeartbeat haState = new NNHAStatusHeartbeat(
           haContext.getState().getServiceState(),
