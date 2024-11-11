@@ -27,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
 import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
@@ -256,10 +257,17 @@ class HeartbeatManager implements DatanodeStatistics {
       StorageReport[] reports, long cacheCapacity, long cacheUsed,
       int xceiverCount, int failedVolumes,
       VolumeFailureSummary volumeFailureSummary) {
+    long startTimeNanos = Time.monotonicNowNanos();
     stats.subtract(node);
+    ((FSNamesystem)namesystem).getStatsSubstractProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
     blockManager.updateHeartbeat(node, reports, cacheCapacity, cacheUsed,
         xceiverCount, failedVolumes, volumeFailureSummary);
+    ((FSNamesystem)namesystem).getBmUpdateHeartbeatProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
     stats.add(node);
+    ((FSNamesystem)namesystem).getStatsAddProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
   }
 
   synchronized void updateLifeline(final DatanodeDescriptor node,
