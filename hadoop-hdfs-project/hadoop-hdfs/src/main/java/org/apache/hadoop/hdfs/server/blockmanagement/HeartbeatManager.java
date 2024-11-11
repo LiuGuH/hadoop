@@ -450,6 +450,7 @@ class HeartbeatManager implements DatanodeStatistics {
       int numOfStaleStorages = 0;
       List<DatanodeDescriptor> staleNodes = new ArrayList<>();
       synchronized(this) {
+        long startTimeNanos = Time.monotonicNowNanos();
         for (DatanodeDescriptor d : datanodes) {
           // check if an excessive GC pause has occurred
           if (shouldAbortHeartbeatCheck(0)) {
@@ -490,6 +491,8 @@ class HeartbeatManager implements DatanodeStatistics {
         // Set the number of stale nodes in the DatanodeManager
         dm.setNumStaleNodes(staleDataNodes.size());
         dm.setNumStaleStorages(numOfStaleStorages);
+        ((FSNamesystem)namesystem).getHeartbeatCheckProcessingTime()
+            .add(Time.monotonicNowNanos() - startTimeNanos);
       }
 
       // log nodes detected as stale since last heartBeat
