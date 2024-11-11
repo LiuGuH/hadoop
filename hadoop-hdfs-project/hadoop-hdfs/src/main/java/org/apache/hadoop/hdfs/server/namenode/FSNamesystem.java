@@ -426,6 +426,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       registry.newRate("providedUpdateStorageProcessingTime");
   @Metric final MutableRate datanodeDescriptorUpdateHeartbeatProcessingTime =
       registry.newRate("datanodeDescriptorUpdateHeartbeatProcessingTime");
+  @Metric final MutableRate heartbeatCheckProcessingTime =
+      registry.newRate("heartbeatCheckProcessingTime");
+
+  public MutableRate getHeartbeatCheckProcessingTime() {
+    return heartbeatCheckProcessingTime;
+  }
 
   public MutableRate getProvidedUpdateStorageProcessingTime() {
     return providedUpdateStorageProcessingTime;
@@ -4555,7 +4561,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       @Nonnull SlowPeerReports slowPeers,
       @Nonnull SlowDiskReports slowDisks)
           throws IOException {
-    readLock(FSNamesystemLockMode.BM);
+    readLock(FSNamesystemLockMode.GLOBAL);
     long startHbTimeNanos = Time.monotonicNowNanos();
     try {
       //get datanode commands
@@ -4581,7 +4587,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           blockReportLeaseId, isSlownode);
     } finally {
       heartbeatProcessingTime.add(Time.monotonicNowNanos() - startHbTimeNanos);
-      readUnlock(FSNamesystemLockMode.BM, "handleHeartbeat");
+      readUnlock(FSNamesystemLockMode.GLOBAL, "handleHeartbeat");
     }
   }
 
