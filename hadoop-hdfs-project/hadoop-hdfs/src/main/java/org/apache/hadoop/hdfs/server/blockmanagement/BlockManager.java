@@ -88,6 +88,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.PendingDataNodeMessages.Rep
 import org.apache.hadoop.hdfs.server.blockmanagement.PendingReconstructionBlocks.PendingBlockInfo;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
@@ -2657,12 +2658,16 @@ public class BlockManager implements BlockStatsMXBean {
   void updateHeartbeat(DatanodeDescriptor node, StorageReport[] reports,
       long cacheCapacity, long cacheUsed, int xceiverCount, int failedVolumes,
       VolumeFailureSummary volumeFailureSummary) {
-
+    long startTimeNanos = Time.monotonicNowNanos();
     for (StorageReport report: reports) {
       providedStorageMap.updateStorage(node, report.getStorage());
     }
+    ((FSNamesystem)namesystem).getProvidedUpdateStorageProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
     node.updateHeartbeat(reports, cacheCapacity, cacheUsed, xceiverCount,
         failedVolumes, volumeFailureSummary);
+    ((FSNamesystem)namesystem).getDatanodeDescriptorUpdateHeartbeatProcessingTime()
+        .add(Time.monotonicNowNanos() - startTimeNanos);
   }
 
   void updateHeartbeatState(DatanodeDescriptor node,

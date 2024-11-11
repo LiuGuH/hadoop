@@ -416,6 +416,36 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       registry.newRate("heartbeatManagerUpdateHeartbeatProcessingTime");
   @Metric final MutableRate commandGenerateProcessingTime =
       registry.newRate("commandGenerateProcessingTime");
+  @Metric final MutableRate statsSubstractProcessingTime =
+      registry.newRate("statsSubstractProcessingTime");
+  @Metric final MutableRate statsAddProcessingTime =
+      registry.newRate("statsAddProcessingTime");
+  @Metric final MutableRate bmUpdateHeartbeatProcessingTime =
+      registry.newRate("bmUpdateHeartbeatProcessingTime");
+  @Metric final MutableRate providedUpdateStorageProcessingTime =
+      registry.newRate("providedUpdateStorageProcessingTime");
+  @Metric final MutableRate datanodeDescriptorUpdateHeartbeatProcessingTime =
+      registry.newRate("datanodeDescriptorUpdateHeartbeatProcessingTime");
+
+  public MutableRate getProvidedUpdateStorageProcessingTime() {
+    return providedUpdateStorageProcessingTime;
+  }
+
+  public MutableRate getDatanodeDescriptorUpdateHeartbeatProcessingTime() {
+    return datanodeDescriptorUpdateHeartbeatProcessingTime;
+  }
+
+  public MutableRate getStatsSubstractProcessingTime() {
+    return statsSubstractProcessingTime;
+  }
+
+  public MutableRate getStatsAddProcessingTime() {
+    return statsAddProcessingTime;
+  }
+
+  public MutableRate getBmUpdateHeartbeatProcessingTime() {
+    return bmUpdateHeartbeatProcessingTime;
+  }
 
   public MutableRate getDmGetDatanodeProcessingTime() {
     return dmGetDatanodeProcessingTime;
