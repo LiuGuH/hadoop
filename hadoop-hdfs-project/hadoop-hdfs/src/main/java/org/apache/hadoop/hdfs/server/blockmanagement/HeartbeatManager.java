@@ -257,17 +257,10 @@ class HeartbeatManager implements DatanodeStatistics {
       StorageReport[] reports, long cacheCapacity, long cacheUsed,
       int xceiverCount, int failedVolumes,
       VolumeFailureSummary volumeFailureSummary) {
-    long startTimeNanos = Time.monotonicNowNanos();
     stats.subtract(node);
-    ((FSNamesystem)namesystem).getStatsSubstractProcessingTime()
-        .add(Time.monotonicNowNanos() - startTimeNanos);
     blockManager.updateHeartbeat(node, reports, cacheCapacity, cacheUsed,
         xceiverCount, failedVolumes, volumeFailureSummary);
-    ((FSNamesystem)namesystem).getBmUpdateHeartbeatProcessingTime()
-        .add(Time.monotonicNowNanos() - startTimeNanos);
     stats.add(node);
-    ((FSNamesystem)namesystem).getStatsAddProcessingTime()
-        .add(Time.monotonicNowNanos() - startTimeNanos);
   }
 
   synchronized void updateLifeline(final DatanodeDescriptor node,
@@ -491,8 +484,6 @@ class HeartbeatManager implements DatanodeStatistics {
         // Set the number of stale nodes in the DatanodeManager
         dm.setNumStaleNodes(staleDataNodes.size());
         dm.setNumStaleStorages(numOfStaleStorages);
-        ((FSNamesystem)namesystem).getHeartbeatCheckProcessingTime()
-            .add(Time.monotonicNowNanos() - startTimeNanos);
       }
 
       // log nodes detected as stale since last heartBeat
