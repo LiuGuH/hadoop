@@ -611,7 +611,9 @@ public abstract class Server {
     // don't include lock wait for detailed metrics.
     processingTime -= waitTime;
     String name = call.getDetailedMetricsName();
+    rpcDetailedMetrics.addProcessingTime(name + "LockWait", waitTime);
     rpcDetailedMetrics.addProcessingTime(name, processingTime);
+    rpcDetailedMetrics.addProcessingTime(name + "Whole", processingTime + waitTime);
     callQueue.addResponseTime(name, call, details);
     if (isLogSlowRPC()) {
       logSlowRpcCalls(name, call, details);
