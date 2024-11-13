@@ -2658,16 +2658,11 @@ public class BlockManager implements BlockStatsMXBean {
   void updateHeartbeat(DatanodeDescriptor node, StorageReport[] reports,
       long cacheCapacity, long cacheUsed, int xceiverCount, int failedVolumes,
       VolumeFailureSummary volumeFailureSummary) {
-    long startTimeNanos = Time.monotonicNowNanos();
     for (StorageReport report: reports) {
       providedStorageMap.updateStorage(node, report.getStorage());
     }
-    ((FSNamesystem)namesystem).getProvidedUpdateStorageProcessingTime()
-        .add(Time.monotonicNowNanos() - startTimeNanos);
     node.updateHeartbeat(reports, cacheCapacity, cacheUsed, xceiverCount,
         failedVolumes, volumeFailureSummary);
-    ((FSNamesystem)namesystem).getDatanodeDescriptorUpdateHeartbeatProcessingTime()
-        .add(Time.monotonicNowNanos() - startTimeNanos);
   }
 
   void updateHeartbeatState(DatanodeDescriptor node,
@@ -2758,6 +2753,7 @@ public class BlockManager implements BlockStatsMXBean {
 
       if (providedStorageMap.isProvidedStorage(storage.getStorageID())) {
         namesystem.writeUnlock(FSNamesystemLockMode.BM, "getStorage");
+        namesystem.readUnlock(FSNamesystemLockMode.FS, "getStorage");
         namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
         try {
           // To minimize startup time, we discard any second (or later) block reports
@@ -2768,6 +2764,7 @@ public class BlockManager implements BlockStatsMXBean {
               providedStorageMap.getStorage(node, storage);
         } finally {
           namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "getStorage");
+          namesystem.readLock(FSNamesystemLockMode.FS);
           namesystem.writeLock(FSNamesystemLockMode.BM);
         }
       } else {
@@ -2792,6 +2789,7 @@ public class BlockManager implements BlockStatsMXBean {
 
       if (storageInfo.getBlockReportCount() == 0) {
         namesystem.writeUnlock(FSNamesystemLockMode.BM, "getStorage");
+        namesystem.readUnlock(FSNamesystemLockMode.FS, "getStorage");
         assert !namesystem.hasWriteLock(FSNamesystemLockMode.BM);
         namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
         try {
@@ -2805,6 +2803,7 @@ public class BlockManager implements BlockStatsMXBean {
           processFirstBlockReport(storageInfo, newReport);
         } finally {
           namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "processFirstBlockReport");
+          namesystem.readLock(FSNamesystemLockMode.FS);
           namesystem.writeLock(FSNamesystemLockMode.BM);
         }
       } else {
@@ -5357,6 +5356,7 @@ public class BlockManager implements BlockStatsMXBean {
           // batch as many operations in the write lock until the queue
           // runs dry, or the max lock hold is reached.
           int processed = 0;
+          namesystem.readLock(FSNamesystemLockMode.FS);
           namesystem.writeLock(FSNamesystemLockMode.BM);
           metrics.setBlockOpsQueued(queue.size() + 1);
           try {
@@ -5373,6 +5373,7 @@ public class BlockManager implements BlockStatsMXBean {
             } while (action != null);
           } finally {
             namesystem.writeUnlock(FSNamesystemLockMode.BM, "blockReportProcessQueue");
+            namesystem.readUnlock(FSNamesystemLockMode.FS, "blockReportProcessQueue");
             metrics.addBlockOpsBatched(processed - 1);
           }
         } catch (InterruptedException e) {
