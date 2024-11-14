@@ -88,6 +88,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.PendingDataNodeMessages.Rep
 import org.apache.hadoop.hdfs.server.blockmanagement.PendingReconstructionBlocks.PendingBlockInfo;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
@@ -5369,7 +5370,8 @@ public class BlockManager implements BlockStatsMXBean {
             long end = Time.monotonicNow();
             namesystem.writeUnlock(FSNamesystemLockMode.BM, "blockReportProcessQueue");
             metrics.addBlockOpsBatched(processed - 1);
-            if (end - start > BzlDynamicConfiguration.getInstance().
+            if (!isInSafeMode() && ((FSNamesystem)namesystem).inActiveState() && 
+                end - start > BzlDynamicConfiguration.getInstance().
                 getLong(DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS,
                     DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS_DEFAULT)) {
               Thread.sleep(BzlDynamicConfiguration.getInstance().

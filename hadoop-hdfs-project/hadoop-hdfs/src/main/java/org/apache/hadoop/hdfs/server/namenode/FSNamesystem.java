@@ -1503,7 +1503,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
   }
 
-  private boolean inActiveState() {
+  public boolean inActiveState() {
     return haContext != null &&
         haContext.getState().getServiceState() == HAServiceState.ACTIVE;
   }
