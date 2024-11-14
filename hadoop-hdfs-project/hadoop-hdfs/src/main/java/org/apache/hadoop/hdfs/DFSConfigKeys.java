@@ -335,7 +335,15 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       = "dfs.namenode.blockreport.max.lock.hold.time.ms";
   public static final long
       DFS_NAMENODE_BLOCKREPORT_MAX_LOCK_HOLD_TIME_MS_DEFAULT = 4;
-
+  public static final String DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS
+      = "dfs.namenode.blockreport.thread.threshold.ms";
+  public static final long DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS_DEFAULT
+      = 100;
+  public static final String DFS_NAMENODE_BLOCKREPORT_THREAD_SLEEP_TIME_MS
+      = "dfs.namenode.blockreport.thread.sleep.time.ms";
+  public static final long DFS_NAMENODE_BLOCKREPORT_THREAD_SLEEP_TIME_MS_DEFAULT
+      = 15;
+  
   public static final String
       DFS_NAMENODE_CORRUPT_BLOCK_DELETE_IMMEDIATELY_ENABLED =
       "dfs.namenode.corrupt.block.delete.immediately.enabled";
