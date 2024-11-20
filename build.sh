@@ -53,9 +53,7 @@ cp -r $base_path/hadoop-dist/target/$hadoop_tar_name $pkg_dir/$hadoop_dir_name/
 cp -r $base_path/hadoop-dist/target/$hadoop_dir_name $pkg_dir/$hadoop_ranger_dir_name/$hadoop_ranger_dir_name
 
 cd $pkg_dir/$hadoop_ranger_dir_name/$hadoop_ranger_dir_name/share/hadoop/hdfs/lib/
-ln -nfs /opt/hadoop/gateway/hdfsrangerplugin/current/lib/ranger-hdfs-plugin-shim.jar ranger-hdfs-plugin-shim.jar
-ln -nfs /opt/hadoop/gateway/hdfsrangerplugin/current/lib/ranger-plugin-classloader.jar ranger-plugin-classloader.jar
-ln -nfs /opt/hadoop/gateway/hdfsrangerplugin/current/lib/ranger-hdfs-plugin-impl ranger-hdfs-plugin-impl
+ln -nfs /opt/hadoop/gateway/bzlhdfsrangerplugin/current/lib/bzl-ranger.jar bzl-ranger.jar
 
 cd $pkg_dir/$hadoop_ranger_dir_name
 tar -zcvf $hadoop_ranger_tar_name $hadoop_ranger_dir_name
