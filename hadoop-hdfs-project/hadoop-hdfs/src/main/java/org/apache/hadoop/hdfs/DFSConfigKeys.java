@@ -29,6 +29,7 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockPlacementPolicyRackFau
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.RamDiskReplicaLruTracker;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReservedSpaceCalculator;
 import org.apache.hadoop.hdfs.server.namenode.lock.AbstractFSNamesystemLock;
+import org.apache.hadoop.hdfs.server.namenode.lock.FineGrainedFSNamesystemLock;
 import org.apache.hadoop.hdfs.server.namenode.lock.LegacyFSNamesystemLock;
 import org.apache.hadoop.hdfs.web.URLConnectionFactory;
 import org.apache.hadoop.http.HttpConfig;
@@ -338,11 +339,11 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS
       = "dfs.namenode.blockreport.thread.threshold.ms";
   public static final long DFS_NAMENODE_BLOCKREPORT_THREAD_THRESHOLD_MS_DEFAULT
-      = 100;
+      = 50;
   public static final String DFS_NAMENODE_BLOCKREPORT_THREAD_SLEEP_TIME_MS
       = "dfs.namenode.blockreport.thread.sleep.time.ms";
   public static final long DFS_NAMENODE_BLOCKREPORT_THREAD_SLEEP_TIME_MS_DEFAULT
-      = 15;
+      = 200;
   
   public static final String
       DFS_NAMENODE_CORRUPT_BLOCK_DELETE_IMMEDIATELY_ENABLED =
@@ -992,7 +993,7 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
   public static final String DFS_NAMENODE_FSNAMESYSTEM_LOCK_PROVIDER_KEY =
       "dfs.namenode.fsnamesystem.lock.provider.class";
   public static final Class<? extends AbstractFSNamesystemLock> DFS_NAMENODE_FSNAMESYSTEM_LOCK_PROVIDER_DEFAULT =
-      LegacyFSNamesystemLock.class;
+      FineGrainedFSNamesystemLock.class;
 
   public static final String  DFS_DATANODE_BP_READY_TIMEOUT_KEY = "dfs.datanode.bp-ready.timeout";
   public static final long    DFS_DATANODE_BP_READY_TIMEOUT_DEFAULT = 20;
