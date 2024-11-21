@@ -3782,10 +3782,10 @@
 
 <property>
   <name>dfs.namenode.fsnamesystem.lock.provider.class</name>
-  <value>org.apache.hadoop.hdfs.server.namenode.lock.LegacyFSNamesystemLock</value>
+  <value>org.apache.hadoop.hdfs.server.namenode.lock.FineGrainedFSNamesystemLock</value>
   <description>
     An implementation class of FSNamesystem lock.
-    Defaults to LegacyFSNamesystemLock.class.
+    Defaults to FineGrainedFSNamesystemLock.class.
   </description>
 </property>
 
