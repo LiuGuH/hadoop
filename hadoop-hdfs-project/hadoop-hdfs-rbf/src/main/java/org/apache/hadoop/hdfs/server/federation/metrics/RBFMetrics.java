@@ -106,6 +106,8 @@ public class RBFMetrics implements RouterMBean, FederationMBean {
   /** Prevent holding the page from load too long. */
   private final long timeOut;
 
+  /** Enable/Disable getNodeUsage. **/
+  private boolean enableGetDNUsage;
 
   /** Router interface. */
   private final Router router;
@@ -167,7 +169,8 @@ public class RBFMetrics implements RouterMBean, FederationMBean {
     Configuration conf = router.getConfig();
     this.timeOut = conf.getTimeDuration(RBFConfigKeys.DN_REPORT_TIME_OUT,
         RBFConfigKeys.DN_REPORT_TIME_OUT_MS_DEFAULT, TimeUnit.MILLISECONDS);
-
+    this.enableGetDNUsage = conf.getBoolean(RBFConfigKeys.DFS_ROUTER_ENABLE_GET_DN_USAGE_KEY,
+        RBFConfigKeys.DFS_ROUTER_ENABLE_GET_DN_USAGE_DEFAULT);
   }
 
   /**
@@ -516,11 +519,15 @@ public class RBFMetrics implements RouterMBean, FederationMBean {
 
     final Map<String, Map<String, Object>> info = new HashMap<>();
     try {
-      RouterRpcServer rpcServer = this.router.getRpcServer();
-      DatanodeInfo[] live = rpcServer.getDatanodeReport(
-          DatanodeReportType.LIVE, false, timeOut);
+      DatanodeInfo[] live = null;
+      if (this.enableGetDNUsage) {
+        RouterRpcServer rpcServer = this.router.getRpcServer();
+        live = rpcServer.getDatanodeReport(DatanodeReportType.LIVE, false, timeOut);
+      } else {
+        LOG.debug("Getting node usage is disabled.");
+      }
 
-      if (live.length > 0) {
+      if (live != null && live.length > 0) {
         float totalDfsUsed = 0;
         float[] usages = new float[live.length];
         int i = 0;
