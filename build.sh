@@ -1,7 +1,19 @@
 #!/bin/bash
 
 #mvn clean package -DskipTests
-mvn clean package -Pdist,native -DskipTests -Dtar -Denforcer.skip=true -Drequire.pmdk -Disal.lib=/usr/lib64/ -Dbundle.isal=true
+# 定义变量
+M2_REPO="/home/jenkins/.m2/repository"
+YARN_VERSION="1.22.5"
+YARN_PATH="$M2_REPO/com/github/eirslett/yarn/$YARN_VERSION"
+YARN_TAR="yarn-$YARN_VERSION.tar.gz"
+MAVEN_SETTINGS="/home/wyf/software/apache-maven-3.8.5/conf/settings.xml"
+
+# 解决yarn 无法从github下载的问题
+mkdir -p $YARN_PATH
+wget http://dap-oss.weizhipin.com/dap-guardian-file/bdh/ci/$YARN_TAR -O $YARN_PATH/$YARN_TAR
+
+# 执行 Maven 命令
+mvn -s $MAVEN_SETTINGS -Dmaven.repo.local=$M2_REPO clean package -Pdist,native -DskipTests -Dtar -Denforcer.skip=true -Drequire.pmdk -Disal.lib=/usr/lib64/ -Dbundle.isal=true
 
 if [ "$?" -ne "0" ]; then
   echo "mvn bulid failed!"
