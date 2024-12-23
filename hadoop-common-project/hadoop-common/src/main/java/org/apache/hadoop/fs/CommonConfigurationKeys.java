@@ -437,6 +437,9 @@ public class CommonConfigurationKeys extends CommonConfigurationKeysPublic {
       "hadoop.metrics.jvm.use-thread-mxbean";
   public static final boolean HADOOP_METRICS_JVM_USE_THREAD_MXBEAN_DEFAULT =
       false;
+  public static final String HADOOP_METRICS_JVM_THREADSTATE_ENABLE_KEY =
+      "hadoop.metrics.jvm.threadstate.enable";
+  public static final boolean HADOOP_METRICS_JVM_THREADSTATE_ENABLE_DEFAULT = true;
 
   /** logging level for IOStatistics (debug or info). */
   public static final String IOSTATISTICS_LOGGING_LEVEL
