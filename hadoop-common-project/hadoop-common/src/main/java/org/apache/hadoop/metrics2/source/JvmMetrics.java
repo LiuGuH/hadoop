@@ -92,14 +92,22 @@ public class JvmMetrics implements MetricsSource {
   final ConcurrentHashMap<String, MetricsInfo[]> gcInfoCache =
       new ConcurrentHashMap<String, MetricsInfo[]>();
   private GcTimeMonitor gcTimeMonitor = null;
+  private boolean threadStateEnable;
 
   @VisibleForTesting
   JvmMetrics(String processName, String sessionId, boolean useThreadMXBean) {
+    this(processName, sessionId, useThreadMXBean, true);
+  }
+
+  @VisibleForTesting
+  JvmMetrics(String processName, String sessionId, boolean useThreadMXBean,
+      boolean threadStateEnable) {
     this.processName = processName;
     this.sessionId = sessionId;
     if (useThreadMXBean) {
       this.threadMXBean = ManagementFactory.getThreadMXBean();
     }
+    this.threadStateEnable = threadStateEnable;
   }
 
   public void setPauseMonitor(final JvmPauseMonitor pauseMonitor) {
@@ -117,11 +125,15 @@ public class JvmMetrics implements MetricsSource {
     // code level to update all the callers across lots of modules,
     // this method is called at most once for components (NN/DN/RM/NM/...)
     // so that the overall cost is not expensive.
-    boolean useThreadMXBean = new Configuration().getBoolean(
+    Configuration conf = new Configuration();
+    boolean useThreadMXBean = conf.getBoolean(
         CommonConfigurationKeys.HADOOP_METRICS_JVM_USE_THREAD_MXBEAN,
         CommonConfigurationKeys.HADOOP_METRICS_JVM_USE_THREAD_MXBEAN_DEFAULT);
+    boolean threadStateEnable = conf.getBoolean(
+        CommonConfigurationKeys.HADOOP_METRICS_JVM_THREADSTATE_ENABLE_KEY,
+        CommonConfigurationKeys.HADOOP_METRICS_JVM_THREADSTATE_ENABLE_DEFAULT);
     return ms.register(JvmMetrics.name(), JvmMetrics.description(),
-                       new JvmMetrics(processName, sessionId, useThreadMXBean));
+                       new JvmMetrics(processName, sessionId, useThreadMXBean, threadStateEnable));
   }
 
   public static void reattach(MetricsSystem ms, JvmMetrics jvmMetrics) {
@@ -144,6 +156,10 @@ public class JvmMetrics implements MetricsSource {
 
   @Override
   public void getMetrics(MetricsCollector collector, boolean all) {
+    if (!threadStateEnable) {
+      return;
+    }
+
     MetricsRecordBuilder rb = collector.addRecord(JvmMetrics)
         .setContext("jvm").tag(ProcessName, processName)
         .tag(SessionId, sessionId);

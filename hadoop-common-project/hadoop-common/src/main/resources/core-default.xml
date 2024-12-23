@@ -4061,6 +4061,15 @@
   </property>
 
   <property>
+    <name>hadoop.metrics.jvm.threadstate.enable</name>
+    <value>true</value>
+    <description>
+      Whether or not compute thread state metrics. There will be a little performance loss
+      when services have a lot of threads. 
+    </description>
+  </property>
+
+  <property>
     <name>ipc.server.observer.stale.rpc.interval</name>
     <value>15s</value>
     <description>
