@@ -4,8 +4,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.federation.metrics.FederationRPCMetrics;
 import org.apache.hadoop.hdfs.server.federation.router.FederationUtil;
 import org.apache.hadoop.hdfs.server.federation.router.RouterRpcServer;
-import org.apache.hadoop.hdfs.server.namenode.nodehealthymetrics.NumOpenConnectionsPerUserMetrics;
-import org.apache.hadoop.metrics2.*;
+import org.apache.hadoop.metrics2.MetricsCollector;
+import org.apache.hadoop.metrics2.MetricsInfo;
+import org.apache.hadoop.metrics2.MetricsRecordBuilder;
+import org.apache.hadoop.metrics2.MetricsSource;
+import org.apache.hadoop.metrics2.MetricsSystem;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.Interns;
 
@@ -36,6 +39,11 @@ public class FairnessControllerMetrics implements MetricsSource {
 
   @Override
   public void getMetrics(MetricsCollector collector, boolean all) {
+    if (rpcServer.getRPCClient().getRouterRpcFairnessPolicyController()
+        instanceof NoRouterRpcFairnessPolicyController) {
+      return;
+    }
+
     MetricsRecordBuilder rb = collector.addRecord(FederationRPCMetrics.class.getName())
         .setContext("dfs");
 
