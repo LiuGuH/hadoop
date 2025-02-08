@@ -10,7 +10,7 @@ MAVEN_SETTINGS="/home/wyf/software/apache-maven-3.8.5/conf/settings.xml"
 
 # 解决yarn 无法从github下载的问题
 mkdir -p $YARN_PATH
-wget http://dap-oss.weizhipin.com/dap-guardian-file/bdh/ci/$YARN_TAR -O $YARN_PATH/$YARN_TAR
+wget http://bzl-oss-store05.weizhipin.com/dap-guardian-file/bdh/ci/$YARN_TAR -O $YARN_PATH/$YARN_TAR
 
 # 执行 Maven 命令
 mvn -s $MAVEN_SETTINGS -Dmaven.repo.local=$M2_REPO clean package -Pdist,native -DskipTests -Dtar -Denforcer.skip=true -Drequire.pmdk -Disal.lib=/usr/lib64/ -Dbundle.isal=true
