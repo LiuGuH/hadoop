@@ -72,16 +72,6 @@ public class JournalProtocolTranslatorPB implements ProtocolMetaInterface,
   }
 
   @Override
-  public FenceResponse fence(JournalInfo journalInfo, long epoch,
-      String fencerInfo) throws IOException {
-    FenceRequestProto req = FenceRequestProto.newBuilder().setEpoch(epoch)
-        .setJournalInfo(PBHelper.convert(journalInfo)).build();
-    FenceResponseProto resp = ipc(() -> rpcProxy.fence(NULL_CONTROLLER, req));
-    return new FenceResponse(resp.getPreviousEpoch(),
-        resp.getLastTransactionId(), resp.getInSync());
-  }
-
-  @Override
   public void startLogSegment(JournalInfo journalInfo, long epoch, long txid)
       throws IOException {
     StartLogSegmentRequestProto req = StartLogSegmentRequestProto.newBuilder()
@@ -90,6 +80,16 @@ public class JournalProtocolTranslatorPB implements ProtocolMetaInterface,
         .setTxid(txid)
         .build();
     ipc(() -> rpcProxy.startLogSegment(NULL_CONTROLLER, req));
+  }
+
+  @Override
+  public FenceResponse fence(JournalInfo journalInfo, long epoch,
+      String fencerInfo) throws IOException {
+    FenceRequestProto req = FenceRequestProto.newBuilder().setEpoch(epoch)
+        .setJournalInfo(PBHelper.convert(journalInfo)).build();
+    FenceResponseProto resp = ipc(() -> rpcProxy.fence(NULL_CONTROLLER, req));
+    return new FenceResponse(resp.getPreviousEpoch(),
+        resp.getLastTransactionId(), resp.getInSync());
   }
 
   @Override
