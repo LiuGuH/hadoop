@@ -131,6 +131,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_DUPLICATE_ECREPLICA_SCANMAP_MAXSIZE_DEFAULT;
+import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.MAX_BLOCKS_IN_GROUP;
 
 /**************************************************
  * FSDataset manages a set of data blocks.  Each block
@@ -1729,10 +1730,37 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     return replicaInfo.getVolume().getStorageType() == StorageType.PROVIDED;
   }
 
+  private void checkECBlockGroupConfliction(ExtendedBlock b) throws ReplicaAlreadyExistsException {
+    // An EC Block Group has 16 replicas at most.
+    // For example ,RS-10-4-1024k will have 14 replicas in one ec block group
+    long[] stripedBlockIds = new long[MAX_BLOCKS_IN_GROUP];
+    stripedBlockIds[0] = BlockIdManager.convertToStripedID(b.getBlockId());
+    for (int i = 1; i < MAX_BLOCKS_IN_GROUP; i++) {
+      stripedBlockIds[i] = stripedBlockIds[i - 1] + 1;
+    }
+    try (AutoCloseableLock lock = lockManager.writeLock(LockLevel.BLOCK_POOl, b.getBlockPoolId())) {
+      for (int i = 0; i < MAX_BLOCKS_IN_GROUP; i++) {
+        ReplicaInfo currentReplicaInfo = volumeMap.get(b.getBlockPoolId(), stripedBlockIds[i]);
+        if (currentReplicaInfo != null) {
+          if (dataNodeMetrics != null) {
+            dataNodeMetrics.incrEcBlockConfliction();
+          }
+          throw new ReplicaAlreadyExistsException(
+              "EC Block " + currentReplicaInfo + " already exists in state "
+                  + currentReplicaInfo.getState() + " and thus " + b + " cannot be created.");
+        }
+      }
+    }
+  }
+
   @Override // FsDatasetSpi
   public ReplicaHandler createTemporary(StorageType storageType,
       String storageId, ExtendedBlock b, boolean isTransfer)
       throws IOException {
+    // With EC file, when datanode decommission and balancer, an ec group block should not exist in a same datanode.
+    if (BlockIdManager.isStripedBlockID(b.getBlockId())) {
+      checkECBlockGroupConfliction(b);
+    }
     long startTimeMs = Time.monotonicNow();
     long startHoldLockTimeMs = startTimeMs;
     long writerStopTimeoutMs = datanode.getDnConf().getXceiverStopTimeout();

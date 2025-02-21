@@ -221,6 +221,7 @@ public class DataNodeMetrics {
   @Metric private MutableRate appendOp;
 
   @Metric MutableCounterLong endBlockInAdvance;
+  @Metric MutableCounterLong ecBlockGroupConfliction;
 
   final MetricsRegistry registry = new MetricsRegistry("datanode");
   @Metric("Milliseconds spent on calling NN rpc")
@@ -736,6 +737,10 @@ public class DataNodeMetrics {
   
   public void incrEndBlockInAdvanceCounts() {
     endBlockInAdvance.incr();
+  }
+
+  public void incrEcBlockConfliction() {
+    ecBlockGroupConfliction.incr();
   }
 
   public void incrNumProcessedCommands() {
