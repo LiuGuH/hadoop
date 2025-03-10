@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.datanode.fsdataset.impl;
 
 import java.util.function.Supplier;
 
+import org.apache.hadoop.hdfs.server.blockmanagement.BlockIdManager;
 import org.apache.hadoop.hdfs.server.datanode.DataSetLockManager;
 import org.apache.hadoop.hdfs.server.datanode.LocalReplica;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
@@ -103,6 +104,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DN_CACHED_DFSUSED_CHECK_INTERVAL_MS;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_SCAN_PERIOD_HOURS_KEY;
+import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BLOCK_GROUP_INDEX_MASK;
+import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.MAX_BLOCKS_IN_GROUP;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1365,6 +1368,25 @@ public class TestFsDatasetImpl {
     } finally {
       cluster.shutdown();
       DataNodeFaultInjector.set(oldInjector);
+    }
+  }
+
+  @Test
+  public void testGenerateECBlocks() {
+    for (int i = 0; i < MAX_BLOCKS_IN_GROUP; i++) {
+      long blockid = ((Long.MIN_VALUE + i) & ~BLOCK_GROUP_INDEX_MASK) + MAX_BLOCKS_IN_GROUP;
+      assertTrue(BlockIdManager.isStripedBlockID(blockid));
+      long ecGroupBlockId = BlockIdManager.convertToStripedID(blockid);
+
+      long[] stripedBlockIds = new long[MAX_BLOCKS_IN_GROUP];
+      if (BlockIdManager.isStripedBlockID(blockid)) {
+        stripedBlockIds[0] = BlockIdManager.convertToStripedID(blockid);
+        for (int j = 1; j < MAX_BLOCKS_IN_GROUP; j++) {
+          stripedBlockIds[j] = stripedBlockIds[j - 1] + 1;
+          assertTrue(BlockIdManager.isStripedBlockID(stripedBlockIds[j]));
+          assertEquals(ecGroupBlockId, BlockIdManager.convertToStripedID(stripedBlockIds[j]));
+        }
+      }
     }
   }
 }
