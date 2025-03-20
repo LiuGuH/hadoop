@@ -56,7 +56,6 @@ public class FineGrainedFSNamesystemLock implements AbstractFSNamesystemLock {
       this.fsLock.readLock();
       this.bmLock.readLock();
     } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
-      assert !hasReadLock(FSNamesystemLockMode.BM);
       this.fsLock.readLock();
     } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
       this.bmLock.readLock();
@@ -140,7 +139,6 @@ public class FineGrainedFSNamesystemLock implements AbstractFSNamesystemLock {
       this.fsLock.writeLock();
       this.bmLock.writeLock();
     } else if (lockMode.equals(FSNamesystemLockMode.FS)) {
-      assert !hasReadLock(FSNamesystemLockMode.BM);
       this.fsLock.writeLock();
     } else if (lockMode.equals(FSNamesystemLockMode.BM)) {
       this.bmLock.writeLock();

@@ -48,6 +48,9 @@ import java.util.Set;
 
 import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.hadoop.fs.Options.Rename;
+import org.apache.hadoop.fs.TrashPolicyDefault;
+import org.apache.hadoop.hdfs.server.namenode.lock.FSNamesystemLockMode;
 import org.apache.hadoop.ipc.CallerContext;
 
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -1120,6 +1123,21 @@ public class NameNodeRpcServer implements NamenodeProtocols {
 
   @Override // ClientProtocol
   public boolean delete(String src, boolean recursive) throws IOException {
+    namesystem.writeLock(FSNamesystemLockMode.GLOBAL);
+    try {
+      if (DeleteToTrashUtils.checkIfDeleteToTrash(namesystem.getFSDirectory(),
+          src) && checkIfExist(src) &&
+          (recursive || isFile(src)
+          || getListing(src, HdfsFileStatus.EMPTY_NAME, false).getPartialListing().length == 0)) {
+        return deleteToTrash(src);
+      }
+      return deleteSkipTrash(src, recursive);
+    } finally {
+      namesystem.writeUnlock(FSNamesystemLockMode.GLOBAL, "delete");
+    }
+  }
+
+  public boolean deleteSkipTrash(String src, boolean recursive) throws IOException {
     checkNNStartup();
     if (stateChangeLog.isDebugEnabled()) {
       stateChangeLog.debug("*DIR* Namenode.delete: src=" + src
@@ -1140,6 +1158,31 @@ public class NameNodeRpcServer implements NamenodeProtocols {
     if (ret) 
       metrics.incrDeleteFileOps();
     return ret;
+  }
+
+  private boolean deleteToTrash(String src) throws IOException {
+    String trashPath = DeleteToTrashUtils.getTrashPath(src);
+    String baseTrashPath = DeleteToTrashUtils.getBaseTrashPath(src);
+
+    try {
+      mkdirs(baseTrashPath, TrashPolicyDefault.PERMISSION, true);
+    } catch (FileAlreadyExistsException | ParentNotDirectoryException e) {
+      String existsFilePath = baseTrashPath;
+      while (!checkIfExist(existsFilePath)) {
+        existsFilePath = DeleteToTrashUtils.getPathParent(existsFilePath);
+      }
+      baseTrashPath = baseTrashPath.replaceFirst(existsFilePath, existsFilePath + Time.now());
+      trashPath = baseTrashPath + DeleteToTrashUtils.getPathLast(trashPath);
+
+      mkdirs(baseTrashPath, TrashPolicyDefault.PERMISSION, true);
+    }
+
+    while (getFileInfo(trashPath) != null) {
+      trashPath = trashPath + Time.now();
+    }
+
+    rename2(src, trashPath, Rename.TO_TRASH);
+    return true;
   }
 
   /**
@@ -1217,6 +1260,23 @@ public class NameNodeRpcServer implements NamenodeProtocols {
       metrics.incrFilesInGetListingOps(numEntries);
     }
     return batchedListing;
+  }
+
+  public boolean checkIfExist(String src) {
+    try {
+      HdfsFileStatus hdfsFileStatus = namesystem.getFileInfo(src, true, false, false);
+      if (hdfsFileStatus != null) {
+        return true;
+      }
+    } catch (IOException e) {
+      return false;
+    }
+    return false;
+  }
+
+  public boolean isFile(String src) throws IOException {
+    HdfsFileStatus hdfsFileStatus = namesystem.getFileInfo(src, true, false, false);
+    return hdfsFileStatus.isFile();
   }
 
   @Override // ClientProtocol

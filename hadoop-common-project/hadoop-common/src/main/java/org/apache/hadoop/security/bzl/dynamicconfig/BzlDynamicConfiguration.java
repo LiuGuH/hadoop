@@ -1,5 +1,6 @@
 package org.apache.hadoop.security.bzl.dynamicconfig;
 
+import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.util.StringUtils;
@@ -151,5 +152,11 @@ public class BzlDynamicConfiguration {
       }
       return null;
     }
+  }
+
+  // This is only used for test case.
+  @VisibleForTesting
+  public String set(String key, String defaultValue) {
+    return bzlDynamicConfigMap.put(key, defaultValue);
   }
 }

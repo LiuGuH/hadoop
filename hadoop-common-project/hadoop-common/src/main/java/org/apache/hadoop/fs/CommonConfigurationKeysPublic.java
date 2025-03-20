@@ -150,6 +150,8 @@ public class CommonConfigurationKeysPublic {
       "fs.protected.directories.bzl.updater.enable";
   public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_URL =
       "fs.protected.directories.bzl.updater.remote.url";
+  public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE =
+      "fs.protected.directories.bzl.updater.remote.list.max.size";
    public static final String FS_PROTECTED_DIRECTORIES_BZL_UPDATER_PERIOD =
       "fs.protected.directories.bzl.updater.period";
   /**
@@ -158,6 +160,17 @@ public class CommonConfigurationKeysPublic {
    */
   public static final String FS_PROTECTED_DIRECTORIES =
       "fs.protected.directories";
+
+  public static final String FS_FORCE_TO_TRASH_BZL_ENABLE =
+      "fs.force.to.trash.bzl.enable";
+  public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_ENABLE =
+      "fs.force.to.trash.bzl.updater.enable";
+  public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_REMOTE_URL =
+      "fs.force.to.trash.bzl.updater.remote.url";
+  public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_REMOTE_LIST_MAX_SIZE =
+      "fs.force.to.trash.bzl.updater.remote.list.max.size";
+  public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_PERIOD =
+      "fs.force.to.trash.bzl.updater.period";
 
   // TBD: Code is still using hardcoded values (e.g. "fs.automatic.close")
   // instead of constant (e.g. FS_AUTOMATIC_CLOSE_KEY)

@@ -69,6 +69,7 @@ import org.apache.commons.cli.PosixParser;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.ParentNotDirectoryException;
 import org.apache.hadoop.fs.UnresolvedLinkException;
+import org.apache.hadoop.hdfs.server.namenode.BzlProtectedDirectoriesUpdater;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
 import org.apache.hadoop.hdfs.server.namenode.INodesInPath;
 import org.apache.hadoop.ipc.ProtobufRpcEngine;
@@ -101,6 +102,7 @@ import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authentication.server.ProxyUserAuthenticationFilterInitializer;
 import org.apache.hadoop.security.authorize.AccessControlList;
 import org.apache.hadoop.security.token.Token;
+import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.ToolRunner;
 
 import org.apache.hadoop.thirdparty.com.google.common.annotations.VisibleForTesting;
@@ -1812,38 +1814,40 @@ public class DFSUtil {
       return;
     }
 
-    String src = iip.getPath();
-    // Is src protected? Caller has already checked it is non-empty.
-    if (protectedDirs.contains(src)) {
-      throw new AccessControlException(
-          "Cannot delete/rename non-empty protected directory " + src);
-    }
-
-    // Are any descendants of src protected?
-    // The subSet call returns only the descendants of src since
-    // {@link Path#SEPARATOR} is "/" and '0' is the next ASCII
-    // character after '/'.
-    for (String descendant :
-        protectedDirs.subSet(src + Path.SEPARATOR, src + "0")) {
-      INodesInPath subdirIIP =
-          fsd.getINodesInPath(descendant, FSDirectory.DirOp.WRITE);
-      if (fsd.isNonEmptyDirectory(subdirIIP)) {
+    long start = Time.monotonicNowNanos();
+    try {
+      String src = iip.getPath();
+      // Is src protected? Caller has already checked it is non-empty.
+      if (protectedDirs.contains(src)) {
         throw new AccessControlException(
-            "Cannot delete/rename non-empty protected subdirectory "
-            + descendant);
+            "Cannot delete/rename non-empty protected directory " + src);
       }
-    }
 
-    if (fsd.isProtectedSubDirectoriesEnable()) {
-      while (!src.isEmpty()) {
-        int index = src.lastIndexOf(Path.SEPARATOR_CHAR);
-        src = src.substring(0, index);
-        if (protectedDirs.contains(src)) {
+      // Are any descendants of src protected?
+      // The subSet call returns only the descendants of src since
+      // {@link Path#SEPARATOR} is "/" and '0' is the next ASCII
+      // character after '/'.
+      for (String descendant : protectedDirs.subSet(src + Path.SEPARATOR, src + "0")) {
+        INodesInPath subdirIIP = fsd.getINodesInPath(descendant, FSDirectory.DirOp.WRITE);
+        if (fsd.isNonEmptyDirectory(subdirIIP)) {
           throw new AccessControlException(
-              "Cannot delete/rename subdirectory under protected subdirectory "
-              + src);
+              "Cannot delete/rename non-empty protected subdirectory " + descendant);
         }
       }
+
+      if (fsd.isProtectedSubDirectoriesEnable()) {
+        while (!src.isEmpty()) {
+          int index = src.lastIndexOf(Path.SEPARATOR_CHAR);
+          src = src.substring(0, index);
+          if (protectedDirs.contains(src)) {
+            throw new AccessControlException(
+                "Cannot delete/rename subdirectory under protected subdirectory " + src);
+          }
+        }
+      }
+    } finally {
+      BzlProtectedDirectoriesUpdater.getInstance().getBzlProtectedDirectoriesProcessingTime()
+          .add(Time.monotonicNowNanos() - start);
     }
   }
 

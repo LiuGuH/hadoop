@@ -174,9 +174,11 @@ public class FSDirectory implements Closeable {
   // be deleted unless they are empty.
   //
   // Each entry in this set must be a normalized path.
-  private static volatile SortedSet<String> protectedDirectories =  Collections.synchronizedSortedSet(new TreeSet<>());;
+  private static volatile SortedSet<String> protectedDirectories =  Collections.synchronizedSortedSet(new TreeSet<>());
   private static volatile SortedSet<String> localProtectedDirectories;
   private final boolean isProtectedSubDirectoriesEnable;
+
+  private static volatile SortedSet<String> forceToTrashDirectories =  Collections.synchronizedSortedSet(new TreeSet<>());
 
   private final boolean isPermissionEnabled;
   private final boolean isPermissionContentSummarySubAccess;
@@ -391,6 +393,8 @@ public class FSDirectory implements Closeable {
         DFS_PROTECTED_SUBDIRECTORIES_ENABLE,
         DFS_PROTECTED_SUBDIRECTORIES_ENABLE_DEFAULT);
 
+    BzlForceToTrashDirectoriesUpdater.getInstance().init(conf, forceToTrashDirectories);
+
     Preconditions.checkArgument(this.inodeXAttrsLimit >= 0,
         "Cannot set a negative limit on the number of xattrs per inode (%s).",
         DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_KEY);
@@ -552,6 +556,16 @@ public class FSDirectory implements Closeable {
 
   public boolean isProtectedSubDirectoriesEnable() {
     return isProtectedSubDirectoriesEnable;
+  }
+
+  public SortedSet<String> getForceToTrashDirectories() {
+    return forceToTrashDirectories;
+  }
+
+  // This is only used for test case.
+  @VisibleForTesting
+  public void setForceToTrashDirectories(SortedSet<String> forceToTrashDirectories) {
+    FSDirectory.forceToTrashDirectories = forceToTrashDirectories;
   }
 
   /**
