@@ -384,45 +384,50 @@ public class ProtobufRpcEngine implements RpcEngine {
    */
   public static class Server extends ProtobufRpcEngine2.Server {
 
-    static final ThreadLocal<ProtobufRpcEngineCallback> currentCallback =
-        new ThreadLocal<>();
-
     static class ProtobufRpcEngineCallbackImpl
         implements ProtobufRpcEngineCallback {
 
       private final RPC.Server server;
       private final Call call;
       private final String methodName;
-      private final long setupTime;
 
       public ProtobufRpcEngineCallbackImpl() {
         this.server = CURRENT_CALL_INFO.get().getServer();
         this.call = Server.getCurCall().get();
         this.methodName = CURRENT_CALL_INFO.get().getMethodName();
-        this.setupTime = Time.now();
+      }
+
+      private void updateProcessingDetails(Call rpcCall, long deltaNanos) {
+        ProcessingDetails details = rpcCall.getProcessingDetails();
+        rpcCall.getProcessingDetails().set(ProcessingDetails.Timing.PROCESSING, deltaNanos,
+            TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(ProcessingDetails.Timing.LOCKWAIT, TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(ProcessingDetails.Timing.LOCKSHARED, TimeUnit.NANOSECONDS);
+        deltaNanos -= details.get(ProcessingDetails.Timing.LOCKEXCLUSIVE, TimeUnit.NANOSECONDS);
+        details.set(ProcessingDetails.Timing.LOCKFREE, deltaNanos, TimeUnit.NANOSECONDS);
       }
 
       @Override
       public void setResponse(Message message) {
-        long processingTime = Time.now() - setupTime;
+        long deltaNanos = Time.monotonicNowNanos() - call.getStartHandleTimestampNanos();
+        updateProcessingDetails(call, deltaNanos);
         call.setDeferredResponse(RpcWritable.wrap(message));
-        server.updateDeferredMetrics(methodName, processingTime);
+        server.updateDeferredMetrics(call, methodName, TimeUnit.NANOSECONDS.toMillis(deltaNanos));
       }
 
       @Override
       public void error(Throwable t) {
-        long processingTime = Time.now() - setupTime;
-        String detailedMetricsName = t.getClass().getSimpleName();
-        server.updateDeferredMetrics(detailedMetricsName, processingTime);
+        long deltaNanos = Time.monotonicNowNanos() - call.getStartHandleTimestampNanos();
+        updateProcessingDetails(call, deltaNanos);
         call.setDeferredError(t);
+        String detailedMetricsName = t.getClass().getSimpleName();
+        server.updateDeferredMetrics(call, detailedMetricsName, TimeUnit.NANOSECONDS.toMillis(deltaNanos));
       }
     }
 
     @InterfaceStability.Unstable
     public static ProtobufRpcEngineCallback registerForDeferredResponse() {
-      ProtobufRpcEngineCallback callback = new ProtobufRpcEngineCallbackImpl();
-      currentCallback.set(callback);
-      return callback;
+      return new ProtobufRpcEngineCallbackImpl();
     }
 
     /**
@@ -478,11 +483,9 @@ public class ProtobufRpcEngine implements RpcEngine {
         CURRENT_CALL_INFO.set(new CallInfo(server, methodName));
         currentCall.setDetailedMetricsName(methodName);
         result = service.callBlockingMethod(methodDescriptor, null, param);
-        // Check if this needs to be a deferred response,
-        // by checking the ThreadLocal callback being set
-        if (currentCallback.get() != null) {
+        if (CURRENT_CALLBACK.get() != null) {
           currentCall.deferResponse();
-          currentCallback.set(null);
+          CURRENT_CALLBACK.set(null);
           return null;
         }
       } catch (ServiceException e) {

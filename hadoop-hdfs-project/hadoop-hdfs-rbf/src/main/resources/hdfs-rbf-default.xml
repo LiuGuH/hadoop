@@ -799,4 +799,47 @@
       The intarval in milliseconds for router to auto msync to nameservices .
     </description>
   </property>
+
+  <property>
+    <name>dfs.federation.router.async.rpc.enable</name>
+    <value>false</value>
+    <description>
+      If true, router will process the RPC request asynchronously.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.async.rpc.ns.handler.config</name>
+    <value>nsPlaceholder:0</value>
+    <description>
+      The number of asynchronous handlers per nameservice, separated by commas, internally separated by colons.
+      The identifier of nameservice is in dfs.nameservices configuration entry.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.async.rpc.ns.handler.count</name>
+    <value>100</value>
+    <description>
+      For those nameservices not in dfs.federation.router.async.rpc.ns.handler.count configuration entry,
+      use this value as the asynchronous handler thread counts.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.async.rpc.responder.count</name>
+    <value>300</value>
+    <description>
+      The thread counts of async responder executor.
+    </description>
+  </property>
+
+  <property>
+    <name>dfs.federation.router.async.rpc.max.asynccall.permit</name>
+    <value>6000</value>
+    <description>
+      Maximum number of asynchronous RPC requests the Router can send to
+      one downstream nameservice.
+    </description>
+  </property>
 </configuration>

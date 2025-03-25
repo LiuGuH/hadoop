@@ -1,0 +1,152 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.hadoop.hdfs.protocolPB;
+
+import org.apache.hadoop.hdfs.server.federation.metrics.FederationRPCMetrics;
+import org.apache.hadoop.hdfs.server.federation.router.ThreadLocalContext;
+import org.apache.hadoop.hdfs.server.federation.router.async.ApplyFunction;
+import org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.ipc.CallerContext;
+import org.apache.hadoop.ipc.Client;
+import org.apache.hadoop.ipc.ProtobufRpcEngine2;
+import org.apache.hadoop.ipc.ProtobufRpcEngineCallback2;
+import org.apache.hadoop.ipc.internal.ShadedProtobufHelper;
+import org.apache.hadoop.thirdparty.protobuf.Message;
+import org.apache.hadoop.util.Time;
+import org.apache.hadoop.util.concurrent.AsyncGet;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.Executor;
+
+import static org.apache.hadoop.hdfs.server.federation.router.async.Async.wrapCompletionException;
+
+import static org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil.asyncCompleteWith;
+import static org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil.asyncReturn;
+import static org.apache.hadoop.ipc.internal.ShadedProtobufHelper.ipc;
+
+public final class AsyncRpcProtocolPBUtil {
+  public static final Logger LOG = LoggerFactory.getLogger(AsyncRpcProtocolPBUtil.class);
+  private static Executor asyncResponderExecutor;
+
+  private AsyncRpcProtocolPBUtil() {}
+
+  /**
+   * Asynchronously invokes an RPC call and applies a response transformation function
+   * to the result. This method is generic and can be used to handle any type of
+   * RPC call.
+   *
+   * <p>The method uses the {@link ShadedProtobufHelper.IpcCall} to prepare the RPC call
+   * and the {@link ApplyFunction} to process the response. It also handles exceptions
+   * that may occur during the RPC call and wraps them in a user-friendly manner.
+   *
+   * @param call The IPC call encapsulating the RPC request.
+   * @param responseHandler The function to apply to the response of the RPC call.
+   * @param clazz The class object representing the type {@code R} of the response.
+   * @param <T> Type of the call's result.
+   * @param <R> Type of method return.
+   * @return An object of type {@code R} that is the result of applying the response
+   *         function to the RPC call result.
+   * @throws IOException If an I/O error occurs during the asynchronous RPC call.
+   */
+  public static <T, R> R asyncIpcClient(
+      ShadedProtobufHelper.IpcCall<T> call, ApplyFunction<T, R> responseHandler,
+      Class<R> clazz) throws IOException {
+    ipc(call);
+    AsyncGet<T, Exception> asyncResultMessage =
+        (AsyncGet<T, Exception>) ProtobufRpcEngine2.getAsyncReturnMessage();
+    CompletableFuture<Writable> responseFuture = Client.getResponseFuture();
+    // Transfer originCall & callerContext to worker threads of executor.
+    ThreadLocalContext threadLocalContext = new ThreadLocalContext();
+    asyncCompleteWith(responseFuture.handleAsync((result, e) -> {
+      FederationRPCMetrics.ASYNC_RESPONDER_START_TIME.set(Time.monotonicNow());
+      if (LOG.isDebugEnabled()) {
+        LOG.debug("async ipc request {} {}, {} ", call, result, threadLocalContext);
+      }
+      threadLocalContext.transfer();
+      if (e != null) {
+        throw wrapCompletionException(e);
+      }
+      try {
+        T res = asyncResultMessage.get(-1, null);
+        return responseHandler.apply(res);
+      } catch (Exception ex) {
+        throw wrapCompletionException(ex);
+      }
+    }, asyncResponderExecutor));
+    return asyncReturn(clazz);
+  }
+
+  /**
+   * Asynchronously invokes an RPC call and applies a response transformation function
+   * to the result on server-side.
+   * @param req The IPC call encapsulating the RPC request on server-side.
+   * @param resultHandler The function to apply to the response of the RPC call on server-side.
+   * @param <T> Type of the call's result.
+   */
+  public static <T> void asyncRouterServer(ServerReq<T> req, ServerRes<T> resultHandler) {
+    final ProtobufRpcEngineCallback2 callback =
+        ProtobufRpcEngine2.Server.registerForDeferredResponse2();
+
+    CompletableFuture<Object> completableFuture =
+        CompletableFuture.completedFuture(null);
+    completableFuture.thenCompose(o -> {
+      try {
+        req.req();
+        return (CompletableFuture<T>)AsyncUtil.getAsyncUtilCompletableFuture();
+      } catch (Exception e) {
+        throw new CompletionException(e);
+      }
+    }).handle((result, ex) -> {
+      LOG.debug("Async response, callback: {}, CallerContext: {}, result: [{}], exception: [{}]",
+          callback, CallerContext.getCurrent(), result, ex);
+      if (ex == null) {
+        Message value = null;
+        try {
+          value = resultHandler.res(result);
+        } catch (Exception re) {
+          callback.error(re);
+          return null;
+        }
+        callback.setResponse(value);
+      } else {
+        callback.error(ex.getCause());
+      }
+      FederationRPCMetrics.addAsyncResponderThreadTime();
+      return null;
+    });
+  }
+
+  public static void setAsyncResponderExecutor(Executor asyncResponderExecutor) {
+    AsyncRpcProtocolPBUtil.asyncResponderExecutor = asyncResponderExecutor;
+  }
+
+  @FunctionalInterface
+  interface ServerReq<T> {
+    T req() throws Exception;
+  }
+
+  @FunctionalInterface
+  interface ServerRes<T> {
+    Message res(T result) throws RuntimeException;
+  }
+}

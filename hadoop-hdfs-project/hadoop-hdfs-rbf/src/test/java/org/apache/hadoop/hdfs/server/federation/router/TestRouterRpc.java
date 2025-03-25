@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.federation.router;
 
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_KEY;
 import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.addDirectory;
 import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.countContents;
@@ -25,6 +26,7 @@ import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.delet
 import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.getFileStatus;
 import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.verifyFileExists;
 import static org.apache.hadoop.hdfs.server.federation.MiniRouterDFSCluster.TEST_STRING;
+import static org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys.DFS_ROUTER_DN_REPORT_ENABLE_KEY;
 import static org.apache.hadoop.test.GenericTestUtils.assertExceptionContains;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -128,6 +130,7 @@ import org.apache.hadoop.service.Service.STATE;
 import org.apache.hadoop.test.GenericTestUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 import org.codehaus.jettison.json.JSONObject;
+import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -153,8 +156,7 @@ public class TestRouterRpc {
 
   private static final int NUM_SUBCLUSTERS = 2;
   // We need at least 6 DNs to test Erasure Coding with RS-6-3-64k
-  private static final int NUM_DNS = 6;
-
+  private static final int NUM_DNS = 7;
 
   private static final Comparator<ErasureCodingPolicyInfo> EC_POLICY_CMP =
       new Comparator<ErasureCodingPolicyInfo>() {
@@ -179,7 +181,7 @@ public class TestRouterRpc {
   private NamenodeContext namenode;
 
   /** Client interface to the Router. */
-  private ClientProtocol routerProtocol;
+  protected ClientProtocol routerProtocol;
   /** Client interface to the Namenode. */
   private ClientProtocol nnProtocol;
 
@@ -202,24 +204,6 @@ public class TestRouterRpc {
 
   @BeforeClass
   public static void globalSetUp() throws Exception {
-    Configuration namenodeConf = new Configuration();
-    namenodeConf.setBoolean(DFSConfigKeys.HADOOP_CALLER_CONTEXT_ENABLED_KEY,
-        true);
-    // It's very easy to become overloaded for some specific dn in this small
-    // cluster, which will cause the EC file block allocation failure. To avoid
-    // this issue, we disable considerLoad option.
-    namenodeConf.setBoolean(DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_KEY, false);
-    cluster = new MiniRouterDFSCluster(false, NUM_SUBCLUSTERS);
-    cluster.setNumDatanodesPerNameservice(NUM_DNS);
-    cluster.addNamenodeOverrides(namenodeConf);
-    cluster.setIndependentDNs();
-
-    Configuration conf = new Configuration();
-    conf.setInt(DFSConfigKeys.DFS_LIST_LIMIT, 5);
-    cluster.addNamenodeOverrides(conf);
-    // Start NNs and DNs and wait until ready
-    cluster.startCluster();
-
     // Start routers with only an RPC service
     Configuration routerConf = new RouterConfigBuilder()
         .metrics()
@@ -228,12 +212,60 @@ public class TestRouterRpc {
     // We decrease the DN cache times to make the test faster
     routerConf.setTimeDuration(
         RBFConfigKeys.DN_REPORT_CACHE_EXPIRE, 1, TimeUnit.SECONDS);
+    routerConf.setBoolean(DFS_ROUTER_DN_REPORT_ENABLE_KEY, true);
+    setUp(routerConf);
+  }
+  
+  public static void setUp(Configuration routerConf) throws Exception {
+    Configuration namenodeConf = new Configuration();
+    namenodeConf.setBoolean(DFSConfigKeys.HADOOP_CALLER_CONTEXT_ENABLED_KEY,
+        true);
+    // It's very easy to become overloaded for some specific dn in this small
+    // cluster, which will cause the EC file block allocation failure. To avoid
+    // this issue, we disable considerLoad option.
+    namenodeConf.setBoolean(DFS_NAMENODE_REDUNDANCY_CONSIDERLOAD_KEY, false);
+    namenodeConf.setBoolean(DFS_NAMENODE_AUDIT_LOG_WITH_REMOTE_PORT_KEY, false);
+    cluster = new MiniRouterDFSCluster(false, NUM_SUBCLUSTERS);
+    cluster.setNumDatanodesPerNameservice(NUM_DNS);
+    cluster.addNamenodeOverrides(namenodeConf);
+    cluster.setIndependentDNs();
+
+    Configuration conf = new Configuration();
+    // Setup proxy users.
+    conf.set("hadoop.proxyuser.testRealUser.groups", "*");
+    conf.set("hadoop.proxyuser.testRealUser.hosts", "*");
+    String loginUser = UserGroupInformation.getLoginUser().getUserName();
+    conf.set(String.format("hadoop.proxyuser.%s.groups", loginUser), "*");
+    conf.set(String.format("hadoop.proxyuser.%s.hosts", loginUser), "*");
+    // Enable IP proxy users.
+    conf.set(DFSConfigKeys.DFS_NAMENODE_IP_PROXY_USERS, "placeholder");
+    conf.setInt(DFSConfigKeys.DFS_LIST_LIMIT, 5);
+    cluster.addNamenodeOverrides(conf);
+    // Start NNs and DNs and wait until ready
+    cluster.startCluster();
+
     cluster.addRouterOverrides(routerConf);
     cluster.startRouters();
 
     // Register and verify all NNs with all routers
     cluster.registerNamenodes();
     cluster.waitNamenodeRegistration();
+
+    // We decrease the DN heartbeat expire interval to make them dead faster
+    cluster.getCluster().getNamesystem(0).getBlockManager()
+        .getDatanodeManager().setHeartbeatInterval(1);
+    cluster.getCluster().getNamesystem(1).getBlockManager()
+        .getDatanodeManager().setHeartbeatInterval(1);
+    cluster.getCluster().getNamesystem(0).getBlockManager()
+        .getDatanodeManager().setHeartbeatExpireInterval(3000);
+    cluster.getCluster().getNamesystem(1).getBlockManager()
+        .getDatanodeManager().setHeartbeatExpireInterval(3000);
+  }
+
+  @After
+  public void cleanup() {
+    // clear client context
+    CallerContext.setCurrent(null);
   }
 
   @AfterClass
@@ -279,20 +311,32 @@ public class TestRouterRpc {
 
   @Test
   public void testRpcService() throws IOException {
-    Router testRouter = new Router();
-    List<String> nss = cluster.getNameservices();
-    String ns0 = nss.get(0);
-    Configuration routerConfig = cluster.generateRouterConfiguration(ns0, null);
-    RouterRpcServer server = new RouterRpcServer(routerConfig, testRouter,
-        testRouter.getNamenodeResolver(), testRouter.getSubclusterResolver());
-    server.init(routerConfig);
-    assertEquals(STATE.INITED, server.getServiceState());
-    server.start();
-    assertEquals(STATE.STARTED, server.getServiceState());
-    server.stop();
-    assertEquals(STATE.STOPPED, server.getServiceState());
-    server.close();
-    testRouter.close();
+    DFSRouterFaultInjector rbfFaultInject = new DFSRouterFaultInjector() {
+      @Override
+      public boolean shouldSkipShutdownAsyncExecutors() {
+        return false;
+      }
+    };
+    DFSRouterFaultInjector oldRbfFaultInject = DFSRouterFaultInjector.get();
+    DFSRouterFaultInjector.set(rbfFaultInject);
+    try {
+      Router testRouter = new Router();
+      List<String> nss = cluster.getNameservices();
+      String ns0 = nss.get(0);
+      Configuration routerConfig = cluster.generateRouterConfiguration(ns0, null);
+      RouterRpcServer server = new RouterRpcServer(routerConfig, testRouter,
+          testRouter.getNamenodeResolver(), testRouter.getSubclusterResolver());
+      server.init(routerConfig);
+      assertEquals(STATE.INITED, server.getServiceState());
+      server.start();
+      assertEquals(STATE.STARTED, server.getServiceState());
+      server.stop();
+      assertEquals(STATE.STOPPED, server.getServiceState());
+      server.close();
+      testRouter.close();
+    } finally {
+      DFSRouterFaultInjector.set(oldRbfFaultInject);
+    }
   }
 
   protected MiniRouterDFSCluster getCluster() {
@@ -1217,7 +1261,7 @@ public class TestRouterRpc {
 
   @Test
   public void testProxyGetAdditionalDatanode()
-      throws IOException, InterruptedException, URISyntaxException {
+      throws Exception {
 
     // Use primitive APIs to open a file, add a block, and get datanode location
     EnumSet<CreateFlag> createFlag = EnumSet.of(CreateFlag.CREATE);
@@ -1226,7 +1270,7 @@ public class TestRouterRpc {
     HdfsFileStatus status = routerProtocol.create(
         newRouterFile, new FsPermission("777"), clientName,
         new EnumSetWritable<CreateFlag>(createFlag), true, (short) 1,
-        (long) 1024, CryptoProtocolVersion.supported(), null, null);
+        (long) 536870913, CryptoProtocolVersion.supported(), null, null);
 
     // Add a block via router (requires client to have same lease)
     LocatedBlock block = routerProtocol.addBlock(
@@ -1913,7 +1957,7 @@ public class TestRouterRpc {
   }
 
   @Test
-  public void testgetGroupsForUser() throws IOException {
+  public void testgetGroupsForUser() throws Exception {
     String[] group = new String[] {"bar", "group2"};
     UserGroupInformation.createUserForTesting("user",
         new String[] {"bar", "group2"});

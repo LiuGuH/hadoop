@@ -167,7 +167,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.updateMountTableEntry(null, proto);
       return new UpdateMountTableEntryResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -183,7 +182,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.removeMountTableEntry(null, proto);
       return new RemoveMountTableEntryResponsePBImpl(responseProto);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -199,7 +197,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.getMountTableEntries(null, proto);
       return new GetMountTableEntriesResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -214,7 +211,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.enterSafeMode(null, proto);
       return new EnterSafeModeResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -229,7 +225,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.leaveSafeMode(null, proto);
       return new LeaveSafeModeResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -244,7 +239,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.getSafeMode(null, proto);
       return new GetSafeModeResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -260,7 +254,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.disableNameservice(null, proto);
       return new DisableNameserviceResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -276,7 +269,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.enableNameservice(null, proto);
       return new EnableNameserviceResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -291,7 +283,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.getDisabledNameservices(null, proto);
       return new GetDisabledNameservicesResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -307,7 +298,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.refreshMountTableEntries(null, proto);
       return new RefreshMountTableEntriesResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -323,7 +313,6 @@ public class RouterAdminProtocolTranslatorPB
           rpcProxy.getDestination(null, proto);
       return new GetDestinationResponsePBImpl(response);
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }
@@ -338,7 +327,6 @@ public class RouterAdminProtocolTranslatorPB
       return new RefreshSuperUserGroupsConfigurationResponsePBImpl(response)
           .getStatus();
     } catch (ServiceException e) {
-
       throw new IOException(getRemoteException(e).getMessage());
     }
   }

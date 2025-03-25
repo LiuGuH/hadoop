@@ -72,12 +72,12 @@ import org.mockito.Mockito;
  */
 public class TestRouterAdmin {
 
-  private static StateStoreDFSCluster cluster;
-  private static RouterContext routerContext;
+  protected static StateStoreDFSCluster cluster;
+  protected static RouterContext routerContext;
   public static final String RPC_BEAN =
       "Hadoop:service=Router,name=FederationRPC";
-  private static List<MountTable> mockMountTable;
-  private static StateStoreService stateStore;
+  protected static List<MountTable> mockMountTable;
+  protected static StateStoreService stateStore;
 
   @BeforeClass
   public static void globalSetUp() throws Exception {
@@ -437,7 +437,7 @@ public class TestRouterAdmin {
     assertTrue(disableResp.getStatus());
   }
 
-  private Set<String> getDisabledNameservices(NameserviceManager nsManager)
+  public Set<String> getDisabledNameservices(NameserviceManager nsManager)
       throws IOException {
     stateStore.loadCache(DisabledNameserviceStoreImpl.class, true);
     GetDisabledNameservicesRequest getReq =

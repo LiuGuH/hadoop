@@ -33,6 +33,7 @@ import org.apache.hadoop.thirdparty.protobuf.ServiceException;
  * Helper methods for protobuf related RPC implementation using the
  * hadoop {@code org.apache.hadoop.thirdparty.protobuf} shaded version.
  * This is <i>absolutely private to hadoop-* modules</i>.
+ * We use this class for the purpose of aligning with community codes.
  */
 @InterfaceAudience.Private
 @InterfaceStability.Unstable

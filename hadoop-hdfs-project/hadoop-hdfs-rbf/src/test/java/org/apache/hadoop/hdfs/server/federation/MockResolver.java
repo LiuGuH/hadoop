@@ -29,6 +29,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hdfs.server.federation.resolver.ActiveNamenodeResolver;
@@ -42,6 +43,7 @@ import org.apache.hadoop.hdfs.server.federation.resolver.PathLocation;
 import org.apache.hadoop.hdfs.server.federation.resolver.RemoteLocation;
 import org.apache.hadoop.hdfs.server.federation.router.Router;
 import org.apache.hadoop.hdfs.server.federation.store.StateStoreService;
+import org.apache.hadoop.hdfs.server.federation.store.records.MountTable;
 import org.apache.hadoop.util.Time;
 
 /**
@@ -100,6 +102,7 @@ public class MockResolver
     final RemoteLocation remoteLocation =
         new RemoteLocation(nsId, location, mount);
     if (locationsList != null) {
+      this.locations.remove(mount);
       return locationsList.remove(remoteLocation);
     }
     return false;
@@ -385,8 +388,20 @@ public class MockResolver
   }
 
   @Override
-  public IdentityHashMap<String, String> getMountPointsWithSrc(String path) throws IOException {
-    return null;
+  public IdentityHashMap<String, String> getMountPointsWithSrc(String path)
+      throws IOException {
+    TreeMap<String, MountTable> sortedMap = new TreeMap<>();
+    for (Map.Entry<String, List<RemoteLocation>> record : this.locations.entrySet()) {
+      String mp = record.getKey();
+      if (mp.startsWith(path)) {
+        Map<String, String> map = new HashMap<>();
+        for (RemoteLocation remoteLocation : record.getValue()) {
+          map.put(remoteLocation.getNameserviceId(), remoteLocation.getDest());
+        }
+        sortedMap.put(mp, MountTable.newInstance(mp, map));
+      }
+    }
+    return FileSubclusterResolver.getMountPointsWithSrc(path, sortedMap);
   }
 
   @Override

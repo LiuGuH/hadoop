@@ -21,6 +21,7 @@ import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.HADOOP_SECURITY
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY;
 import static org.apache.hadoop.hdfs.server.federation.fairness.RefreshFairnessPolicyControllerHandler.HANDLER_IDENTIFIER;
+import static org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil.syncReturn;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -561,22 +562,25 @@ public class RouterAdminServer extends AbstractService
     final String src = request.getSrcPath();
     final List<String> nsIds = new ArrayList<>();
     RouterRpcServer rpcServer = this.router.getRpcServer();
-    List<RemoteLocation> locations = rpcServer.getLocationsForPath(src, false);
     RouterRpcClient rpcClient = rpcServer.getRPCClient();
+    List<RemoteLocation> locations = rpcServer.getLocationsForPath(src, false);
     RemoteMethod method = new RemoteMethod("getFileInfo",
         new Class<?>[] {String.class}, new RemoteParam());
     try {
       Map<RemoteLocation, HdfsFileStatus> responses =
           rpcClient.invokeConcurrent(
               locations, method, false, false, HdfsFileStatus.class);
+      if (rpcServer.isAsync()) {
+        responses = syncReturn(Map.class);
+      }
       for (RemoteLocation location : locations) {
         if (responses.get(location) != null) {
           nsIds.add(location.getNameserviceId());
         }
       }
-    } catch (IOException ioe) {
+    } catch (Exception ex) {
       LOG.error("Cannot get location for {}: {}",
-          src, ioe.getMessage());
+          src, ex.getMessage());
     }
     if (nsIds.isEmpty() && !locations.isEmpty()) {
       String nsId = locations.get(0).getNameserviceId();

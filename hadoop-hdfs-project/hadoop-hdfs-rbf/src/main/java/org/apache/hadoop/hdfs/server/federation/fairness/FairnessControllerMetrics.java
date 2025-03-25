@@ -46,7 +46,6 @@ public class FairnessControllerMetrics implements MetricsSource {
 
     MetricsRecordBuilder rb = collector.addRecord(FederationRPCMetrics.class.getName())
         .setContext("dfs");
-
     Set<String> allConfiguredNS = FederationUtil.getAllConfiguredNS(conf);
     Iterator<String> iterator = allConfiguredNS.iterator();
     while (iterator.hasNext()) {

@@ -554,7 +554,7 @@ public class TestRouterFaultTolerant {
   /**
    * Class to summarize the results of running a task.
    */
-  static class TaskResults {
+  public static class TaskResults {
     private final AtomicInteger success = new AtomicInteger(0);
     private final AtomicInteger failure = new AtomicInteger(0);
     public void incrSuccess() {
