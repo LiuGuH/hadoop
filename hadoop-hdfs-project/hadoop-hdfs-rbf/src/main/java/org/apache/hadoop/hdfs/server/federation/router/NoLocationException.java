@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -15,16 +15,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.hadoop.hdfs.server.federation.router;
+
+import java.io.IOException;
 
 /**
- * Tools to help define network clients and servers.
- * Other ASF projects use this package, often with their own shaded/unshaded
- * versions of protobuf messages.
- * Changes to the API signatures will break things, especially changes to
- * {@link org.apache.hadoop.ipc.RPC} and {@link org.apache.hadoop.ipc.RpcEngine}.
+ * This exception is thrown when can not get any mount point for the input path.
+ * RBF cannot forward any requests for the path.
  */
-@InterfaceAudience.LimitedPrivate({"HBase", "HDFS", "MapReduce", "YARN", "Hive", "Ozone"})
-@InterfaceStability.Evolving
-package org.apache.hadoop.ipc;
-import org.apache.hadoop.classification.InterfaceAudience;
-import org.apache.hadoop.classification.InterfaceStability;
+public class NoLocationException extends IOException {
+
+  private static final long serialVersionUID = 1L;
+
+  public NoLocationException(String path, Class<?> t) {
+    super("Cannot find locations for " + path + " in " + t.getSimpleName());
+  }
+}

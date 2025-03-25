@@ -313,11 +313,11 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
         .build();
 
     // Add all the RPC protocols that the Router implements
-    DFSUtil.addPBProtocol(
+    DFSUtil.addInternalPBProtocol(
         conf, NamenodeProtocolPB.class, nnPbService, this.rpcServer);
-    DFSUtil.addPBProtocol(conf, RefreshUserMappingsProtocolPB.class,
+    DFSUtil.addInternalPBProtocol(conf, RefreshUserMappingsProtocolPB.class,
         refreshUserMappingService, this.rpcServer);
-    DFSUtil.addPBProtocol(conf, GetUserMappingsProtocolPB.class,
+    DFSUtil.addInternalPBProtocol(conf, GetUserMappingsProtocolPB.class,
         getUserMappingService, this.rpcServer);
 
     // Set service-level authorization security policy
@@ -1547,8 +1547,7 @@ public class RouterRpcServer extends AbstractService implements ClientProtocol,
       final PathLocation location =
           this.subclusterResolver.getDestinationForPath(path);
       if (location == null) {
-        throw new IOException("Cannot find locations for " + path + " in " +
-            this.subclusterResolver.getClass().getSimpleName());
+        throw new NoLocationException(path, this.subclusterResolver.getClass());
       }
 
       // We may block some write operations
