@@ -60,6 +60,7 @@ import org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys;
 import org.apache.hadoop.hdfs.server.federation.router.Router;
 import org.apache.hadoop.hdfs.server.federation.router.RouterRpcServer;
 import org.apache.hadoop.hdfs.server.federation.router.RouterServiceState;
+import org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil;
 import org.apache.hadoop.hdfs.server.federation.router.security.RouterSecurityManager;
 import org.apache.hadoop.hdfs.server.federation.store.MembershipStore;
 import org.apache.hadoop.hdfs.server.federation.store.MountTableStore;
@@ -522,7 +523,16 @@ public class RBFMetrics implements RouterMBean, FederationMBean {
       DatanodeInfo[] live = null;
       if (this.enableGetDNUsage) {
         RouterRpcServer rpcServer = this.router.getRpcServer();
-        live = rpcServer.getDatanodeReport(DatanodeReportType.LIVE, false, timeOut);
+        if (rpcServer.isAsync()) {
+          rpcServer.getDatanodeReportAsync(DatanodeReportType.LIVE, false, timeOut);
+          try {
+            live = AsyncUtil.syncReturn(DatanodeInfo[].class);
+          } catch (Exception e) {
+            LOG.error("Cannot get the live nodes in aysnc rpc mode: {}", e.getMessage());
+          }
+        } else {
+          live = rpcServer.getDatanodeReport(DatanodeReportType.LIVE, false, timeOut);
+        }
       } else {
         LOG.debug("Getting node usage is disabled.");
       }

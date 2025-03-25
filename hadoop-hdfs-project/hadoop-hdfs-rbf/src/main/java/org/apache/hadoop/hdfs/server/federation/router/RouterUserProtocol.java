@@ -46,11 +46,11 @@ public class RouterUserProtocol
       LoggerFactory.getLogger(RouterUserProtocol.class);
 
   /** RPC server to receive client calls. */
-  private final RouterRpcServer rpcServer;
+  protected final RouterRpcServer rpcServer;
   /** RPC clients to connect to the Namenodes. */
-  private final RouterRpcClient rpcClient;
+  protected final RouterRpcClient rpcClient;
 
-  private final ActiveNamenodeResolver namenodeResolver;
+  protected final ActiveNamenodeResolver namenodeResolver;
 
   public RouterUserProtocol(RouterRpcServer server) {
     this.rpcServer = server;

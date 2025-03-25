@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.federation.router;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -36,8 +37,10 @@ import java.util.TreeSet;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.ContentSummary;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FsServerDefaults;
 import org.apache.hadoop.fs.Options.Rename;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.AclEntry;
@@ -45,6 +48,7 @@ import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSTestUtil;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
+import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.server.federation.MiniRouterDFSCluster.RouterContext;
 import org.apache.hadoop.hdfs.server.federation.RouterConfigBuilder;
 import org.apache.hadoop.hdfs.server.federation.StateStoreDFSCluster;
@@ -59,6 +63,7 @@ import org.apache.hadoop.hdfs.server.federation.store.protocol.GetDestinationRes
 import org.apache.hadoop.hdfs.server.federation.store.protocol.RemoveMountTableEntryRequest;
 import org.apache.hadoop.hdfs.server.federation.store.records.MountTable;
 import org.apache.hadoop.hdfs.tools.federation.RouterAdmin;
+import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.test.LambdaTestUtils;
 import org.apache.hadoop.util.ToolRunner;
 import org.junit.After;
@@ -70,21 +75,22 @@ import org.junit.Test;
  * Tests router rpc with multiple destination mount table resolver.
  */
 public class TestRouterRPCMultipleDestinationMountTableResolver {
-  private static final List<String> NS_IDS = Arrays.asList("ns0", "ns1");
+  protected static final List<String> NS_IDS = Arrays.asList("ns0", "ns1", "ns2");
 
-  private static StateStoreDFSCluster cluster;
-  private static RouterContext routerContext;
-  private static MountTableResolver resolver;
-  private static DistributedFileSystem nnFs0;
-  private static DistributedFileSystem nnFs1;
-  private static DistributedFileSystem routerFs;
-  private static RouterRpcServer rpcServer;
+  protected static StateStoreDFSCluster cluster;
+  protected static RouterContext routerContext;
+  protected static MountTableResolver resolver;
+  protected static DistributedFileSystem nnFs0;
+  protected static DistributedFileSystem nnFs1;
+  protected static DistributedFileSystem nnFs2;
+  protected static DistributedFileSystem routerFs;
+  protected static RouterRpcServer rpcServer;
 
   @BeforeClass
   public static void setUp() throws Exception {
 
     // Build and start a federated cluster
-    cluster = new StateStoreDFSCluster(false, 2,
+    cluster = new StateStoreDFSCluster(false, 3,
         MultipleDestinationMountTableResolver.class);
     Configuration routerConf =
         new RouterConfigBuilder().stateStore().admin().quota().rpc().build();
@@ -105,6 +111,8 @@ public class TestRouterRPCMultipleDestinationMountTableResolver {
         .getNamenode(cluster.getNameservices().get(0), null).getFileSystem();
     nnFs1 = (DistributedFileSystem) cluster
         .getNamenode(cluster.getNameservices().get(1), null).getFileSystem();
+    nnFs2 = (DistributedFileSystem) cluster
+        .getNamenode(cluster.getNameservices().get(2), null).getFileSystem();
     routerFs = (DistributedFileSystem) routerContext.getFileSystem();
     rpcServer =routerContext.getRouter().getRpcServer();
   }
@@ -399,7 +407,7 @@ public class TestRouterRPCMultipleDestinationMountTableResolver {
    * @return If it was successfully added.
    * @throws IOException + * Problems adding entries.
    */
-  private boolean addMountTable(final MountTable entry) throws IOException {
+  protected boolean addMountTable(final MountTable entry) throws IOException {
     RouterClient client = routerContext.getAdminClient();
     MountTableManager mountTableManager = client.getMountTableManager();
     AddMountTableEntryRequest addRequest =
@@ -640,6 +648,78 @@ public class TestRouterRPCMultipleDestinationMountTableResolver {
   }
 
   /**
+   * Test RouterRpcServer#invokeAtAvailableNs on mount point with multiple destinations
+   * and making a one of the destination's subcluster unavailable.
+   */
+  @Test
+  public void testInvokeAtAvailableNs() throws IOException {
+    // Create a mount point with multiple destinations.
+    Path path = new Path("/testInvokeAtAvailableNs");
+    Map<String, String> destMap = new HashMap<>();
+    destMap.put("ns0", "/testInvokeAtAvailableNs");
+    destMap.put("ns1", "/testInvokeAtAvailableNs");
+    nnFs0.mkdirs(path);
+    nnFs1.mkdirs(path);
+    MountTable addEntry =
+        MountTable.newInstance("/testInvokeAtAvailableNs", destMap);
+    addEntry.setQuota(new RouterQuotaUsage.Builder().build());
+    addEntry.setDestOrder(DestinationOrder.RANDOM);
+    addEntry.setFaultTolerant(true);
+    assertTrue(addMountTable(addEntry));
+
+    // Make one subcluster unavailable.
+    MiniDFSCluster dfsCluster = cluster.getCluster();
+    dfsCluster.shutdownNameNode(0);
+    dfsCluster.shutdownNameNode(1);
+    try {
+      // Verify that #invokeAtAvailableNs works by calling #getServerDefaults.
+      RemoteMethod method = new RemoteMethod("getServerDefaults");
+      FsServerDefaults serverDefaults =
+          rpcServer.invokeAtAvailableNs(method, FsServerDefaults.class);
+      assertNotNull(serverDefaults);
+    } finally {
+      dfsCluster.restartNameNode(0);
+      dfsCluster.restartNameNode(1);
+    }
+  }
+
+  /**
+   * Test write on mount point with multiple destinations
+   * and making a one of the destination's subcluster unavailable.
+   */
+  @Test
+  public void testWriteWithUnavailableSubCluster() throws IOException {
+    //create a mount point with multiple destinations
+    Path path = new Path("/testWriteWithUnavailableSubCluster");
+    Map<String, String> destMap = new HashMap<>();
+    destMap.put("ns0", "/testWriteWithUnavailableSubCluster");
+    destMap.put("ns1", "/testWriteWithUnavailableSubCluster");
+    nnFs0.mkdirs(path);
+    nnFs1.mkdirs(path);
+    MountTable addEntry =
+        MountTable.newInstance("/testWriteWithUnavailableSubCluster", destMap);
+    addEntry.setQuota(new RouterQuotaUsage.Builder().build());
+    addEntry.setDestOrder(DestinationOrder.RANDOM);
+    addEntry.setFaultTolerant(true);
+    assertTrue(addMountTable(addEntry));
+
+    //make one subcluster unavailable and perform write on mount point
+    MiniDFSCluster dfsCluster = cluster.getCluster();
+    dfsCluster.shutdownNameNode(0);
+    FSDataOutputStream out = null;
+    Path filePath = new Path(path, "aa");
+    try {
+      out = routerFs.create(filePath);
+      out.write("hello".getBytes());
+      out.hflush();
+      assertTrue(routerFs.exists(filePath));
+    } finally {
+      IOUtils.closeStream(out);
+      dfsCluster.restartNameNode(0);
+    }
+  }
+
+  /**
    * Test to verify rename operation on directories in case of multiple
    * destinations.
    * @param order order to be followed by the mount entry.
@@ -816,6 +896,9 @@ public class TestRouterRPCMultipleDestinationMountTableResolver {
     }
     if (nsId.equals("ns1")) {
       return nnFs1;
+    }
+    if (nsId.equals("ns2")) {
+      return nnFs2;
     }
     return null;
   }

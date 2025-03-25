@@ -63,7 +63,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.api.TestInfo;
 
-
 public class TestObserverWithRouter {
   private static final int NUM_NAMESERVICES = 2;
   private static final String SKIP_BEFORE_EACH_CLUSTER_STARTUP = "SkipBeforeEachClusterStartup";

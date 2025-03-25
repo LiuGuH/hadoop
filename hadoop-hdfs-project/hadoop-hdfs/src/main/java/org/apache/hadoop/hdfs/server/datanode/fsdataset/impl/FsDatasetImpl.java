@@ -3176,9 +3176,10 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
         List<String> allSubDirNameForDataSetLock = DatanodeUtil.getAllSubDirNameForDataSetLock();
         for (String dir : allSubDirNameForDataSetLock) {
           lockManager.addLock(LockLevel.DIR, bpid, v, dir);
-          LOG.info("Added DIR lock for bpid:{}, volume storageid:{}, dir:{}",
+          LOG.debug("Added DIR lock for bpid:{}, volume storageid:{}, dir:{}",
               bpid, v, dir);
         }
+        LOG.info("Added DIR lock for bpid:{}, volume storageid:{}", bpid, v);
       }
     }
     try {

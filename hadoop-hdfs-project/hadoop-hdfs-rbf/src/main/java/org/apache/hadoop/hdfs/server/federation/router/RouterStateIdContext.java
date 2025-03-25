@@ -47,7 +47,7 @@ import org.apache.hadoop.thirdparty.protobuf.InvalidProtocolBufferException;
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-class RouterStateIdContext implements AlignmentContext {
+public class RouterStateIdContext implements AlignmentContext {
 
   private final HashSet<String> coordinatedMethods;
   /**

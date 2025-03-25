@@ -15,4 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+/**
+ * This package contains the implementation of the Protocol Buffers
+ * protocols related to HDFS Router.
+ */
+@InterfaceAudience.Private
+@InterfaceStability.Evolving
+
 package org.apache.hadoop.hdfs.protocolPB;
+
+import org.apache.hadoop.classification.InterfaceAudience;
+import org.apache.hadoop.classification.InterfaceStability;

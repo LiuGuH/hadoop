@@ -35,10 +35,10 @@ import org.junit.Test;
 public class TestSafeMode {
 
   /** Federated HDFS cluster. */
-  private MiniRouterDFSCluster cluster;
+  protected MiniRouterDFSCluster cluster;
 
   @Before
-  public  void setup() throws Exception {
+  public void setup() throws Exception {
     cluster = new MiniRouterDFSCluster(true, 2);
 
     // Start NNs and DNs and wait until ready

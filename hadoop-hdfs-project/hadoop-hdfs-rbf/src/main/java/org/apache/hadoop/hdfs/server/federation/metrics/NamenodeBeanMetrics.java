@@ -46,6 +46,7 @@ import org.apache.hadoop.hdfs.server.federation.router.RBFConfigKeys;
 import org.apache.hadoop.hdfs.server.federation.router.Router;
 import org.apache.hadoop.hdfs.server.federation.router.RouterRpcServer;
 import org.apache.hadoop.hdfs.server.federation.router.SubClusterTimeoutException;
+import org.apache.hadoop.hdfs.server.federation.router.async.AsyncUtil;
 import org.apache.hadoop.hdfs.server.federation.store.MembershipStore;
 import org.apache.hadoop.hdfs.server.federation.store.StateStoreService;
 import org.apache.hadoop.hdfs.server.federation.store.protocol.GetNamespaceInfoRequest;
@@ -53,6 +54,7 @@ import org.apache.hadoop.hdfs.server.federation.store.protocol.GetNamespaceInfoR
 import org.apache.hadoop.hdfs.server.namenode.NameNodeMXBean;
 import org.apache.hadoop.hdfs.server.namenode.NameNodeStatusMXBean;
 import org.apache.hadoop.hdfs.server.namenode.metrics.FSNamesystemMBean;
+import org.apache.hadoop.hdfs.server.protocol.DatanodeStorageReport;
 import org.apache.hadoop.ipc.StandbyException;
 import org.apache.hadoop.metrics2.util.MBeans;
 import org.apache.hadoop.net.NetUtils;
@@ -447,8 +449,13 @@ public class NamenodeBeanMetrics
     final Map<String, Map<String, Object>> info = new HashMap<>();
     try {
       RouterRpcServer rpcServer = this.router.getRpcServer();
-      DatanodeInfo[] datanodes =
-          rpcServer.getDatanodeReport(type, false, dnReportTimeOut);
+      DatanodeInfo[] datanodes = null;
+      if (router.isEnableAsync()) {
+        rpcServer.getDatanodeReportAsync(type, false, dnReportTimeOut);
+        datanodes = AsyncUtil.syncReturn(DatanodeInfo[].class);
+      } else {
+        datanodes = rpcServer.getDatanodeReport(type, false, dnReportTimeOut);
+      }
       for (DatanodeInfo node : datanodes) {
         Map<String, Object> innerinfo = new HashMap<>();
         innerinfo.put("infoAddr", node.getInfoAddr());
@@ -477,6 +484,8 @@ public class NamenodeBeanMetrics
     } catch (SubClusterTimeoutException e) {
       LOG.error("Cannot get {} nodes, subclusters timed out responding", type);
     } catch (IOException e) {
+      LOG.error("Cannot get " + type + " nodes", e);
+    } catch (Exception e) {
       LOG.error("Cannot get " + type + " nodes", e);
     }
     return JSON.toString(info);

@@ -72,7 +72,6 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
   public static final String DFS_ROUTER_RPC_ENABLE =
       FEDERATION_ROUTER_PREFIX + "rpc.enable";
   public static final boolean DFS_ROUTER_RPC_ENABLE_DEFAULT = true;
-
   public static final String DFS_ROUTER_METRICS_ENABLE =
       FEDERATION_ROUTER_PREFIX + "metrics.enable";
   public static final boolean DFS_ROUTER_METRICS_ENABLE_DEFAULT = true;
@@ -414,4 +413,25 @@ public class RBFConfigKeys extends CommonConfigurationKeysPublic {
 
   public static final Long DFS_ROUTER_FAIR_HANDLER_DYNAMIC_UPDATE_PERIOD_DEFAULT =
       30000l;
+
+  public static final String DFS_ROUTER_ASYNC_RPC_ENABLE =
+      FEDERATION_ROUTER_PREFIX + "async.rpc.enable";
+  public static final boolean DFS_ROUTER_ASYNC_RPC_ENABLE_DEFAULT = false;
+  // HDFS Asynchronous RPC
+  public static final String FEDERATION_ROUTER_ASYNC_RPC_PREFIX =
+      FEDERATION_ROUTER_PREFIX + "async.rpc.";
+  //单条格式（nameservice:asynchandlercount），多条之间以逗号进行分隔
+  public static final String DFS_ROUTER_ASYNC_RPC_NS_HANDLER_CONFIG =
+      FEDERATION_ROUTER_ASYNC_RPC_PREFIX + "ns.handler.config";
+  public static final String DFS_ROUTER_ASYNC_RPC_NS_HANDLER_CONFIG_DEFAULT =
+      "nsPlaceholder:0";
+  public static final String DFS_ROUTER_ASYNC_RPC_NS_HANDLER_COUNT =
+      FEDERATION_ROUTER_ASYNC_RPC_PREFIX + "ns.handler.count";
+  public static final int DFS_ROUTER_ASYNC_RPC_HANDLER_COUNT_DEFAULT = 100;
+  public static final String DFS_ROUTER_ASYNC_RPC_RESPONDER_COUNT =
+      FEDERATION_ROUTER_ASYNC_RPC_PREFIX + "responder.count";
+  public static final int DFS_ROUTER_ASYNC_RPC_RESPONDER_COUNT_DEFAULT = 300;
+  public static final String DFS_ROUTER_ASYNC_RPC_MAX_ASYNCCALL_PERMIT_KEY =
+      FEDERATION_ROUTER_ASYNC_RPC_PREFIX + "max.asynccall.permit";
+  public static final int DFS_ROUTER_ASYNC_RPC_MAX_ASYNC_CALL_PERMIT_DEFAULT = 6000;
 }

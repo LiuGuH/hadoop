@@ -395,7 +395,7 @@ public class Router extends CompositeService implements
    * @return New Router RPC Server.
    * @throws IOException If the router RPC server was not started.
    */
-  protected RouterRpcServer createRpcServer() throws IOException {
+  public RouterRpcServer createRpcServer() throws IOException {
     return new RouterRpcServer(this.conf, this, this.getNamenodeResolver(),
         this.getSubclusterResolver());
   }
@@ -816,4 +816,10 @@ public class Router extends CompositeService implements
     return adminServer;
   }
 
+  public boolean isEnableAsync() {
+    if (rpcServer == null) {
+      return false;
+    }
+    return rpcServer.isAsync();
+  }
 }
