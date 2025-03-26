@@ -54,6 +54,7 @@ public class TestRouterAsyncRpc extends TestRouterRpc {
     routerConf.setTimeDuration(RBFConfigKeys.DN_REPORT_CACHE_EXPIRE, 1, TimeUnit.SECONDS);
     // Use async router.
     routerConf.setBoolean(DFS_ROUTER_ASYNC_RPC_ENABLE, true);
+    routerConf.setInt(RBFConfigKeys.DFS_ROUTER_ASYNC_RPC_NS_HANDLER_COUNT, 2);
     // Use RouterAsyncRpcFairnessPolicyController as the fairness controller.
     routerConf.setClass(DFS_ROUTER_FAIRNESS_POLICY_CONTROLLER_CLASS, RouterAsyncRpcFairnessPolicyController.class, RouterRpcFairnessPolicyController.class);
     routerConf.setBoolean(DFS_ROUTER_DN_REPORT_ENABLE_KEY, true);
