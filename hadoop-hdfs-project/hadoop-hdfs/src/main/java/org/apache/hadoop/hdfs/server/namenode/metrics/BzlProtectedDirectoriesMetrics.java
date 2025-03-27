@@ -5,24 +5,29 @@ import org.apache.hadoop.metrics2.annotation.Metrics;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.metrics2.lib.MetricsRegistry;
 import org.apache.hadoop.metrics2.lib.MutableCounterLong;
+import org.apache.hadoop.metrics2.lib.MutableRate;
 
-@Metrics(name = "BzlProtectedDirectors", context = "dfs")
+@Metrics(name = "BzlProtectedDirectories", context = "dfs")
 public class BzlProtectedDirectoriesMetrics {
   final MetricsRegistry registry;
   final String name;
-  @Metric("Number of bzlProtectedDirectors fetch successes")
+  @Metric("Number of bzlProtectedDirectories fetch successes")
   MutableCounterLong bzlProtectedDirectoriesFetchSuccesses;
-  @Metric("Number of bzlProtectedDirectors fetch failures")
+  @Metric("Number of bzlProtectedDirectories fetch failures")
   MutableCounterLong bzlProtectedDirectoriesFetchFailures;
-  @Metric("Number of bzlProtectedDirectors check successes")
+  @Metric("Number of bzlProtectedDirectories check successes")
   MutableCounterLong bzlProtectedDirectoriesCheckSuccesses;
-  @Metric("Number of bzlProtectedDirectors check failures")
+  @Metric("Number of bzlProtectedDirectories check failures")
   MutableCounterLong bzlProtectedDirectoriesCheckFailures;
   int bzlProtectedDirectoriesNums;
+  int bzlProtectedDirectoriesSizeExceeded;
+  @Metric("ProcessingTime of bzlProtectedDirectories check")
+  private MutableRate bzlProtectedDirectoriesProcessingTime;
 
   private BzlProtectedDirectoriesMetrics() {
-    name = "BzlProtectedDirectors";
+    name = "BzlProtectedDirectories";
     registry = new MetricsRegistry(name);
+    bzlProtectedDirectoriesProcessingTime = registry.newRate("bzlProtectedDirectoriesProcessingTime");
   }
 
   public static BzlProtectedDirectoriesMetrics create() {
@@ -46,12 +51,25 @@ public class BzlProtectedDirectoriesMetrics {
     bzlProtectedDirectoriesCheckFailures.incr();
   }
 
-  @Metric({"ProtectedDirectoriesNums", "Number of bzlProtectedDirectors size"})
+  @Metric({"ProtectedDirectoriesNums", "Number of bzlProtectedDirectories size"})
   public int getBzlProtectedDirectoriesNums() {
     return bzlProtectedDirectoriesNums;
   }
 
   public void setBzlProtectedDirectoriesNums(int nums) {
     this.bzlProtectedDirectoriesNums = nums;
+  }
+
+  @Metric({"ProtectedDirectoriesSizeExceeded", "Number of bzlProtectedDirectories size exceeds max size"})
+  public int getBzlProtectedDirectoriesSizeExceeded() {
+    return bzlProtectedDirectoriesSizeExceeded;
+  }
+
+  public void setBzlProtectedDirectoriesSizeExceeded(int bzlProtectedDirectoriesSizeExceeded) {
+    this.bzlProtectedDirectoriesSizeExceeded = bzlProtectedDirectoriesSizeExceeded;
+  }
+
+  public MutableRate getBzlProtectedDirectoriesProcessingTime() {
+    return bzlProtectedDirectoriesProcessingTime;
   }
 }

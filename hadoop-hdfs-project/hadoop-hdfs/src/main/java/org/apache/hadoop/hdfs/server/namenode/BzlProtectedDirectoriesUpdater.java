@@ -5,6 +5,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.server.namenode.metrics.BzlProtectedDirectoriesMetrics;
+import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -25,6 +26,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE;
 
 public class BzlProtectedDirectoriesUpdater {
   static final Logger LOG = LoggerFactory.getLogger(BzlProtectedDirectoriesUpdater.class);
@@ -87,6 +89,10 @@ public class BzlProtectedDirectoriesUpdater {
         if (httpResponse.getStatusLine().getStatusCode() == 200) {
           resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
           bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchSuccesses();
+        } else {
+          LOG.warn("Fetch error. The return code is {} .",
+              httpResponse.getStatusLine().getStatusCode());
+          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
         }
       } catch (IOException e) {
         LOG.warn("IOException error! The detail message is {}.", e.getMessage());
@@ -121,24 +127,43 @@ public class BzlProtectedDirectoriesUpdater {
       Map<String, Map<String, List<String>>> rs = gson.fromJson(json, Map.class);
       Map<String, List<String>> allData = rs.get("data");
       int remoteProtectedDirectoriesNums = 0;
-      if (allData != null) {
-          List<String> remoteProtectedDirectoriesList = new ArrayList<>();
-        for (Map.Entry<String, List<String>> item : allData.entrySet()) {
-          List<String> itemList = item.getValue();
-          remoteProtectedDirectoriesNums += itemList.size();
-          remoteProtectedDirectoriesList.addAll(itemList);
-        }
 
-        if (!remoteProtectedDirectoriesList.containsAll(protectedDirectoriesListInCoresite)) {
-          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckFailures();
-          return remoteProtectedDirectories;
-        }
-
-        remoteProtectedDirectories.addAll(remoteProtectedDirectoriesList);
+      if (allData == null) {
+        LOG.warn("RemoteProtectedDirectories is null.");
+        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckFailures();
+        return remoteProtectedDirectories;
       }
+
+      List<String> remoteProtectedDirectoriesList = new ArrayList<>();
+      for (Map.Entry<String, List<String>> item : allData.entrySet()) {
+        List<String> itemList = item.getValue();
+        remoteProtectedDirectoriesNums += itemList.size();
+        remoteProtectedDirectoriesList.addAll(itemList);
+      }
+
+      if (!remoteProtectedDirectoriesList.containsAll(protectedDirectoriesListInCoresite)) {
+        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckFailures();
+        return remoteProtectedDirectories;
+      }
+
+      if (remoteProtectedDirectoriesList.size() > BzlDynamicConfiguration.getInstance()
+          .getLong(FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE, 100000)) {
+        LOG.warn("RemoteProtectdDirectoriesList size exceeds the upper limit of {}.",
+            BzlDynamicConfiguration.getInstance()
+                .getLong(FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE, 100000));
+        bzlProtectedDirectoriesMetrics.setBzlProtectedDirectoriesSizeExceeded(1);
+        return remoteProtectedDirectories;
+      }
+      bzlProtectedDirectoriesMetrics.setBzlProtectedDirectoriesSizeExceeded(0);
+      remoteProtectedDirectories.addAll(remoteProtectedDirectoriesList);
+
       bzlProtectedDirectoriesMetrics.setBzlProtectedDirectoriesNums(remoteProtectedDirectoriesNums);
       bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckSuccesses();
       return remoteProtectedDirectories;
+    }
+
+    public BzlProtectedDirectoriesMetrics getBzlProtectedDirectoriesMetrics() {
+      return bzlProtectedDirectoriesMetrics;
     }
   }
 
@@ -197,13 +222,13 @@ public class BzlProtectedDirectoriesUpdater {
       protectedDirectories.removeIf(item -> !currlocalProtectedDirectories.contains(item) &&
           !currRemoteProtectedDirectories.contains(item));
       int newSize = protectedDirectories.size();
-      LOG.info("UpdateBzlProtectedDirectories, BzlProtectedDirectories has changed! PreviousSize is {}, newSise is {}.",
+      LOG.info("UpdateBzlProtectedDirectories, BzlProtectedDirectories has changed! PreviousSize is {}, newSize is {}.",
           previousSize, newSize);
       prevRemoteProtectedDirectories.clear();
       prevRemoteProtectedDirectories.addAll(currRemoteProtectedDirectories);
     }
 
-    if(LOG.isDebugEnabled()){
+    if(LOG.isDebugEnabled()) {
       LOG.debug("ProtectedDirectories is {}",protectedDirectories);
     }
   }
@@ -212,5 +237,9 @@ public class BzlProtectedDirectoriesUpdater {
     this.currRemoteProtectedDirectories.addAll(remoteProtectedDirectories);
     this.currRemoteProtectedDirectories.removeIf(
         item -> !remoteProtectedDirectories.contains(item));
+  }
+
+  public MutableRate getBzlProtectedDirectoriesProcessingTime() {
+    return updateThread.getBzlProtectedDirectoriesMetrics().getBzlProtectedDirectoriesProcessingTime();
   }
 }
