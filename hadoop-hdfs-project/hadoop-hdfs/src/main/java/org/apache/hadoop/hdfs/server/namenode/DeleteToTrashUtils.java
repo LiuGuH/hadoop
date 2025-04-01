@@ -17,6 +17,8 @@ public class DeleteToTrashUtils {
   public static final String NN = "/.NN";
   public static final String HIVE_STAGING_DIR = ".hive-staging";
   public static final String SPARK_STAGING_DIR = ".spark-staging";
+  public static final String TEMPORARY_DIR = "_temporary";
+
 
 
   public static String getTrashRoot() {
@@ -51,8 +53,8 @@ public class DeleteToTrashUtils {
       return false;
     }
 
-    if (src.contains(FileSystem.TRASH_PREFIX) || src.contains(HIVE_STAGING_DIR)
-        || src.contains(SPARK_STAGING_DIR)) {
+    if (src.contains(FileSystem.TRASH_PREFIX) || src.contains(HIVE_STAGING_DIR) || src.contains(
+        SPARK_STAGING_DIR) || src.contains(TEMPORARY_DIR)) {
       return false;
     }
 
