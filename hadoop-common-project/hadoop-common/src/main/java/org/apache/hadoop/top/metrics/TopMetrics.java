@@ -23,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.top.window.RollingWindowManager;
 import org.apache.hadoop.top.window.RollingWindowManager.Op;
 import org.apache.hadoop.top.window.RollingWindowManager.User;
@@ -69,7 +70,6 @@ public class TopMetrics implements MetricsSource {
   public static final Logger LOG = LoggerFactory.getLogger(TopMetrics.class);
   public static final String TOPMETRICS_METRICS_SOURCE_NAME =
       "RPCRateLimiterTopUserOpCounts";
-  private final boolean isMetricsSourceEnabled;
 
   private static void logConf(Configuration conf) {
     LOG.info("NNTop conf: " + CommonConfigurationKeysPublic.RPC_RATELIMITER_TOP_BUCKETS_PER_WINDOW_KEY +
@@ -93,8 +93,6 @@ public class TopMetrics implements MetricsSource {
       rollingWindowManagers.put(reportingPeriods[i], new RollingWindowManager(
           conf, reportingPeriods[i]));
     }
-    isMetricsSourceEnabled = conf.getBoolean(CommonConfigurationKeysPublic.RPC_RATELIMITER_TOP_ENABLED_KEY,
-        CommonConfigurationKeysPublic.RPC_RATELIMITER_TOP_ENABLED_DEFAULT);
   }
 
   /**
@@ -156,7 +154,9 @@ public class TopMetrics implements MetricsSource {
    */
   @Override
   public void getMetrics(MetricsCollector collector, boolean all) {
-    if (!isMetricsSourceEnabled) {
+    if (!BzlDynamicConfiguration.getInstance()
+        .getBoolean(CommonConfigurationKeysPublic.RPC_RATELIMITER_TOP_ENABLED_KEY,
+            CommonConfigurationKeysPublic.RPC_RATELIMITER_TOP_ENABLED_DEFAULT)) {
       return;
     }
 

@@ -79,6 +79,23 @@ public final class CallerContext {
         null : Arrays.copyOf(signature, signature.length);
   }
 
+  public String getClientIpStr() {
+    if (isContextValid() && context.contains(CLIENT_IP_STR)) {
+      String[] items = context.split(HADOOP_CALLER_CONTEXT_SEPARATOR_DEFAULT);
+      for (String item : items) {
+        if (item.contains(CLIENT_IP_STR)) {
+          String[] ipInfos = item.split(Builder.KEY_VALUE_SEPARATOR);
+          if (ipInfos.length == 2) {
+            if (!ipInfos[1].isEmpty()) {
+              return ipInfos[1];
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }
+
   @InterfaceAudience.Private
   public boolean isContextValid() {
     return context != null && !context.isEmpty();

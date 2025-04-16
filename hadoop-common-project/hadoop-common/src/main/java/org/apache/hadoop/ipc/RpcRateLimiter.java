@@ -103,6 +103,16 @@ public class RpcRateLimiter {
     return INSTANCE;
   }
 
+  private String getRealClientIp() {
+    CallerContext callerContext = CallerContext.getCurrent();
+    String clientIp = null;
+    if (callerContext != null) {
+      LOG.debug("CallerContext context is : {}", callerContext.getContext());
+      clientIp = callerContext.getClientIpStr();
+    }
+    return clientIp;
+  }
+
   public void rateLimit(String protocolName, String methodName, String ip, String user)
       throws Exception {
     if (!BzlDynamicConfiguration.getInstance()
@@ -111,6 +121,10 @@ public class RpcRateLimiter {
     }
 
     long start = Time.monotonicNowNanos();
+    String clientIp = getRealClientIp();
+    if (clientIp != null) {
+      ip = clientIp;
+    }
 
     LimitCondition limitCondition = null;
     try {
