@@ -19,6 +19,7 @@ import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.server.namenode.metrics.BzlForceToTrashDirectoriesMetrics;
 import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIBuilder;
@@ -26,6 +27,9 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_FORCE_TO_TRASH_BZL_UPDATER_REMOTE_LIST_MAX_SIZE;
 
 public class BzlForceToTrashDirectoriesUpdater {
@@ -80,8 +84,11 @@ public class BzlForceToTrashDirectoriesUpdater {
       CloseableHttpClient httpClient = null;
       CloseableHttpResponse httpResponse = null;
       try {
+        RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
+            .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
+            .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
         URI uri = new URIBuilder(forceToTrashDirectoriesBzlRemoteUrl).build();
-        httpClient = HttpClients.createDefault();
+        httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
         HttpGet httpGet = new HttpGet(uri);
         httpResponse = httpClient.execute(httpGet);
 

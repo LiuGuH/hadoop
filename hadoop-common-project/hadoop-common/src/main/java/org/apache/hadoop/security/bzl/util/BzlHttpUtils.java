@@ -2,6 +2,7 @@ package org.apache.hadoop.security.bzl.util;
 
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.hadoop.ipc.metrics.RpcBzlTokenPasswordFetcherMetrics;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIBuilder;
@@ -14,6 +15,10 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 
 public class BzlHttpUtils {
 
@@ -31,6 +36,9 @@ public class BzlHttpUtils {
     CloseableHttpResponse httpResponse = null;
     URI uri = null;
     try {
+      RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
+          .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
+          .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
       uri = new URIBuilder(url + method)
           .setParameter("datastarAc", datastarAc)
           .setParameter("datastarTs", datastarTs)
@@ -38,7 +46,7 @@ public class BzlHttpUtils {
           .setParameter("datastarSign", datastarSign)
           .build();
 
-      httpClient = HttpClients.createDefault();
+      httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
       HttpGet httpGet = new HttpGet(uri);
       httpResponse = httpClient.execute(httpGet);
 

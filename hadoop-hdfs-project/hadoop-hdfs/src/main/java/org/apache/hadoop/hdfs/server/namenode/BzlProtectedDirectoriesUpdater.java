@@ -7,6 +7,7 @@ import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.server.namenode.metrics.BzlProtectedDirectoriesMetrics;
 import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIBuilder;
@@ -25,6 +26,9 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE;
 
@@ -81,8 +85,11 @@ public class BzlProtectedDirectoriesUpdater {
       CloseableHttpClient httpClient = null;
       CloseableHttpResponse httpResponse = null;
       try {
+        RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
+            .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
+            .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
         URI uri = new URIBuilder(protectedDirectoriesBzlRemoteUrl).build();
-        httpClient = HttpClients.createDefault();
+        httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
         HttpGet httpGet = new HttpGet(uri);
         httpResponse = httpClient.execute(httpGet);
 
@@ -142,6 +149,7 @@ public class BzlProtectedDirectoriesUpdater {
       }
 
       if (!remoteProtectedDirectoriesList.containsAll(protectedDirectoriesListInCoresite)) {
+        LOG.warn("RemoteProtectedDirectoriesList does not contain all local protected directories.");
         bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesCheckFailures();
         return remoteProtectedDirectories;
       }

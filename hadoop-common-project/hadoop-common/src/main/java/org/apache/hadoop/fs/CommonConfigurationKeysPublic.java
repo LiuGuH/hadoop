@@ -39,6 +39,11 @@ public class CommonConfigurationKeysPublic {
   // The Keys
   public static final String HADOOP_BZL_TOKEN = "HADOOP_BZL_TOKEN";
   public static final String HADOOP_BZL_TOKEN_FILE = "HADOOP_BZL_TOKEN_FILE";
+
+  public static final int BZL_HTTP_SOCKET_TIMEOUT = 10000;
+  public static final int BZL_HTTP_CONNECT_TIMEOUT = 10000;
+  public static final int BZL_HTTP_CONNECTION_REQUEST_TIMEOUT = 15000;
+  
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">
