@@ -26,6 +26,7 @@ import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.ipc.Client;
 import org.apache.hadoop.ipc.ProtobufRpcEngine2;
 import org.apache.hadoop.ipc.ProtobufRpcEngineCallback2;
+import org.apache.hadoop.ipc.Server;
 import org.apache.hadoop.ipc.internal.ShadedProtobufHelper;
 import org.apache.hadoop.thirdparty.protobuf.Message;
 import org.apache.hadoop.util.Time;
@@ -79,15 +80,14 @@ public final class AsyncRpcProtocolPBUtil {
     ThreadLocalContext threadLocalContext = new ThreadLocalContext();
     asyncCompleteWith(responseFuture.handleAsync((result, e) -> {
       FederationRPCMetrics.ASYNC_RESPONDER_START_TIME.set(Time.monotonicNow());
-      if (LOG.isDebugEnabled()) {
-        LOG.debug("async ipc request {} {}, {} ", call, result, threadLocalContext);
-      }
       threadLocalContext.transfer();
       if (e != null) {
         throw wrapCompletionException(e);
       }
       try {
         T res = asyncResultMessage.get(-1, null);
+        LOG.debug("Async IPC Request, Call={}, CallerContext={}, Result={}",
+            Server.getCurCall().get(), CallerContext.getCurrent(), res);
         return responseHandler.apply(res);
       } catch (Exception ex) {
         throw wrapCompletionException(ex);
