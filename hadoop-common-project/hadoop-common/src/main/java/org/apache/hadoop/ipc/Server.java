@@ -1230,16 +1230,15 @@ public abstract class Server {
           // This is equivalent to what happens in synchronous calls when the
           // response cannot be sent.
           LOG.error(
-              "Failed to setup deferred successful response. ThreadName=" +
-                  Thread.currentThread().getName() + ", Call=" + this);
+              "Failed to setup deferred successful response. ThreadName={}, Call={}, Exception is {}",
+              Thread.currentThread().getName(), this, e);
         } catch (Exception e) {
           // For synchronous calls, application code is done once it's returned
           // from a method. It does not expect to receive an error.
           // This is equivalent to what happens in synchronous calls when the
           // Responder is not able to send out the response.
-          LOG.error("Failed to send deferred response. ThreadName=" + Thread
-              .currentThread().getName() + ", CallId="
-              + callId + ", hostname=" + getHostAddress());
+          LOG.error("Failed to send deferred response. ThreadName={}, CallId={}, hostname={}, Exception is {}", Thread
+              .currentThread().getName(), callId, getHostAddress(), e);
         }
       }
     }
