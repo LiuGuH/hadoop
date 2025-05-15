@@ -82,6 +82,8 @@ public final class AsyncRpcProtocolPBUtil {
       FederationRPCMetrics.ASYNC_RESPONDER_START_TIME.set(Time.monotonicNow());
       threadLocalContext.transfer();
       if (e != null) {
+        LOG.debug("Async IPC Request, Call={}, CallerContext={}, Exception={}",
+            Server.getCurCall().get(), CallerContext.getCurrent(), e.toString());
         throw wrapCompletionException(e);
       }
       try {
@@ -93,7 +95,6 @@ public final class AsyncRpcProtocolPBUtil {
         throw wrapCompletionException(ex);
       }
     }, asyncResponderExecutor));
-    CallerContext.setCurrent(null);
     return asyncReturn(clazz);
   }
 
