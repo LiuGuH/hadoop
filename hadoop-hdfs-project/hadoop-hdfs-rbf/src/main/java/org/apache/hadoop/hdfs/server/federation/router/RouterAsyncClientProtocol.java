@@ -542,7 +542,17 @@ public class RouterAsyncClientProtocol extends RouterClientProtocol {
 
       CatchFunction<HdfsFileStatus, IOException> catchFunction = (status, e) -> {
         LOG.error("Cannot get mount point: {}", e.getMessage());
-        return null;
+        return builder.isdir(true)
+            .mtime(modTime)
+            .atime(accessTime)
+            .perm(permission[0])
+            .owner(owner[0])
+            .group(group[0])
+            .symlink(new byte[0])
+            .fileId(inodeId)
+            .children(childrenNums[0])
+            .flags(flags[0])
+            .build();
       };
 
       asyncTryCatchFinally(tryFunction, IOException.class, catchFunction, null);
@@ -823,6 +833,8 @@ public class RouterAsyncClientProtocol extends RouterClientProtocol {
       if (e instanceof NoLocationException
           || e instanceof RouterResolveException) {
         noLocationException[0] = e;
+      } else {
+        throw e;
       }
       return null;
     };
