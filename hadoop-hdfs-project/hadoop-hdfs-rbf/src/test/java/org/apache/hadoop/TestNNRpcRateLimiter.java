@@ -13,8 +13,10 @@ import org.apache.hadoop.hdfs.MiniDFSCluster;
 import org.apache.hadoop.hdfs.server.federation.MiniRouterDFSCluster;
 import org.apache.hadoop.ipc.CallerContext;
 import org.apache.hadoop.ipc.RemoteException;
+import org.apache.hadoop.ipc.RpcRateLimiter;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_RULES_URL;
 import static org.apache.hadoop.hdfs.server.federation.FederationTestUtils.NAMENODES;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -117,13 +119,24 @@ public class TestNNRpcRateLimiter {
 
 
   @Test
-  public void test1() {
+  public void testSplit() {
     String s = "a,,c";
     String[] items = s.split(",");
     System.out.println(items.length);
     for (String item : items) {
       System.out.println("---"+item+"---");
     }
+  }
+
+  @Test
+  public void testGetRpcRatelimiterUrl() {
+    String url =
+        "https://datastar.kanzhun-inc.com//api/guardian/openapi/limitRule/queryLimitRuleContentByCode/yj-hadoop/yj-hdfs6";
+    BzlDynamicConfiguration.getInstance().set(IPC_SERVER_RATE_LIMIT_RULES_URL, url);
+    String result = RpcRateLimiter.getInstance().getRefreshRpcRateLimitThread().getRateLimterRules();
+    // result should be "" if request success but the rules is emtpy
+    // result should be rules if request success but the rules is config
+    // result should be null if request failed
   }
 
 }

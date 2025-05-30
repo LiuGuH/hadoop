@@ -3,6 +3,7 @@ package org.apache.hadoop.ipc;
 import com.google.gson.Gson;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.net.util.SubnetUtils;
+import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.ipc.metrics.RpcRateLimiterMetrics;
 import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
@@ -291,8 +292,8 @@ public class RpcRateLimiter {
     }
   }
 
-  private class RefreshRpcRateLimitThread extends Thread {
-    private RefreshRpcRateLimitThread() {
+  public class RefreshRpcRateLimitThread extends Thread {
+    public RefreshRpcRateLimitThread() {
       this.setName("RefreshRpcRateLimitThread");
       this.setDaemon(true);
     }
@@ -312,28 +313,26 @@ public class RpcRateLimiter {
             newValue = BzlDynamicConfiguration.getInstance()
                 .get(IPC_SERVER_RATE_LIMIT_RULES, IPC_SERVER_RATE_LIMIT_RULES_DEFAULT);
           } else {
+            // If requests URL failed , newValue will be null.
+            // If successes but the rules is empty, newValue will be ""
             newValue = getRateLimterRules();
           }
 
-          if ((oldValue == null) || (newValue != null && !oldValue.equals(newValue))) {
+          if (newValue != null && !newValue.equals(oldValue)) {
             try {
               List<LimitCondition> list = getRateLimitList(newValue);
-              if (list.size() > 0) {
-                long start = Time.monotonicNowNanos();
-                writeLock();
-                try {
-                  conditionList.clear();
-                  conditionList.addAll(list);
-                } finally {
-                  writeUnlock();
-                  rpcRateLimiterMetrics.addRpcLimitConditionWriteLock(
-                      Time.monotonicNowNanos() - start);
-                }
-                LOG.info(
-                    "The {} has changed. Details is {}", IPC_SERVER_RATE_LIMIT_RULES,
-                    list);
-                oldValue = newValue;
+              long start = Time.monotonicNowNanos();
+              writeLock();
+              try {
+                conditionList.clear();
+                conditionList.addAll(list);
+              } finally {
+                writeUnlock();
+                rpcRateLimiterMetrics.addRpcLimitConditionWriteLock(
+                    Time.monotonicNowNanos() - start);
               }
+              LOG.info("The {} has changed. Details is {}", IPC_SERVER_RATE_LIMIT_RULES, list);
+              oldValue = newValue;
             } catch (Exception e) {
               LOG.error("RefreshRpcRateLimitThread throw exception. The detail is {}.",
                   e.getMessage());
@@ -356,6 +355,9 @@ public class RpcRateLimiter {
 
     private List<LimitCondition> getRateLimitList(String rateLimitConfig) {
       List<LimitCondition> list = new ArrayList<>();
+      if (rateLimitConfig == null || rateLimitConfig.equals("")) {
+        return list;
+      }
       String rateLimits[] = rateLimitConfig.split(";");
 
       for (int i = 0; i < rateLimits.length; i++) {
@@ -421,7 +423,7 @@ public class RpcRateLimiter {
           Double.parseDouble(qps) >= 1.0) || qps.equals("*") || qps.equals("0"));
     }
 
-    private String getRateLimterRules() {
+    public String getRateLimterRules() {
       String json = doGetHttp(BzlDynamicConfiguration.getInstance()
           .get(IPC_SERVER_RATE_LIMIT_RULES_URL, ""));
       String rpcRateLimiterRules = parseJson(json);
@@ -433,6 +435,7 @@ public class RpcRateLimiter {
 
     private String doGetHttp(String rpcRateLimiterUrl) {
       if (rpcRateLimiterUrl == null) {
+        LOG.warn("RpcRateLimiterUrl is null.");
         rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
         return null;
       }
@@ -452,6 +455,10 @@ public class RpcRateLimiter {
         if (httpResponse.getStatusLine().getStatusCode() == 200) {
           resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
           rpcRateLimiterMetrics.addRpcRateLimitFetchSuccesses();
+        } else {
+          LOG.warn("Request {} failed. Code is {}", rpcRateLimiterUrl,
+              httpResponse.getStatusLine().getStatusCode());
+          rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
         }
       } catch (java.io.IOException e) {
         LOG.warn("IOException error! The detail message is {}.", e.getMessage());
@@ -486,5 +493,10 @@ public class RpcRateLimiter {
       return rs.get("data");
     }
     
+  }
+
+  @VisibleForTesting
+  public RefreshRpcRateLimitThread getRefreshRpcRateLimitThread() {
+     return  new RefreshRpcRateLimitThread();
   }
 }
