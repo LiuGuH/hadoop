@@ -12,6 +12,7 @@ import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.RateLimite
 import org.apache.hadoop.top.TopConf;
 import org.apache.hadoop.top.metrics.TopMetrics;
 import org.apache.hadoop.util.Time;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.utils.URIBuilder;
@@ -31,6 +32,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
+import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE;
@@ -437,8 +441,11 @@ public class RpcRateLimiter {
       CloseableHttpClient httpClient = null;
       CloseableHttpResponse httpResponse = null;
       try {
+        RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
+            .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
+            .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
         URI uri = new URIBuilder(rpcRateLimiterUrl).build();
-        httpClient = HttpClients.createDefault();
+        httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
         HttpGet httpGet = new HttpGet(uri);
         httpResponse = httpClient.execute(httpGet);
 
