@@ -38,6 +38,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -2243,6 +2244,127 @@ public class TestDistributedFileSystem {
       blockInfo = (BlockInfoStriped)blockManager.getStoredBlockNonThreadSafe(locatedBlocks.getLocatedBlocks().get(0).getBlock().getLocalBlock());
       assertEquals(2, blockInfo.numNodes());
       assertEquals(BlockUCState.COMPLETE, blockInfo.getBlockUCState());
+    }
+  }
+
+  @Test()
+  public void testECRead() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).build()) {
+      cluster.waitActive();
+      final DistributedFileSystem dfs = cluster.getFileSystem();
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+      dfs.enableErasureCodingPolicy("XOR-2-1-1024k");
+      dfs.setErasureCodingPolicy(dir, "XOR-2-1-1024k");
+
+      int length = 5 * 1024 * 1024 + 1;
+      byte[] bytes = new byte[length];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"));) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      DataInputStream inputStream =  dfs.open(new Path("/dir/file"));
+      for (int i = 0; i < length; i++) {
+        inputStream.read();
+      }
+      inputStream.close();
+    }
+  }
+
+  @Test()
+  public void testRead() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).build()) {
+      cluster.waitActive();
+      final DistributedFileSystem dfs = cluster.getFileSystem();
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+
+      byte[] bytes = new byte[1024 * 1024];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"));) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      DataInputStream in =  dfs.open(new Path("/dir/file"));
+      byte[] toRead = new byte[bytes.length];
+      int totalRead = 0;
+      int nRead = 0;
+      try {
+        while ((nRead = in.read(toRead, totalRead, toRead.length - totalRead)) > 0) {
+          totalRead += nRead;
+        }
+      } catch (IOException e) {
+
+      }
+      assertEquals("Cannot read file.", toRead.length, totalRead);
+      checkFile(toRead, bytes);
+    }
+  }
+
+  private boolean checkFile(byte[] fileToCheck, byte[] expected) {
+    if (fileToCheck.length != expected.length) {
+      return false;
+    }
+    for (int i = 0; i < fileToCheck.length; i++) {
+      if (fileToCheck[i] != expected[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Test()
+  public void testWrite3R() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "10000");
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).setDnHttpPorts(50010, 50011, 50012)
+              .setDnIpcPorts(8010, 8011, 8012).build()) {
+      cluster.waitActive();
+
+      Configuration clientConf = cluster.getConfiguration(0);
+      clientConf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "40000");
+
+      final DistributedFileSystem dfs = (DistributedFileSystem)FileSystem.get(clientConf);
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+
+      byte[] bytes = new byte[1024 * 1024];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"))) {
+        str.flush();
+        str.flush();
+        Thread.sleep(50 * 1000);
+        str.flush();
+
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.flush();
+
+        Thread.sleep(60 * 1000);
+        str.write("End".getBytes());
+        str.flush();
+
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
     }
   }
 }
