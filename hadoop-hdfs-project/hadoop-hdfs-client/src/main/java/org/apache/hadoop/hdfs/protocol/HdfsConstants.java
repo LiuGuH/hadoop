@@ -100,7 +100,7 @@ public final class HdfsConstants {
       "org.apache.hadoop.hdfs.protocolPB.RouterAdminProtocol";
 
   // Timeouts for communicating with DataNode for streaming writes/reads
-  public static final int READ_TIMEOUT = 8*60 * 1000;
+  public static final int READ_TIMEOUT = 3 * 60 * 1000;
   public static final int READ_TIMEOUT_EXTENSION = 5 * 1000;
   public static final int WRITE_TIMEOUT = 8 * 60 * 1000;
   //for write pipeline

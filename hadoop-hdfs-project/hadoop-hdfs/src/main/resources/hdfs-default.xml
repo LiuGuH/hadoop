@@ -4425,7 +4425,7 @@
 
 <property>
   <name>dfs.client.socket-timeout</name>
-  <value>60000</value>
+  <value>180000</value>
   <description>
     Default timeout value in milliseconds for all sockets.
   </description>
