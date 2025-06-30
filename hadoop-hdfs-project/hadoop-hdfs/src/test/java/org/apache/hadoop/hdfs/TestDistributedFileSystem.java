@@ -24,15 +24,21 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_RECONSTRUCTION_P
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_CLIENT_CONTEXT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.Write.ECRedunency.DFS_CLIENT_EC_CHECKSTREAMER_REDUNENCY;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -128,9 +134,11 @@ import org.apache.hadoop.test.Whitebox;
 import org.apache.hadoop.util.DataChecksum;
 import org.apache.hadoop.util.Time;
 import org.apache.hadoop.util.concurrent.HadoopExecutors;
+import org.apache.hadoop.util.functional.RemoteIterators;
 import org.junit.Assert;
 import org.junit.Test;
 import org.mockito.InOrder;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -165,7 +173,7 @@ public class TestDistributedFileSystem {
           "localhost:0");
     }
     conf.setLong(DFSConfigKeys.DFS_NAMENODE_MIN_BLOCK_SIZE_KEY, 0);
-
+    conf.setBoolean("dfs.webhdfs.enabled",true);
     return conf;
   }
 
@@ -672,6 +680,44 @@ public class TestDistributedFileSystem {
       checkStatistics(dfs, 0, 0, 0);
     } finally {
       cluster.shutdown();
+    }
+  }
+
+  /**
+   * This is to test that {@link DFSConfigKeys#DFS_LIST_LIMIT} works as
+   * expected when {@link DistributedFileSystem#listLocatedStatus} is called.
+   */
+  @Test
+  public void testGetListingLimit() throws Exception {
+    final Configuration conf = getTestConfiguration();
+    conf.setInt(DFSConfigKeys.DFS_LIST_LIMIT, 9);
+    try (MiniDFSCluster cluster =
+             new MiniDFSCluster.Builder(conf).numDataNodes(9).build()) {
+      cluster.waitActive();
+      ErasureCodingPolicy ecPolicy = StripedFileTestUtil.getDefaultECPolicy();
+      final DistributedFileSystem fs = cluster.getFileSystem();
+      fs.dfs = spy(fs.dfs);
+      Path dir1 = new Path("/testRep");
+      Path dir2 = new Path("/testEC");
+      fs.mkdirs(dir1);
+      fs.mkdirs(dir2);
+      fs.setErasureCodingPolicy(dir2, ecPolicy.getName());
+      for (int i = 0; i < 3; i++) {
+        DFSTestUtil.createFile(fs, new Path(dir1, String.valueOf(i)),
+            20 * 1024L, (short) 3, 1);
+        DFSTestUtil.createStripedFile(cluster, new Path(dir2,
+            String.valueOf(i)), dir2, 1, 1, false);
+      }
+
+      List<LocatedFileStatus> str = RemoteIterators.toList(fs.listLocatedStatus(dir1));
+      assertThat(str).hasSize(3);
+      Mockito.verify(fs.dfs, Mockito.times(1)).listPaths(anyString(), any(),
+          anyBoolean());
+
+      str = RemoteIterators.toList(fs.listLocatedStatus(dir2));
+      assertThat(str).hasSize(3);
+      Mockito.verify(fs.dfs, Mockito.times(4)).listPaths(anyString(), any(),
+          anyBoolean());
     }
   }
 
@@ -2198,6 +2244,127 @@ public class TestDistributedFileSystem {
       blockInfo = (BlockInfoStriped)blockManager.getStoredBlockNonThreadSafe(locatedBlocks.getLocatedBlocks().get(0).getBlock().getLocalBlock());
       assertEquals(2, blockInfo.numNodes());
       assertEquals(BlockUCState.COMPLETE, blockInfo.getBlockUCState());
+    }
+  }
+
+  @Test()
+  public void testECRead() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).build()) {
+      cluster.waitActive();
+      final DistributedFileSystem dfs = cluster.getFileSystem();
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+      dfs.enableErasureCodingPolicy("XOR-2-1-1024k");
+      dfs.setErasureCodingPolicy(dir, "XOR-2-1-1024k");
+
+      int length = 5 * 1024 * 1024 + 1;
+      byte[] bytes = new byte[length];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"));) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      DataInputStream inputStream =  dfs.open(new Path("/dir/file"));
+      for (int i = 0; i < length; i++) {
+        inputStream.read();
+      }
+      inputStream.close();
+    }
+  }
+
+  @Test()
+  public void testRead() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).build()) {
+      cluster.waitActive();
+      final DistributedFileSystem dfs = cluster.getFileSystem();
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+
+      byte[] bytes = new byte[1024 * 1024];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"));) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      DataInputStream in =  dfs.open(new Path("/dir/file"));
+      byte[] toRead = new byte[bytes.length];
+      int totalRead = 0;
+      int nRead = 0;
+      try {
+        while ((nRead = in.read(toRead, totalRead, toRead.length - totalRead)) > 0) {
+          totalRead += nRead;
+        }
+      } catch (IOException e) {
+
+      }
+      assertEquals("Cannot read file.", toRead.length, totalRead);
+      checkFile(toRead, bytes);
+    }
+  }
+
+  private boolean checkFile(byte[] fileToCheck, byte[] expected) {
+    if (fileToCheck.length != expected.length) {
+      return false;
+    }
+    for (int i = 0; i < fileToCheck.length; i++) {
+      if (fileToCheck[i] != expected[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Test()
+  public void testWrite3R() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    conf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "10000");
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(3).setDnHttpPorts(50010, 50011, 50012)
+              .setDnIpcPorts(8010, 8011, 8012).build()) {
+      cluster.waitActive();
+
+      Configuration clientConf = cluster.getConfiguration(0);
+      clientConf.set(HdfsClientConfigKeys.DFS_CLIENT_SOCKET_TIMEOUT_KEY, "40000");
+
+      final DistributedFileSystem dfs = (DistributedFileSystem)FileSystem.get(clientConf);
+      Path dir = new Path("/dir");
+      dfs.mkdirs(dir);
+
+      byte[] bytes = new byte[1024 * 1024];
+      try (FSDataOutputStream str = dfs.create(new Path("/dir/file"))) {
+        str.flush();
+        str.flush();
+        Thread.sleep(50 * 1000);
+        str.flush();
+
+        Random random = new Random();
+        random.nextBytes(bytes);
+
+        str.write(bytes,0,bytes.length);
+        str.flush();
+
+        Thread.sleep(60 * 1000);
+        str.write("End".getBytes());
+        str.flush();
+
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
     }
   }
 }

@@ -23,6 +23,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_CLIENT_HTTPS_KEYSTORE_RES
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_HTTPS_ADDRESS_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_KERBEROS_PRINCIPAL_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_DATANODE_KEYTAB_FILE_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HEARTBEAT_INTERVAL_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_HTTP_POLICY_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_MOVER_ADDRESS_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_MOVER_KERBEROS_PRINCIPAL_KEY;
@@ -48,6 +49,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hadoop.conf.Configuration;
@@ -68,6 +70,7 @@ import org.apache.hadoop.hdfs.NameNodeProxies;
 import org.apache.hadoop.hdfs.StripedFileTestUtil;
 import org.apache.hadoop.hdfs.protocol.ClientProtocol;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.protocol.DatanodeInfoWithStorage;
 import org.apache.hadoop.hdfs.protocol.ErasureCodingPolicy;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
@@ -77,10 +80,13 @@ import org.apache.hadoop.hdfs.server.balancer.Dispatcher.DBlock;
 import org.apache.hadoop.hdfs.server.balancer.ExitStatus;
 import org.apache.hadoop.hdfs.server.balancer.NameNodeConnector;
 import org.apache.hadoop.hdfs.server.balancer.TestBalancer;
+import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeDescriptor;
+import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeManager;
 import org.apache.hadoop.hdfs.server.datanode.DataNode;
 import org.apache.hadoop.hdfs.server.datanode.InternalDataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.mover.Mover.MLocation;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.namenode.ha.HATestUtil;
 import org.apache.hadoop.http.HttpConfig;
 import org.apache.hadoop.minikdc.MiniKdc;
@@ -96,6 +102,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.function.Supplier;
+
+import org.apache.hadoop.thirdparty.com.google.common.collect.Lists;
 import org.apache.hadoop.thirdparty.com.google.common.collect.Maps;
 
 public class TestMover {
@@ -887,7 +895,7 @@ public class TestMover {
               {StorageType.ARCHIVE, StorageType.ARCHIVE},
               {StorageType.ARCHIVE, StorageType.ARCHIVE},
               {StorageType.ARCHIVE, StorageType.ARCHIVE}},
-          true, null, null, null,capacities, null, false, false, false, null);
+          true, null, null, null, capacities, null, false, false, false, null, null, null);
       cluster.triggerHeartbeats();
 
       // move file to ARCHIVE
@@ -897,13 +905,12 @@ public class TestMover {
           new String[] { "-p", barDir });
       Assert.assertEquals("Movement to ARCHIVE should be successful", 0, rc);
 
-      // verify storage types and locations
+      // Verify storage types and locations.
+      // Wait until Namenode confirms ARCHIVE storage type for all blocks of
+      // fooFile.
+      waitForUpdatedStorageType(client, fooFile, fileLen, StorageType.ARCHIVE);
+
       locatedBlocks = client.getBlockLocations(fooFile, 0, fileLen);
-      for(LocatedBlock lb : locatedBlocks.getLocatedBlocks()){
-        for( StorageType type : lb.getStorageTypes()){
-          Assert.assertEquals(StorageType.ARCHIVE, type);
-        }
-      }
       StripedFileTestUtil.verifyLocatedStripedBlocks(locatedBlocks,
           dataBlocks + parityBlocks);
 
@@ -921,7 +928,7 @@ public class TestMover {
               { StorageType.SSD, StorageType.DISK },
               { StorageType.SSD, StorageType.DISK },
               { StorageType.SSD, StorageType.DISK } },
-          true, null, null, null, capacities, null, false, false, false, null);
+          true, null, null, null, capacities, null, false, false, false, null, null, null);
       cluster.triggerHeartbeats();
 
       // move file blocks to ONE_SSD policy
@@ -942,6 +949,185 @@ public class TestMover {
     }finally{
       cluster.shutdown();
     }
+  }
+
+  @Test(timeout = 300000)
+  public void testMoverWithStripedFileMaintenance() throws Exception {
+    final Configuration conf = new HdfsConfiguration();
+    initConfWithStripe(conf);
+
+    // Start 9 datanodes
+    int numOfDatanodes = 9;
+    int storagesPerDatanode = 2;
+    long capacity = 9 * defaultBlockSize;
+    long[][] capacities = new long[numOfDatanodes][storagesPerDatanode];
+    for (int i = 0; i < numOfDatanodes; i++) {
+      for(int j = 0; j < storagesPerDatanode; j++){
+        capacities[i][j] = capacity;
+      }
+    }
+    final MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(numOfDatanodes)
+        .storagesPerDatanode(storagesPerDatanode)
+        .storageTypes(new StorageType[][]{
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD},
+            {StorageType.SSD, StorageType.SSD}})
+        .storageCapacities(capacities)
+        .build();
+
+    try {
+      cluster.waitActive();
+      cluster.getFileSystem().enableErasureCodingPolicy(
+          StripedFileTestUtil.getDefaultECPolicy().getName());
+
+      ClientProtocol client = NameNodeProxies.createProxy(conf,
+          cluster.getFileSystem(0).getUri(), ClientProtocol.class).getProxy();
+      String barDir = "/bar";
+      client.mkdirs(barDir, new FsPermission((short) 777), true);
+      // Set "/bar" directory with ALL_SSD storage policy.
+      client.setStoragePolicy(barDir, "ALL_SSD");
+      // Set an EC policy on "/bar" directory
+      client.setErasureCodingPolicy(barDir,
+          StripedFileTestUtil.getDefaultECPolicy().getName());
+
+      // Write file to barDir
+      final String fooFile = "/bar/foo";
+      long fileLen = 6 * defaultBlockSize;
+      DFSTestUtil.createFile(cluster.getFileSystem(), new Path(fooFile),
+          fileLen, (short) 3, 0);
+
+      // Verify storage types and locations
+      LocatedBlocks locatedBlocks =
+          client.getBlockLocations(fooFile, 0, fileLen);
+      DatanodeInfoWithStorage location = null;
+      for(LocatedBlock lb : locatedBlocks.getLocatedBlocks()){
+        location = lb.getLocations()[8];
+        for(StorageType type : lb.getStorageTypes()){
+          Assert.assertEquals(StorageType.SSD, type);
+        }
+      }
+
+      // Maintain the last datanode later
+      FSNamesystem ns = cluster.getNamesystem(0);
+      DatanodeManager datanodeManager = ns.getBlockManager().getDatanodeManager();
+      DatanodeDescriptor dn = datanodeManager.getDatanode(location.getDatanodeUuid());
+
+      StripedFileTestUtil.verifyLocatedStripedBlocks(locatedBlocks,
+          dataBlocks + parityBlocks);
+
+      // Start 5 more datanodes for mover
+      capacities = new long[5][storagesPerDatanode];
+      for (int i = 0; i < 5; i++) {
+        for(int j = 0; j < storagesPerDatanode; j++){
+          capacities[i][j] = capacity;
+        }
+      }
+      cluster.startDataNodes(conf, 5,
+          new StorageType[][]{
+              {StorageType.DISK, StorageType.DISK},
+              {StorageType.DISK, StorageType.DISK},
+              {StorageType.DISK, StorageType.DISK},
+              {StorageType.DISK, StorageType.DISK},
+              {StorageType.DISK, StorageType.DISK}},
+          true, null, null, null, capacities,
+          null, false, false, false, null, null, null);
+      cluster.triggerHeartbeats();
+
+      // Move blocks to DISK
+      client.setStoragePolicy(barDir, "HOT");
+      int rc = ToolRunner.run(conf, new Mover.Cli(),
+          new String[]{"-p", barDir});
+      // Verify the number of DISK storage types
+      waitForLocatedBlockWithDiskStorageType(cluster.getFileSystem(), fooFile, 5);
+
+      // Maintain a datanode that simulates that one node in the location list
+      // is in ENTERING_MAINTENANCE status.
+      datanodeManager.getDatanode(dn.getDatanodeUuid()).startMaintenance();
+      waitNodeState(dn, DatanodeInfo.AdminStates.ENTERING_MAINTENANCE);
+
+      // Move blocks back to SSD.
+      // Without HDFS-17599, locations and indices lengths might not match,
+      // resulting in getting the wrong blockId in DBlockStriped#getInternalBlock,
+      // and mover will fail to run.
+      client.setStoragePolicy(barDir, "ALL_SSD");
+      rc = ToolRunner.run(conf, new Mover.Cli(),
+          new String[]{"-p", barDir});
+
+      Assert.assertEquals("Movement to HOT should be successful", 0, rc);
+    } finally {
+      cluster.shutdown();
+    }
+  }
+
+  /**
+   * Wait till DataNode is transitioned to the expected state.
+   */
+  protected void waitNodeState(DatanodeInfo node, DatanodeInfo.AdminStates state) {
+    waitNodeState(Lists.newArrayList(node), state);
+  }
+
+  /**
+   * Wait till all DataNodes are transitioned to the expected state.
+   */
+  protected void waitNodeState(List<DatanodeInfo> nodes, DatanodeInfo.AdminStates state) {
+    for (DatanodeInfo node : nodes) {
+      boolean done = (state == node.getAdminState());
+      while (!done) {
+        LOG.info("Waiting for node " + node + " to change state to "
+            + state + " current state: " + node.getAdminState());
+        try {
+          Thread.sleep(DFS_HEARTBEAT_INTERVAL_DEFAULT * 10);
+        } catch (InterruptedException e) {
+          // nothing
+        }
+        done = (state == node.getAdminState());
+      }
+      LOG.info("node " + node + " reached the state " + state);
+    }
+  }
+
+  /**
+   * Wait until Namenode reports expected storage type for all blocks of
+   * given file.
+   *
+   * @param client handle all RPC calls to Namenode.
+   * @param file file for which we are expecting same storage type of all
+   *     located blocks.
+   * @param fileLen length of the file.
+   * @param expectedStorageType storage type to expect for all blocks of the
+   *     given file.
+   * @throws TimeoutException if the wait timed out.
+   * @throws InterruptedException if interrupted while waiting for the response.
+   */
+  private void waitForUpdatedStorageType(ClientProtocol client, String file,
+      long fileLen, StorageType expectedStorageType)
+      throws TimeoutException, InterruptedException {
+    GenericTestUtils.waitFor(() -> {
+      LocatedBlocks blocks;
+      try {
+        blocks = client.getBlockLocations(file, 0, fileLen);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      for (LocatedBlock lb : blocks.getLocatedBlocks()) {
+        for (StorageType type : lb.getStorageTypes()) {
+          if (!expectedStorageType.equals(type)) {
+            LOG.info("Block {} has StorageType: {}. It might not have been "
+                    + "updated yet, awaiting the latest update.",
+                lb.getBlock().toString(), type);
+            return false;
+          }
+        }
+      }
+      return true;
+    }, 500, 5000, "Blocks storage type must be ARCHIVE");
   }
 
   private void initSecureConf(Configuration conf) throws Exception {
@@ -1221,7 +1407,7 @@ public class TestMover {
       final MiniDFSCluster cluster) throws IOException {
 
     cluster.startDataNodes(conf, newNodesRequired, newTypes, true, null, null,
-        null, null, null, false, false, false, null);
+        null, null, null, false, false, false, null, null, null);
     cluster.triggerHeartbeats();
   }
 }

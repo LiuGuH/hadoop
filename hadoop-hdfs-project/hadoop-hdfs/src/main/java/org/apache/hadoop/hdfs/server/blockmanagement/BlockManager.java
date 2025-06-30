@@ -1609,7 +1609,7 @@ public class BlockManager implements BlockStatsMXBean {
   public boolean isSufficientlyReplicated(BlockInfo b) {
     // Compare against the lesser of the minReplication and number of live DNs.
     final int liveReplicas = countNodes(b).liveReplicas();
-    if (liveReplicas >= minReplication) {
+    if (hasMinStorage(b, liveReplicas)) {
       return true;
     }
     // getNumLiveDataNodes() is very expensive and we minimize its use by
@@ -2108,6 +2108,16 @@ public class BlockManager implements BlockStatsMXBean {
       return null;
     }
 
+    // skip if source datanodes for reconstructing ec block are not enough
+    if (block.isStriped()) {
+      BlockInfoStriped stripedBlock = (BlockInfoStriped) block;
+      if (stripedBlock.getRealDataBlockNum() > srcNodes.length) {
+        LOG.debug("Block {} cannot be reconstructed due to shortage of source datanodes ", block);
+        NameNode.getNameNodeMetrics().incNumTimesReReplicationNotScheduled();
+        return null;
+      }
+    }
+
     // liveReplicaNodes can include READ_ONLY_SHARED replicas which are
     // not included in the numReplicas.liveReplicas() count
     assert liveReplicaNodes.size() >= numReplicas.liveReplicas();
@@ -2238,7 +2248,9 @@ public class BlockManager implements BlockStatsMXBean {
     }
 
     // Add block to the datanode's task list
-    rw.addTaskToDatanode(numReplicas);
+    if (!rw.addTaskToDatanode(numReplicas)) {
+      return false;
+    }
     DatanodeStorageInfo.incrementBlocksScheduled(targets);
 
     // Move the block-replication into a "pending" state.
@@ -3892,17 +3904,11 @@ public class BlockManager implements BlockStatsMXBean {
     }
 
     if (shouldProcessExtraRedundancy(num, expectedRedundancy)) {
-      if (num.replicasOnStaleNodes() > 0) {
-        // If any of the replicas of this block are on nodes that are
-        // considered "stale", then these replicas may in fact have
-        // already been deleted. So, we cannot safely act on the
-        // over-replication until a later point in time, when
-        // the "stale" nodes have block reported.
+      // extra redundancy block
+      if (!processExtraRedundancyBlockWithoutPostpone(block, expectedRedundancy,
+          null, null)) {
         return MisReplicationResult.POSTPONE;
       }
-      
-      // extra redundancy block
-      processExtraRedundancyBlock(block, expectedRedundancy, null, null);
       return MisReplicationResult.OVER_REPLICATED;
     }
     
@@ -3935,11 +3941,25 @@ public class BlockManager implements BlockStatsMXBean {
   }
 
   /**
+   * Process blocks with redundant replicas. If there are replicas in
+   * stale storages, mark them in the postponedMisreplicatedBlocks.
+   */
+  private void processExtraRedundancyBlock(final BlockInfo block,
+      final short replication, final DatanodeDescriptor addedNode,
+      DatanodeDescriptor delNodeHint) {
+    if (!processExtraRedundancyBlockWithoutPostpone(block, replication,
+        addedNode, delNodeHint)) {
+      postponeBlock(block);
+    }
+  }
+
+  /**
    * Find how many of the containing nodes are "extra", if any.
    * If there are any extras, call chooseExcessRedundancies() to
    * mark them in the excessRedundancyMap.
+   * @return true if all redundancy replicas are removed.
    */
-  private void processExtraRedundancyBlock(final BlockInfo block,
+  private boolean processExtraRedundancyBlockWithoutPostpone(final BlockInfo block,
       final short replication, final DatanodeDescriptor addedNode,
       DatanodeDescriptor delNodeHint) {
     assert namesystem.hasWriteLock(FSNamesystemLockMode.BM);
@@ -3949,17 +3969,17 @@ public class BlockManager implements BlockStatsMXBean {
     Collection<DatanodeStorageInfo> nonExcess = new ArrayList<>();
     Collection<DatanodeDescriptor> corruptNodes = corruptReplicas
         .getNodes(block);
+    boolean hasStaleStorage = false;
+    Set<DatanodeStorageInfo> staleStorages = new HashSet<>();
     for (DatanodeStorageInfo storage : blocksMap.getStorages(block)) {
       if (storage.getState() != State.NORMAL) {
         continue;
       }
       final DatanodeDescriptor cur = storage.getDatanodeDescriptor();
       if (storage.areBlockContentsStale()) {
-        LOG.trace("BLOCK* processExtraRedundancyBlock: Postponing {}"
-            + " since storage {} does not yet have up-to-date information.",
-            block, storage);
-        postponeBlock(block);
-        return;
+        hasStaleStorage = true;
+        staleStorages.add(storage);
+        continue;
       }
       if (!isExcess(cur, block)) {
         if (cur.isInService()) {
@@ -3972,6 +3992,13 @@ public class BlockManager implements BlockStatsMXBean {
     }
     chooseExcessRedundancies(nonExcess, block, replication, addedNode,
         delNodeHint);
+    if (hasStaleStorage) {
+      LOG.trace("BLOCK* processExtraRedundancyBlockWithoutPostpone: Postponing {}"
+              + " since storages {} does not yet have up-to-date information.",
+          block, staleStorages);
+      return false;
+    }
+    return true;
   }
 
   private void chooseExcessRedundancies(
@@ -3986,12 +4013,14 @@ public class BlockManager implements BlockStatsMXBean {
     if (storedBlock.isStriped()) {
       chooseExcessRedundancyStriped(nonExcess, storedBlock, delNodeHint);
     } else {
-      final BlockStoragePolicy storagePolicy = storagePolicySuite.getPolicy(
-          storedBlock.getStoragePolicyId());
-      final List<StorageType> excessTypes = storagePolicy.chooseExcess(
-          replication, DatanodeStorageInfo.toStorageTypes(nonExcess));
-      chooseExcessRedundancyContiguous(nonExcess, storedBlock, replication,
-          addedNode, delNodeHint, excessTypes);
+      if (nonExcess.size() > replication) {
+        final BlockStoragePolicy storagePolicy = storagePolicySuite.getPolicy(
+            storedBlock.getStoragePolicyId());
+        final List<StorageType> excessTypes = storagePolicy.chooseExcess(
+            replication, DatanodeStorageInfo.toStorageTypes(nonExcess));
+        chooseExcessRedundancyContiguous(nonExcess, storedBlock, replication,
+            addedNode, delNodeHint, excessTypes);
+      }
     }
   }
 
@@ -4050,6 +4079,12 @@ public class BlockManager implements BlockStatsMXBean {
       }
       found.set(index);
       storage2index.put(storage, index);
+    }
+
+    if (duplicated.isEmpty()) {
+      LOG.debug("Found no duplicated internal blocks for {}. Maybe it's " +
+          "because there are stale storages.", storedBlock);
+      return;
     }
 
     // use delHint only if delHint is duplicated
