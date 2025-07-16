@@ -3725,6 +3725,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   void fsync(String src, long fileId, String clientName, long lastBlockLength)
       throws IOException {
+    long startNanos = Time.monotonicNowNanos();
+    final String operationName = "fsync";
     NameNode.stateChangeLog.info("BLOCK* fsync: " + src + " for " + clientName);
     checkOperation(OperationCategory.WRITE);
     final FSPermissionChecker pc = getPermissionChecker();
@@ -3745,6 +3747,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       writeUnlock(FSNamesystemLockMode.GLOBAL, "fsync");
     }
     getEditLog().logSync();
+    logAuditEvent(true, operationName, src, Time.monotonicNowNanos() - startNanos);
   }
 
   /**
