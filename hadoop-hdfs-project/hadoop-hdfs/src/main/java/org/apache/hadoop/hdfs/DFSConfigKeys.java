@@ -350,7 +350,10 @@ public class DFSConfigKeys extends CommonConfigurationKeys {
       "dfs.namenode.corrupt.block.delete.immediately.enabled";
   public static final boolean
       DFS_NAMENODE_CORRUPT_BLOCK_DELETE_IMMEDIATELY_ENABLED_DEFAULT = true;
-
+  public static final String DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE =
+      "dfs.namenode.ec.blocksize.divided.enable";
+  public static final boolean DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE_DEFAULT = false;
+  
   @Deprecated
   public static final String  DFS_WEBHDFS_USER_PATTERN_KEY =
       HdfsClientConfigKeys.DFS_WEBHDFS_USER_PATTERN_KEY;

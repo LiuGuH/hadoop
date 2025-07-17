@@ -19,6 +19,8 @@ package org.apache.hadoop.hdfs.server.namenode;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_MAXIMUM_DATA_LENGTH;
 import static org.apache.hadoop.fs.CommonConfigurationKeys.IPC_MAXIMUM_DATA_LENGTH_DEFAULT;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_HANDLER_COUNT_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_HANDLER_COUNT_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_IP_PROXY_USERS;
@@ -277,12 +279,22 @@ public class NameNodeRpcServer implements NamenodeProtocols {
   // Users who can override the client ip
   private final String[] ipProxyUsers;
 
+  static boolean ecBlockSizeDividedEnable;
+
+  public static boolean isEcBlockSizeDividedEnable() {
+    return ecBlockSizeDividedEnable;
+  }
+
   public NameNodeRpcServer(Configuration conf, NameNode nn)
       throws IOException {
     this.nn = nn;
     this.namesystem = nn.getNamesystem();
     this.retryCache = namesystem.getRetryCache();
     this.metrics = NameNode.getNameNodeMetrics();
+
+    ecBlockSizeDividedEnable = conf.getBoolean(DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE,
+        DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE_DEFAULT);
+    LOG.info("{} is set {}.", DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE, ecBlockSizeDividedEnable);
 
     int handlerCount = 
       conf.getInt(DFS_NAMENODE_HANDLER_COUNT_KEY, 

@@ -19,6 +19,8 @@
 package org.apache.hadoop.hdfs;
 
 import static org.apache.hadoop.fs.CommonConfigurationKeys.FS_CLIENT_TOPOLOGY_RESOLUTION_ENABLED;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_BLOCK_SIZE_KEY;
+import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_FILE_CLOSE_NUM_COMMITTED_ALLOWED_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_RECONSTRUCTION_PENDING_TIMEOUT_SEC_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_NAMENODE_REDUNDANCY_INTERVAL_SECONDS_KEY;
@@ -80,6 +82,7 @@ import org.apache.hadoop.fs.FileChecksum;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.GlobalStorageStatistics;
+import org.apache.hadoop.fs.HdfsBlockLocation;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.MD5MD5CRC32FileChecksum;
 import org.apache.hadoop.fs.Options.ChecksumOpt;
@@ -108,6 +111,7 @@ import org.apache.hadoop.hdfs.protocol.HdfsConstants.SafeModeAction;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants.StoragePolicySatisfierMode;
 import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.apache.hadoop.hdfs.protocol.LocatedBlocks;
+import org.apache.hadoop.hdfs.protocol.LocatedStripedBlock;
 import org.apache.hadoop.hdfs.protocol.OpenFileEntry;
 import org.apache.hadoop.hdfs.protocol.OpenFilesIterator;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfoStriped;
@@ -119,6 +123,7 @@ import org.apache.hadoop.hdfs.server.datanode.DataNodeTestUtils;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsDatasetSpi;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
 import org.apache.hadoop.hdfs.server.namenode.ErasureCodingPolicyManager;
+import org.apache.hadoop.hdfs.util.StripedBlockUtil;
 import org.apache.hadoop.hdfs.web.WebHdfsConstants;
 import org.apache.hadoop.io.erasurecode.ECSchema;
 import org.apache.hadoop.ipc.RemoteException;
@@ -2367,4 +2372,93 @@ public class TestDistributedFileSystem {
       }
     }
   }
+
+  @Test()
+  public void testBlockSize() throws Exception {
+    HdfsConfiguration conf = new HdfsConfiguration();
+    long ori_blocksize = 7 * 1024 * 1024;
+    conf.setLong(DFS_BLOCK_SIZE_KEY, ori_blocksize);
+    conf.set(DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE, "true");
+
+    try (MiniDFSCluster cluster = new MiniDFSCluster.Builder(conf)
+        .numDataNodes(9).build()) {
+      cluster.waitActive();
+      final DistributedFileSystem dfs = cluster.getFileSystem();
+      Path dir = new Path("/ecdir");
+      dfs.mkdirs(dir);
+      dfs.enableErasureCodingPolicy("RS-6-3-1024k");
+      dfs.setErasureCodingPolicy(dir, "RS-6-3-1024k");
+      int cellsize = 1024 * 1024;
+      int numDataUint = 6;
+      int numParityUint = 3;
+
+      int length = 60 * 1024 * 1024 + 1;
+      byte[] bytes = new byte[length];
+      try (FSDataOutputStream str = dfs.create(new Path("/ecdir/file"))) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      long blocksize = dfs.getClient().getBlockSize("/ecdir/file");
+      assertEquals(blocksize, getECBlockSize(ori_blocksize, numDataUint, cellsize));
+
+      HdfsFileStatus fileStatus = dfs.getClient().getFileInfo("/ecdir/file");
+      assertEquals(fileStatus.getBlockSize(), getECBlockSize(ori_blocksize, numDataUint, cellsize));
+
+      BlockLocation[] blks = dfs.getClient().getBlockLocations("/ecdir/file",0,Integer.MAX_VALUE);
+
+      long filelength = 0;
+      for(BlockLocation blk : blks) {
+        HdfsBlockLocation hdfsblk = (HdfsBlockLocation)blk;
+        LocatedBlock locatedBlock = hdfsblk.getLocatedBlock();
+        filelength += locatedBlock.getBlockSize();
+        LocatedBlock[] locatedBlocks = StripedBlockUtil.parseStripedBlockGroup((LocatedStripedBlock)locatedBlock,cellsize,numDataUint,numParityUint);
+      }
+      assertEquals(length, filelength);
+
+      Path repDir = new Path("/repdir");
+      dfs.mkdirs(repDir);
+
+      length = 60 * 1024 * 1024 + 1;
+      bytes = new byte[length];
+      try (FSDataOutputStream str = dfs.create(new Path("/repdir/file"))) {
+        Random random = new Random();
+        random.nextBytes(bytes);
+        str.write(bytes,0,bytes.length);
+        str.close();
+        // Wait for dn2 IBR.
+        Thread.sleep(2000);
+      }
+
+      blocksize = dfs.getClient().getBlockSize("/repdir/file");
+      assertEquals(blocksize, ori_blocksize);
+
+      fileStatus = dfs.getClient().getFileInfo("/repdir/file");
+      assertEquals(fileStatus.getBlockSize(), ori_blocksize);
+
+      blks = dfs.getClient().getBlockLocations("/repdir/file",0,Integer.MAX_VALUE);
+
+      filelength = 0;
+      for(BlockLocation blk : blks) {
+        HdfsBlockLocation hdfsblk = (HdfsBlockLocation)blk;
+        LocatedBlock locatedBlock = hdfsblk.getLocatedBlock();
+        filelength += locatedBlock.getBlockSize();
+      }
+      assertEquals(length, filelength);
+    }
+  }
+
+  private static long getECBlockSize(long blocksize, long numDataUint, long cellsize) {
+    blocksize = blocksize / numDataUint;
+    blocksize = blocksize - blocksize % cellsize;
+    if (blocksize < cellsize) {
+      blocksize = cellsize;
+    }
+    return blocksize;
+  }
+
 }
