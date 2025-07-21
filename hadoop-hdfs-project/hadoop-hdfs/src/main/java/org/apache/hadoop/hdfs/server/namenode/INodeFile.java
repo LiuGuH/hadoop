@@ -577,7 +577,17 @@ public class INodeFile extends INodeWithAdditionalFields
   /** @return preferred block size (in bytes) of the file. */
   @Override
   public long getPreferredBlockSize() {
-    return HeaderFormat.getPreferredBlockSize(header);
+    long blocksize = HeaderFormat.getPreferredBlockSize(header);
+    if (isStriped() && NameNodeRpcServer.isEcBlockSizeDividedEnable()) {
+      ErasureCodingPolicy ecPolicy =
+          ErasureCodingPolicyManager.getInstance().getByID(getErasureCodingPolicyID());
+      blocksize = blocksize / ecPolicy.getNumDataUnits();
+      blocksize = blocksize - blocksize % ecPolicy.getCellSize();
+      if (blocksize < ecPolicy.getCellSize()) {
+        blocksize = ecPolicy.getCellSize();
+      }
+    }
+    return blocksize;
   }
 
   @Override
