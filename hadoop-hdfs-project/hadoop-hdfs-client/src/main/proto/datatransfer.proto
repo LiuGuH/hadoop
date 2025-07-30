@@ -316,6 +316,8 @@ message BlockOpResponseProto {
   optional uint64 slowWriteDatanodeOverthresholdCountInWindow = 13;
   optional uint64 slowReadDatanodeCheckThreholdNs = 14;
   optional uint64 slowReadDatanodeOverthresholdCountInWindow = 15;
+  optional uint64 slowECReadDatanodeCheckThresholdNs = 16;
+  optional uint64 slowECWriteDatanodeCheckThresholdNs = 17;
 }
 
 /**
