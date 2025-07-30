@@ -92,6 +92,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
+import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY;
 import static org.apache.hadoop.hdfs.client.HdfsClientConfigKeys.DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT;
@@ -791,10 +795,15 @@ class DataXceiver extends Receiver implements Runnable {
         BzlDynamicConfiguration.getInstance().getLong(
             DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
             DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    long slowECWriteDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY,
+            DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT
+        ));
     long slowWriteDatanodeOverthresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
         DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
         DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
-    
+
     ArrayList<Boolean> slowDnKickoutEnableList = Lists.newArrayList();
 
     try {
@@ -913,6 +922,8 @@ class DataXceiver extends Receiver implements Runnable {
             slowDatanodeCheckWindowNs = Math.min(slowDatanodeCheckWindowNs, connectAck.getSlowDatanodeCheckWindowNs());
             slowWriteDatanodeCheckThresholdNs = Math.max(slowWriteDatanodeCheckThresholdNs,
                 connectAck.getSlowWriteDatanodeCheckThresholdNs());
+            slowECWriteDatanodeCheckThresholdNs = Math.max(slowECWriteDatanodeCheckThresholdNs,
+                connectAck.getSlowECWriteDatanodeCheckThresholdNs());
             slowWriteDatanodeOverthresholdCountInWindow = Math.max(slowWriteDatanodeOverthresholdCountInWindow,
                 connectAck.getSlowWriteDatanodeOverthresholdCountInWindow());
           }
@@ -956,6 +967,7 @@ class DataXceiver extends Receiver implements Runnable {
           .addAllSlowDatanodeKickoutEnable(slowDnKickoutEnableList)
           .setSlowDatanodeCheckWindowNs(slowDatanodeCheckWindowNs)
           .setSlowWriteDatanodeCheckThresholdNs(slowWriteDatanodeCheckThresholdNs)
+          .setSlowECWriteDatanodeCheckThresholdNs(slowECWriteDatanodeCheckThresholdNs)
           .setSlowWriteDatanodeOverthresholdCountInWindow(slowWriteDatanodeOverthresholdCountInWindow)
           .build()
           .writeDelimitedTo(replyOut);
@@ -1455,6 +1467,10 @@ class DataXceiver extends Receiver implements Runnable {
         BzlDynamicConfiguration.getInstance().getLong(
             DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
             DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
+    long slowECReadDatanodeCheckThresholdNs = TimeUnit.MILLISECONDS.toNanos(
+        BzlDynamicConfiguration.getInstance().getLong(
+            DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY,
+            DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT));
     long slowReadDatanodeOverThresholdCountInWindow = BzlDynamicConfiguration.getInstance().getLong(
         DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY,
         DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT);
@@ -1468,6 +1484,7 @@ class DataXceiver extends Receiver implements Runnable {
       .addAllSlowDatanodeKickoutEnable(slowReadDatanodeSwitchEnableList)
       .setSlowDatanodeCheckWindowNs(slowDatanodeCheckWindowNs)
       .setSlowReadDatanodeCheckThreholdNs(slowReadDatanodeCheckThresholdNs)
+      .setSlowECReadDatanodeCheckThresholdNs(slowECReadDatanodeCheckThresholdNs)
       .setSlowReadDatanodeOverthresholdCountInWindow(slowReadDatanodeOverThresholdCountInWindow)
       .build();
     response.writeDelimitedTo(out);

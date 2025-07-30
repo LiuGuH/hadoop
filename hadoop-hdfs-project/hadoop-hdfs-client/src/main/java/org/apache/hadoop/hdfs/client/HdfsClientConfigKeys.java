@@ -166,15 +166,21 @@ public interface HdfsClientConfigKeys {
   String DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY =
       "dfs.slowwrite.datanode.check.threshold.ms";
   long DFS_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 2000L;
+  String DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_KEY =
+      "dfs.ec.slowwrite.datanode.check.threshold.ms";
+  long DFS_EC_SLOWWRITE_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 3000L;
   String DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY =
       "dfs.slowwrite.datanode.overthreshold.count.inwindow";
   long DFS_SLOWWRITE_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT = 20;
   String DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY =
       "dfs.slowread.datanode.check.threshold.ms";
   long DFS_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 2000L;
+  String DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_KEY =
+      "dfs.ec.slowread.datanode.check.threshold.ms";
+  long DFS_EC_SLOWREAD_DATANODE_CHECK_THRESHOLD_MS_DEFAULT = 30000L;
   String DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_KEY =
       "dfs.slowread.datanode.overthreshold.count.inwindow";
-  long DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT = 20;
+  long DFS_SLOWREAD_DATANODE_OVERTHRESHOLD_COUNT_INWINDOW_DEFAULT = 5;
 
   String DFS_CLIENT_SLOWNODE_CACHE_SIZE_MAX_KEY =
       "dfs.client.slow.cache.size.max";
