@@ -19,6 +19,8 @@ public class BzlProtectedDirectoriesMetrics {
   MutableCounterLong bzlProtectedDirectoriesCheckSuccesses;
   @Metric("Number of bzlProtectedDirectories check failures")
   MutableCounterLong bzlProtectedDirectoriesCheckFailures;
+  @Metric("Number of bzlProtectedDirectories throw exception")
+  MutableCounterLong bzlProtectedDirectoriesThrowException;
   int bzlProtectedDirectoriesNums;
   int bzlProtectedDirectoriesSizeExceeded;
   @Metric("ProcessingTime of bzlProtectedDirectories check")
@@ -49,6 +51,10 @@ public class BzlProtectedDirectoriesMetrics {
 
   public void incrBzlProtectedDirectoriesCheckFailures() {
     bzlProtectedDirectoriesCheckFailures.incr();
+  }
+
+  public void incrBzlProtectedDirectoriesThrowException() {
+    bzlProtectedDirectoriesThrowException.incr();
   }
 
   @Metric({"ProtectedDirectoriesNums", "Number of bzlProtectedDirectories size"})
