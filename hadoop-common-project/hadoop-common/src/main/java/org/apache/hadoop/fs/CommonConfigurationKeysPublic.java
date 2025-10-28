@@ -530,6 +530,8 @@ public class CommonConfigurationKeysPublic {
   public static final String IPC_SERVER_RATE_LIMIT_ENABLE =
       "ipc.server.rate.limit.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT = false;
+  public static final String IPC_SERVER_RATE_LIMIT_ENABLE_URI =
+      "ipc.server.rate.limit.enable.uri";
   public static final String IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE =
           "ipc.server.rate.limit.local.config.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE_DEFAULT = false;

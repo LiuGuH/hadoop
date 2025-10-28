@@ -1,6 +1,6 @@
 package org.apache.hadoop.security.bzl.bean;
 
-public class BzlTokenAuthEnableBean {
+public class BzlGlobalEnableBean {
   Meta meta;
   String data;
 
