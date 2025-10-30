@@ -2,11 +2,12 @@ package org.apache.hadoop.security.bzl.util;
 
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.util.encoders.Base64;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.UnsupportedEncodingException;
 import java.security.Key;
 import java.security.Security;
 import java.util.Arrays;
@@ -16,6 +17,8 @@ import java.util.Arrays;
  * 数星平台提供的用于密码的加密和解密算法
  */
 public final class BzlEncryptionUtils {
+  static final Logger LOG = LoggerFactory.getLogger(BzlEncryptionUtils.class);
+
   private BzlEncryptionUtils() {
   }
 
@@ -49,7 +52,7 @@ public final class BzlEncryptionUtils {
     try {
       cipher = Cipher.getInstance(ALGORITHM_STR, "BC");
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.warn("BzlEncryptionUtils init error:", e);
     }
   }
 
@@ -64,7 +67,7 @@ public final class BzlEncryptionUtils {
       cipher.init(Cipher.ENCRYPT_MODE, key, new IvParameterSpec(ivs));
       encryptedText = cipher.doFinal(content);
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.warn("BzlEncryptionUtils encryptOfDiyIv error:", e);
     }
     return encryptedText;
   }
@@ -76,7 +79,7 @@ public final class BzlEncryptionUtils {
       cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(ivs));
       encryptedText = cipher.doFinal(encryptedData);
     } catch (Exception e) {
-      e.printStackTrace();
+      LOG.warn("BzlEncryptionUtils decryptOfDiyIv error:", e);
     }
     return encryptedText;
   }
@@ -94,9 +97,9 @@ public final class BzlEncryptionUtils {
       return new String(
           decryptOfDiyIv(decryptBase64(enstr.getBytes()), decryptBase64(KEY_STR.getBytes()), IV),
           "UTF-8");
-    } catch (UnsupportedEncodingException e) {
-      e.printStackTrace();
+    } catch (Exception e) {
+      LOG.warn("BzlEncryptionUtils decode error:", e);
+      return null;
     }
-    return null;
   }
 }

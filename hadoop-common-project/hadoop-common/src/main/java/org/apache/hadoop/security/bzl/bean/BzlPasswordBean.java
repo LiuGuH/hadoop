@@ -1,6 +1,9 @@
 package org.apache.hadoop.security.bzl.bean;
 
 import java.util.List;
+import java.util.Objects;
+
+import org.apache.commons.lang3.StringUtils;
 
 public class BzlPasswordBean {
   Meta meta;
@@ -97,6 +100,38 @@ public class BzlPasswordBean {
 
     public void setExpiringGroupPassword(String expiringGroupPassword) {
       this.expiringGroupPassword = expiringGroupPassword;
+    }
+
+    public boolean groupAccountIsEmpty() {
+      return StringUtils.isBlank(groupAccount);
+    }
+
+    public boolean groupPasswordIsEmpty() {
+      return StringUtils.isBlank(groupPassword);
+    }
+
+    public boolean expiringGroupPasswordIsEmpty() {
+      return StringUtils.isBlank(expiringGroupPassword);
+    }
+
+    public boolean allPasswordIsEmpty() {
+      return groupPasswordIsEmpty() && expiringGroupPasswordIsEmpty();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o)
+        return true;
+      if (!(o instanceof PasswordData))
+        return false;
+      PasswordData that = (PasswordData) o;
+      return Objects.equals(groupAccount, that.groupAccount) && Objects.equals(groupPassword,
+          that.groupPassword) && Objects.equals(expiringGroupPassword, that.expiringGroupPassword);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(groupAccount, groupPassword, expiringGroupPassword);
     }
   }
 }

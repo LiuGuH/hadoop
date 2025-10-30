@@ -59,14 +59,19 @@ public class RpcBzlTokenPasswordFetcherMetrics {
   MutableCounterLong bzlTokenPasswordFetchSuccesses;
   @Metric("Number of bzlTokenPassword fetch failures")
   MutableCounterLong bzlTokenPasswordFetchFailures;
-  @Metric("Number of bzlTokenPassword write local tmp file successes")
-  MutableCounterLong bzlTokenPasswordWriteTmpFileSuccesses;
-  @Metric("Number of bzlTokenPassword write local tmp file failures")
-  MutableCounterLong bzlTokenPasswordWriteTmpFileFailures;
-  @Metric("Number of bzlTokenPassword copy local file successes")
-  MutableCounterLong bzlTokenPasswordCopyFileSuccesses;
-  @Metric("Number of bzlTokenPassword copy local file failures")
-  MutableCounterLong bzlTokenPasswordCopyFileFailures;
+  @Metric("Number of bzlTokenPassword write local file successes")
+  MutableCounterLong bzlTokenPasswordWriteFileSuccesses;
+  @Metric("Number of bzlTokenPassword write local file failures")
+  MutableCounterLong bzlTokenPasswordWriteFileFailures;
+
+  @Metric("Number of bzlTokenPassword update failures")
+  MutableCounterLong bzlTokenPasswordUpdateFailures;
+  @Metric("Number of bzlTokenPassword fetch account empty")
+  MutableCounterLong bzlTokenPasswordFetchAccountEmpty;
+  @Metric("Number of bzlTokenPassword fetch password empty")
+  MutableCounterLong bzlTokenPasswordFetchPasswordEmpty;
+  @Metric("Number of bzlTokenPassword fetch missing system account")
+  MutableCounterLong bzlTokenPasswordFetchMissingSystemAccount;
 
 
   public void incrBzlTokenPasswordFetchSuccesses() {
@@ -77,19 +82,27 @@ public class RpcBzlTokenPasswordFetcherMetrics {
     bzlTokenPasswordFetchFailures.incr();
   }
 
-  public void incrBzlTokenPasswordWriteTmpFileSuccesses() {
-    bzlTokenPasswordWriteTmpFileSuccesses.incr();
+  public void incrBzlTokenPasswordWriteFileSuccesses() {
+    bzlTokenPasswordWriteFileSuccesses.incr();
   }
 
-  public void incrBzlTokenPasswordWriteTmpFileFailures() {
-    bzlTokenPasswordWriteTmpFileFailures.incr();
+  public void incrBzlTokenPasswordWriteFileFailures() {
+    bzlTokenPasswordWriteFileFailures.incr();
   }
 
-  public void incrBzlTokenPasswordCopyFileSuccesses() {
-    bzlTokenPasswordCopyFileSuccesses.incr();
+  public void incrBzlTokenPasswordUpdateFailures() {
+    bzlTokenPasswordUpdateFailures.incr();
   }
 
-  public void incrBzlTokenPasswordCopyFileFailures() {
-    bzlTokenPasswordCopyFileFailures.incr();
+  public void incrBzlTokenPasswordFetchAccountEmpty() {
+    bzlTokenPasswordFetchAccountEmpty.incr();
+  }
+
+  public void incrBzlTokenPasswordFetchPasswordEmpty() {
+    bzlTokenPasswordFetchPasswordEmpty.incr();
+  }
+
+  public void incrBzlTokenPasswordFetchMissingSystemAccount() {
+    bzlTokenPasswordFetchMissingSystemAccount.incr();
   }
 }

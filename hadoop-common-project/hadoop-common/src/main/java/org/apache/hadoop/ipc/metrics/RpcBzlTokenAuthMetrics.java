@@ -87,12 +87,16 @@ public class RpcBzlTokenAuthMetrics {
   MutableCounterLong rpcBzlTokenAuthSuccesses;
   @Metric("Number of bzlToken authentication failures")
   MutableCounterLong rpcBzlTokenAuthFailures;
-  @Metric("Number of bzltoken format errors")
+  @Metric("Number of bzlToken format errors")
   MutableCounterLong rpcBzlTokenFormatErrors;
   @Metric("Number of bzltoken nullPoint numbers")
   MutableCounterLong rpcBzlTokenNullPointNumbers;
-  @Metric("Number of bzltoken whitelist authentication successes")
-  MutableCounterLong rpcBzlTokenWhiteListAuthSuccesses;
+  @Metric("Number of bzltoken server side missing password")
+  MutableCounterLong rpcBzlTokenServerMissingPassword;
+  @Metric("Number of bzltoken server side exception numbers")
+  MutableCounterLong rpcBzlTokenServerExceptionNumbers;
+
+
   @Metric("BzlTokenAuth time")
   MutableRate rpcBzlTokenAuthTime;
   MutableQuantiles[] rpcBzlTokenAuthTimeQuantiles;
@@ -113,8 +117,12 @@ public class RpcBzlTokenAuthMetrics {
     rpcBzlTokenNullPointNumbers.incr();
   }
 
-  public void incrBzlTokenWhiteListAuthSuccesses() {
-    rpcBzlTokenWhiteListAuthSuccesses.incr();
+  public void incrBzlTokenServerMissingPassword() {
+    rpcBzlTokenServerMissingPassword.incr();
+  }
+
+  public void incrBzlTokenServerExceptionNumbers() {
+    rpcBzlTokenServerExceptionNumbers.incr();
   }
 
   public void addRpcBzlTokenAuthTime(long qTime) {
