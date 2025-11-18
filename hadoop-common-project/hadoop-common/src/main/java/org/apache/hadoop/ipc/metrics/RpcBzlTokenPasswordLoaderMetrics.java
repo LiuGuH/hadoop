@@ -57,8 +57,44 @@ public class RpcBzlTokenPasswordLoaderMetrics {
 
   @Metric("Number of bzlTokenPassword change numbers")
   MutableCounterLong bzlTokenPasswordChangeNumbers;
+  @Metric("Number of bzlTokenPassword loader decode expections")
+  MutableCounterLong bzlTokenPasswordLoaderDecodeException;
+  @Metric("Number of bzlTokenPassword loader missing system account")
+  MutableCounterLong bzlTokenPasswordLoaderMissingSystemAccount;
+  @Metric("Number of bzlTokenPassword loader account empty")
+  MutableCounterLong bzlTokenPasswordLoaderAccountEmpty;
+  @Metric("Number of bzlTokenPassword loader password empty")
+  MutableCounterLong bzlTokenPasswordLoaderPasswordEmpty;
+
+  long bzlTokenPasswordLoaderUserCount;
+
+  @Metric({"bzlTokenPasswordLoaderPasswordUserCount", "Number of bzlTokenPasswordLoaderPasswordUserCount"})
+  public long getBzlTokenPasswordLoaderUserCount() {
+    return bzlTokenPasswordLoaderUserCount;
+  }
+
+  public void setBzlTokenPasswordLoaderUserCount(
+      long bzlTokenPasswordLoaderUserCount) {
+    this.bzlTokenPasswordLoaderUserCount = bzlTokenPasswordLoaderUserCount;
+  }
 
   public void incrBzlTokenPasswordChangeNumbers() {
     bzlTokenPasswordChangeNumbers.incr();
+  }
+  
+  public void incrBzlTokenPasswordLoaderDecodeException() {
+    bzlTokenPasswordLoaderDecodeException.incr();
+  }
+
+  public void incrBzlTokenPasswordLoaderMissingSystemAccount() {
+    bzlTokenPasswordLoaderMissingSystemAccount.incr();
+  }
+
+  public void incrzlTokenPasswordLoaderAccountEmpty() {
+    bzlTokenPasswordLoaderAccountEmpty.incr();
+  }
+
+  public void incrBzlTokenPasswordLoaderPasswordEmpty() {
+    bzlTokenPasswordLoaderPasswordEmpty.incr();
   }
 }

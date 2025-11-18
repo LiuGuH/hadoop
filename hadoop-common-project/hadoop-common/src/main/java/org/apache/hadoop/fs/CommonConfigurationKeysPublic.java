@@ -43,7 +43,9 @@ public class CommonConfigurationKeysPublic {
   public static final int BZL_HTTP_SOCKET_TIMEOUT = 10000;
   public static final int BZL_HTTP_CONNECT_TIMEOUT = 10000;
   public static final int BZL_HTTP_CONNECTION_REQUEST_TIMEOUT = 15000;
-  
+  public static final int BZL_HTTP_CONNECTION_MANAGER_MAX_TOTAL = 200;
+  public static final int BZL_HTTP_CONNECTION_MANAGER_MAX_PERROUTER = 50;
+
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">
@@ -693,26 +695,32 @@ public class CommonConfigurationKeysPublic {
     "hadoop.security.authorization";
   public static final String HADOOP_BZL_TOKEN_AUTH_ENABLE =
     "hadoop.bzl.token.auth.enable";
+  public static final String HADOOP_BZL_TOKEN_AUTH_ENABLE_URI =
+      "hadoop.bzl.token.auth.enable.uri";
   public static final String HADOOP_BZL_AUTH_LOCALDIR =
     "hadoop.bzl.auth.localdir";
   public static final String HADOOP_BZL_AUTH_URL_ENDPOINT =
     "hadoop.bzl.auth.url.endpoint";
   public static final String HADOOP_BZL_AUTH_URL_PASSWORDAPI =
     "hadoop.bzl.auth.url.passwordapi";
-  public static final String HADOOP_BZL_AUTH_URL_WHITELISTAPI =
-    "hadoop.bzl.auth.url.whitelistapi";
   public static final String HADOOP_BZL_AUTH_URL_AC =
     "hadoop.bzl.auth.url.ac";
   public static final String HADOOP_BZL_AUTH_URL_SK =
     "hadoop.bzl.auth.url.sk";
   public static final String HADOOP_BZL_AUTH_UPDATE_ENABLE =
     "hadoop.bzl.auth.update.enable";
-  public static final String HADOOP_BZL_AUTH_UPDATE_PERIOD =
-    "hadoop.bzl.auth.update.period";
+  public static final String HADOOP_BZL_AUTH_UPDATE_PERIOD_MS =
+    "hadoop.bzl.auth.update.period.ms";
   public static final String HADOOP_BZL_DYNAMIC_CONFIG_ENABLE =
     "hadoop.bzl.dynamic.config.enable";
   public static final String HADOOP_BZL_DYNAMIC_CONFIG_PERIOD =
     "hadoop.bzl.dynamic.config.period";
+  public static final String HADOOP_BZL_AUTH_SYSTEM_ACCOUNT_LIST =
+      "hadoop.bzl.auth.system.account.list";
+  public static final String HADOOP_BZL_AUTH_SYSTEM_ACCOUNT_LIST_DEFAULT = "hdfs,yarn,hive,hbase";
+  public static final String HADOOP_BZL_AUTH_PASSWORD_RETAIN_VERSION =
+      "hadoop.bzl.auth.password.retain.version";
+  public static final int HADOOP_BZL_AUTH_PASSWORD_RETAIN_VERSION_DEFAULT = 10;
   /**
    * @see
    * <a href="{@docRoot}/../hadoop-project-dist/hadoop-common/core-default.xml">

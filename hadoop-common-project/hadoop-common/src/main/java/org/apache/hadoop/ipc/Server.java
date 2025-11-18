@@ -2589,6 +2589,11 @@ public abstract class Server {
 
     private void authBzlTokenUser(UserGroupInformation protocolUser, String callerContext)
         throws FatalRpcServerException {
+
+      if (!BzlTokenPasswordManager.isBzlTokenPasswordGlobalEnable()) {
+        return;
+      }
+
       if (!BzlDynamicConfiguration.getInstance()
           .getBoolean(CommonConfigurationKeys.HADOOP_BZL_TOKEN_AUTH_ENABLE, false)) {
         return;
@@ -2602,11 +2607,6 @@ public abstract class Server {
       String clientUser = protocolUser.getUserName();
       String clientRealUser =
           protocolUser.getRealUser() != null ? protocolUser.getRealUser().getUserName() : null;
-      //clientUser以及clientRealUser ，如果是白名单用户，不做token验证，直接通过
-      if (BzlTokenPasswordManager.getInstance().isUserInWhiteList(clientRealUser, clientUser)) {
-        rpcBzlTokenAuthMetrics.incrBzlTokenWhiteListAuthSuccesses();
-        return;
-      }
 
       //获取bzltoken
       String base64EncodeBzlToken = protocolUser.getBzlTokenFromClient();
@@ -2656,7 +2656,7 @@ public abstract class Server {
       String bzlTokenMd5 = tokenParts[3];
 
       if (!BzlTokenHelper.authBzlTokenMd5(bzlTokenUser, bzlTokenTimestamp, bzlTokenPeriod,
-          bzlTokenMd5)) {
+          bzlTokenMd5, rpcBzlTokenAuthMetrics)) {
         rpcBzlTokenAuthMetrics.incrBzlTokenAuthFailures();
         LOG.info(
             "[Warning] BzlToken is wrong! BzltokenUser is {}, ClientUser is {}, ClientRealUser is {}, Base64EncodeBzlToken's prefix is {}, suffix is {}. ClientInfo is {}:{}. CallerContext is {}.",
