@@ -29,7 +29,7 @@ public class BzlTokenPasswordGlobalEnableThread extends Thread {
         String url = BzlDynamicConfiguration.getInstance()
             .get(CommonConfigurationKeysPublic.HADOOP_BZL_TOKEN_AUTH_ENABLE_URI, "");
 
-        String result = BzlJsonUtils.getBzlTokenEnableFromHttp(url, "[BDH]bzlTokenEnable");
+        String result = BzlJsonUtils.getBzlGlobalEnableFromHttp(url, "[BDH]bzlTokenEnable");
 
         if (result.equalsIgnoreCase("false") && enable) {
           LOG.warn("Disable bzlToken auth globally from {}", url);

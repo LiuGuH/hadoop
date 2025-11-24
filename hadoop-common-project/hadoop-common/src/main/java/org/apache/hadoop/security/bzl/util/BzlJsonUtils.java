@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.hadoop.ipc.metrics.RpcBzlTokenPasswordFetcherMetrics;
 import org.apache.hadoop.security.bzl.bean.BzlPasswordBean;
 import org.apache.hadoop.security.bzl.bean.BzlPasswordBean.PasswordData;
-import org.apache.hadoop.security.bzl.bean.BzlTokenAuthEnableBean;
+import org.apache.hadoop.security.bzl.bean.BzlGlobalEnableBean;
 import org.apache.http.HttpException;
 import org.apache.http.client.utils.URIBuilder;
 
@@ -85,7 +85,7 @@ public class BzlJsonUtils {
     return list;
   }
 
-  public static String getBzlTokenEnableFromHttp(String url, String logPrefix)
+  public static String getBzlGlobalEnableFromHttp(String url, String logPrefix)
       throws HttpException, URISyntaxException, IOException {
     String traceId = UUID.randomUUID().toString();
     URI uri = new URIBuilder(url)
@@ -93,15 +93,15 @@ public class BzlJsonUtils {
         .build();
     String context = BzlHttpUtils.doGet(uri, traceId, logPrefix);
 
-    return parseBzlTokenEnableData(context, traceId, logPrefix);
+    return parseBzlGlobalEnableData(context, traceId, logPrefix);
   }
 
-  private static String parseBzlTokenEnableData(String context, String traceId, String logPrefix)
+  private static String parseBzlGlobalEnableData(String context, String traceId, String logPrefix)
       throws HttpException {
     Gson gson = new Gson();
-    BzlTokenAuthEnableBean bean = gson.fromJson(context, BzlTokenAuthEnableBean.class);
+    BzlGlobalEnableBean bean = gson.fromJson(context, BzlGlobalEnableBean.class);
     if (bean.getMeta().getCode() != 0) {
-      LOG.warn("{}: getBzlTokenEnable context code is {}, errorMsg is {}. TraceId is {}.",
+      LOG.warn("{}: getBzlGlobalEnableData context code is {}, errorMsg is {}. TraceId is {}.",
           logPrefix, bean.getMeta().getCode(), bean.getMeta().getErrorMsg(), traceId);
       throw new HttpException(
           String.format("Bzl Http Meta code is %d, Error msg is %s, TraceId is %s.",

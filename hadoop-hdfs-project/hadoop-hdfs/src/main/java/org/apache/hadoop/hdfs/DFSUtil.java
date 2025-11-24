@@ -70,6 +70,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.fs.ParentNotDirectoryException;
 import org.apache.hadoop.fs.UnresolvedLinkException;
+import org.apache.hadoop.hdfs.server.namenode.BzlProtectedDirectoriesGlobalEnableThread;
 import org.apache.hadoop.hdfs.server.namenode.BzlProtectedDirectoriesUpdater;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
 import org.apache.hadoop.hdfs.server.namenode.INodesInPath;
@@ -1833,6 +1834,10 @@ public class DFSUtil {
       FSDirectory fsd, INodesInPath iip)
           throws AccessControlException, UnresolvedLinkException,
           ParentNotDirectoryException {
+    if(!BzlProtectedDirectoriesGlobalEnableThread.isGlobalEnable()) {
+      return;
+    }
+
     final SortedSet<String> protectedDirs = fsd.getProtectedDirectories();
     if (protectedDirs.isEmpty()) {
       return;

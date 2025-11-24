@@ -10,32 +10,29 @@ import org.apache.hadoop.metrics2.lib.DefaultMetricsSystem;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.thirdparty.com.google.common.net.InetAddresses;
 import org.apache.hadoop.thirdparty.com.google.common.util.concurrent.RateLimiter;
+
+import org.apache.hadoop.security.bzl.util.BzlHttpUtils;
 import org.apache.hadoop.top.TopConf;
 import org.apache.hadoop.top.metrics.TopMetrics;
 import org.apache.hadoop.util.Time;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
+import org.apache.http.HttpException;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE;
@@ -86,6 +83,8 @@ public class RpcRateLimiter {
     }
 
     new RefreshRpcRateLimitThread().start();
+
+    new RpcRateLimiterGlobalEnableThread().start();
   }
 
   void readLock() {
@@ -120,6 +119,10 @@ public class RpcRateLimiter {
 
   public void rateLimit(String protocolName, String methodName, String ip, String user)
       throws Exception {
+    if (!RpcRateLimiterGlobalEnableThread.isGlobalEnable()) {
+      return;
+    }
+
     if (!BzlDynamicConfiguration.getInstance()
         .getBoolean(IPC_SERVER_RATE_LIMIT_ENABLE, IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT)) {
       return;
@@ -315,7 +318,12 @@ public class RpcRateLimiter {
           } else {
             // If requests URL failed , newValue will be null.
             // If successes but the rules is empty, newValue will be ""
-            newValue = getRateLimterRules();
+            try {
+              newValue = getRateLimiterRules();
+            } catch (Exception e) {
+              LOG.warn("getRateLimterRules throw Exception:", e);
+              newValue = null;
+            }
           }
 
           if (newValue != null && !newValue.equals(oldValue)) {
@@ -334,8 +342,8 @@ public class RpcRateLimiter {
               LOG.info("The {} has changed. Details is {}", IPC_SERVER_RATE_LIMIT_RULES, list);
               oldValue = newValue;
             } catch (Exception e) {
-              LOG.error("RefreshRpcRateLimitThread throw exception. The detail is {}.",
-                  e.getMessage());
+              LOG.error("Apply new ratelimit rules to conditionList throw exception:", e);
+              rpcRateLimiterMetrics.addRpcRateLimitParsingFormatFailures();
             }
           }
         }
@@ -345,8 +353,7 @@ public class RpcRateLimiter {
               .getLong(IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD,
                   IPC_SERVER_RATE_LIMIT_RULES_DYNAMIC_UPDATE_PERIOD_DEFAULT));
         } catch (InterruptedException e) {
-          LOG.warn("RefreshRpcRateLimitThread InterruptedException. The detail is {}.",
-              e.getMessage());
+          LOG.warn("RefreshRpcRateLimitThread catch InterruptedException:", e);
           Thread.currentThread().interrupt();
         }
       }
@@ -423,64 +430,21 @@ public class RpcRateLimiter {
           Double.parseDouble(qps) >= 1.0) || qps.equals("*") || qps.equals("0"));
     }
 
-    public String getRateLimterRules() {
-      String json = doGetHttp(BzlDynamicConfiguration.getInstance()
-          .get(IPC_SERVER_RATE_LIMIT_RULES_URL, ""));
-      String rpcRateLimiterRules = parseJson(json);
-      if (rpcRateLimiterRules == null) {
-        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
-      }
-      return rpcRateLimiterRules;
-    }
+    public String getRateLimiterRules() throws HttpException, IOException, URISyntaxException {
+      String traceId = UUID.randomUUID().toString();
+      String url = BzlDynamicConfiguration.getInstance().get(IPC_SERVER_RATE_LIMIT_RULES_URL, "");
+      URI uri = new URIBuilder(url).setParameter("traceId", traceId).build();
 
-    private String doGetHttp(String rpcRateLimiterUrl) {
-      if (rpcRateLimiterUrl == null) {
-        LOG.warn("RpcRateLimiterUrl is null.");
-        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
-        return null;
-      }
-      
-      String resStr = null;
-      CloseableHttpClient httpClient = null;
-      CloseableHttpResponse httpResponse = null;
       try {
-        RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
-            .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
-            .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
-        URI uri = new URIBuilder(rpcRateLimiterUrl).build();
-        httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
-        HttpGet httpGet = new HttpGet(uri);
-        httpResponse = httpClient.execute(httpGet);
+        String json = BzlHttpUtils.doGet(uri, traceId, "[BDH]rpcRateLimiter");
+        rpcRateLimiterMetrics.addRpcRateLimitFetchSuccesses();
 
-        if (httpResponse.getStatusLine().getStatusCode() == 200) {
-          resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
-          rpcRateLimiterMetrics.addRpcRateLimitFetchSuccesses();
-        } else {
-          LOG.warn("Request {} failed. Code is {}", rpcRateLimiterUrl,
-              httpResponse.getStatusLine().getStatusCode());
-          rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
-        }
-      } catch (java.io.IOException e) {
-        LOG.warn("IOException error! The detail message is {}.", e.getMessage());
+        String rpcRateLimiterRules = parseJson(json);
+        return rpcRateLimiterRules;
+      } catch (Exception e) {
         rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
-        return null;
-      } catch (java.net.URISyntaxException e) {
-        LOG.warn("URISyntaxException error! The detail message is {}.", e.getMessage());
-        rpcRateLimiterMetrics.addRpcRateLimitFetchFailures();
-        return null;
-      } finally {
-        try {
-          if (httpClient != null) {
-            httpClient.close();
-          }
-          if (httpResponse != null) {
-            httpResponse.close();
-          }
-        } catch (java.io.IOException e) {
-          LOG.warn("Close error! The detail message is {}.", e.getMessage());
-        }
+        throw e;
       }
-      return resStr;
     }
 
     private String parseJson(String json) {

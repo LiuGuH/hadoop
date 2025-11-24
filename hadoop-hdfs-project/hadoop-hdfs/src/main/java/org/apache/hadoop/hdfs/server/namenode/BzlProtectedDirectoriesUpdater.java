@@ -7,28 +7,19 @@ import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.hdfs.server.namenode.metrics.BzlProtectedDirectoriesMetrics;
 import org.apache.hadoop.metrics2.lib.MutableRate;
 import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
+import org.apache.hadoop.security.bzl.util.BzlHttpUtils;
 import org.apache.http.client.utils.URIBuilder;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.UUID;
 
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECTION_REQUEST_TIMEOUT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_CONNECT_TIMEOUT;
-import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.BZL_HTTP_SOCKET_TIMEOUT;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES;
 import static org.apache.hadoop.fs.CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_LIST_MAX_SIZE;
 
@@ -37,7 +28,6 @@ public class BzlProtectedDirectoriesUpdater {
 
   private static class ProtectedDirectoriesUpdateThread extends Thread {
     private long updatePeriod;
-    private String protectedDirectoriesBzlRemoteUrl;
     private BzlProtectedDirectoriesMetrics bzlProtectedDirectoriesMetrics;
     private List<String> protectedDirectoriesListInCoresite;
 
@@ -46,82 +36,60 @@ public class BzlProtectedDirectoriesUpdater {
       this.updatePeriod = conf.getLong(
           CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_PERIOD,
           60 * 1000);
-      this.protectedDirectoriesBzlRemoteUrl = conf
-          .get(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_URL, "");
       this.setDaemon(true);
       this.protectedDirectoriesListInCoresite =
           (List<String>) conf.getStringCollection(FS_PROTECTED_DIRECTORIES);
+
+      new BzlProtectedDirectoriesGlobalEnableThread().start();
     }
 
     @Override
     public void run() {
       while (true) {
-        BzlProtectedDirectoriesUpdater.getInstance()
-            .updateRemoteProtectedDirectories(getRemoteProtectedDirectories());
-        BzlProtectedDirectoriesUpdater.getInstance().mergeRemoteBzlProtectedDirectories();
+        try {
+          BzlProtectedDirectoriesUpdater.getInstance()
+              .updateRemoteProtectedDirectories(getRemoteProtectedDirectories());
+          BzlProtectedDirectoriesUpdater.getInstance().mergeRemoteBzlProtectedDirectories();
+        } catch (Exception e) {
+          LOG.error("BzlProtectedDirectoriesUpdater throw Exception:", e);
+          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesThrowException();
+        }
 
         try {
           Thread.sleep(updatePeriod);
         } catch (InterruptedException e) {
-          LOG.warn("InterruptedException is catched. The details is {}", e.getMessage());
+          LOG.warn("InterruptedException is catched:", e);
           Thread.currentThread().interrupt();
         }
       }
     }
 
-    private SortedSet<String> getRemoteProtectedDirectories() {
+    private SortedSet<String> getRemoteProtectedDirectories() throws Exception {
       SortedSet<String> remoteProtectedDirectories = new TreeSet<>();
-      if (BzlDynamicConfiguration.getInstance()
+      if (!BzlDynamicConfiguration.getInstance()
           .getBoolean(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_ENABLE,
               false)) {
-        String jsonData = doGetHttp(protectedDirectoriesBzlRemoteUrl);
-        remoteProtectedDirectories = parseJson(jsonData);
+        return remoteProtectedDirectories;
       }
-      return remoteProtectedDirectories;
-    }
 
-    private String doGetHttp(String protectedDirectoriesBzlRemoteUrl) {
-      String resStr = null;
-      CloseableHttpClient httpClient = null;
-      CloseableHttpResponse httpResponse = null;
       try {
-        RequestConfig config = RequestConfig.custom().setSocketTimeout(BZL_HTTP_SOCKET_TIMEOUT)
-            .setConnectTimeout(BZL_HTTP_CONNECT_TIMEOUT)
-            .setConnectionRequestTimeout(BZL_HTTP_CONNECTION_REQUEST_TIMEOUT).build();
-        URI uri = new URIBuilder(protectedDirectoriesBzlRemoteUrl).build();
-        httpClient = HttpClients.custom().setDefaultRequestConfig(config).build();
-        HttpGet httpGet = new HttpGet(uri);
-        httpResponse = httpClient.execute(httpGet);
+        String protectedDirectoriesBzlRemoteUrl = BzlDynamicConfiguration.getInstance()
+            .get(CommonConfigurationKeysPublic.FS_PROTECTED_DIRECTORIES_BZL_UPDATER_REMOTE_URL, "");
 
-        if (httpResponse.getStatusLine().getStatusCode() == 200) {
-          resStr = EntityUtils.toString(httpResponse.getEntity(), "UTF-8");
-          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchSuccesses();
-        } else {
-          LOG.warn("Fetch error. The return code is {} .",
-              httpResponse.getStatusLine().getStatusCode());
-          bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
-        }
-      } catch (IOException e) {
-        LOG.warn("IOException error! The detail message is {}.", e.getMessage());
+        String traceId = UUID.randomUUID().toString();
+        URI uri = new URIBuilder(protectedDirectoriesBzlRemoteUrl).setParameter("traceId", traceId)
+            .build();
+        String jsonData = BzlHttpUtils.doGet(uri, traceId, "[BDH]protectedDirectories");
+
+        remoteProtectedDirectories = parseJson(jsonData);
+        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchSuccesses();
+
+        return remoteProtectedDirectories;
+      } catch (Exception e) {
         bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
-        return null;
-      } catch (URISyntaxException e) {
-        LOG.warn("URISyntaxException error! The detail message is {}.", e.getMessage());
-        bzlProtectedDirectoriesMetrics.incrBzlProtectedDirectoriesFetchFailures();
-        return null;
-      } finally {
-        try {
-          if (httpClient != null) {
-            httpClient.close();
-          }
-          if (httpResponse != null) {
-            httpResponse.close();
-          }
-        } catch (IOException e) {
-          LOG.warn("Close error! The detail message is {}.", e.getMessage());
-        }
+        LOG.warn("getRemoteProtectedDirectories throw Exception:", e);
+        throw e;
       }
-      return resStr;
     }
 
     private SortedSet<String> parseJson(String json) {

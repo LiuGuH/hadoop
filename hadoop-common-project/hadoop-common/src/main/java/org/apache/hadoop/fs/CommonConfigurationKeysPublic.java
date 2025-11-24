@@ -168,6 +168,9 @@ public class CommonConfigurationKeysPublic {
   public static final String FS_PROTECTED_DIRECTORIES =
       "fs.protected.directories";
 
+  public static final String FS_PROTECTED_DIRECTORIES_ENABLE_URI =
+      "fs.protected.directories.enable.uri";
+
   public static final String FS_FORCE_TO_TRASH_BZL_ENABLE =
       "fs.force.to.trash.bzl.enable";
   public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_ENABLE =
@@ -530,6 +533,8 @@ public class CommonConfigurationKeysPublic {
   public static final String IPC_SERVER_RATE_LIMIT_ENABLE =
       "ipc.server.rate.limit.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_ENABLE_DEFAULT = false;
+  public static final String IPC_SERVER_RATE_LIMIT_ENABLE_URI =
+      "ipc.server.rate.limit.enable.uri";
   public static final String IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE =
           "ipc.server.rate.limit.local.config.enable";
   public static final boolean IPC_SERVER_RATE_LIMIT_LOCAL_CONFIG_ENABLE_DEFAULT = false;

@@ -129,11 +129,11 @@ public class TestNNRpcRateLimiter {
   }
 
   @Test
-  public void testGetRpcRatelimiterUrl() {
+  public void testGetRpcRatelimiterUrl() throws Exception {
     String url =
         "https://datastar.kanzhun-inc.com//api/guardian/openapi/limitRule/queryLimitRuleContentByCode/yj-hadoop/yj-hdfs6";
     BzlDynamicConfiguration.getInstance().set(IPC_SERVER_RATE_LIMIT_RULES_URL, url);
-    String result = RpcRateLimiter.getInstance().getRefreshRpcRateLimitThread().getRateLimterRules();
+    String result = RpcRateLimiter.getInstance().getRefreshRpcRateLimitThread().getRateLimiterRules();
     // result should be "" if request success but the rules is emtpy
     // result should be rules if request success but the rules is config
     // result should be null if request failed
