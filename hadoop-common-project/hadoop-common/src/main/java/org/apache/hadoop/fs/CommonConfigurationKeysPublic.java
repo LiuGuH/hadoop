@@ -706,10 +706,8 @@ public class CommonConfigurationKeysPublic {
       "hadoop.bzl.token.auth.enable.uri";
   public static final String HADOOP_BZL_AUTH_LOCALDIR =
     "hadoop.bzl.auth.localdir";
-  public static final String HADOOP_BZL_AUTH_URL_ENDPOINT =
-    "hadoop.bzl.auth.url.endpoint";
-  public static final String HADOOP_BZL_AUTH_URL_PASSWORDAPI =
-    "hadoop.bzl.auth.url.passwordapi";
+  public static final String HADOOP_BZL_AUTH_URL =
+    "hadoop.bzl.auth.url";
   public static final String HADOOP_BZL_AUTH_URL_AC =
     "hadoop.bzl.auth.url.ac";
   public static final String HADOOP_BZL_AUTH_URL_SK =

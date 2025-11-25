@@ -10,6 +10,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.ipc.metrics.RpcBzlTokenPasswordFetcherMetrics;
 import org.apache.hadoop.security.bzl.bean.BzlPasswordBean;
+import org.apache.hadoop.security.bzl.dynamicconfig.BzlDynamicConfiguration;
 import org.apache.hadoop.security.bzl.util.BzlAuthFileUtils;
 import org.apache.hadoop.security.bzl.util.BzlJsonUtils;
 
@@ -52,12 +53,13 @@ public class TestBzlAuthPasswordFile {
   public void testBzlTokenPasswordUpdateThread() {
     Configuration conf = new Configuration();
     conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_LOCALDIR, bzlAuthLocalDir);
-    conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_ENDPOINT,
-        "http://alps-auth-web-datastar-qa.kanzhun.tech");
-    conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_PASSWORDAPI,
-        "/api/alps/auth/groupUser/query");
+    conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL,
+        "http://alps-auth-web-datastar-qa.kanzhun.tech/api/alps/auth/groupUser/query");
     conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_AC, bzlAuthUrlAc);
     conf.set(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_SK, bzlAuthUrlSk);
+
+    BzlDynamicConfiguration.getInstance().updateConfiguration(conf);
+
 
     BzlTokenPasswordUpdateThread thread = new BzlTokenPasswordUpdateThread(conf);
     thread.run();
