@@ -173,6 +173,8 @@ public class CommonConfigurationKeysPublic {
 
   public static final String FS_FORCE_TO_TRASH_BZL_ENABLE =
       "fs.force.to.trash.bzl.enable";
+  public static final String FS_FORCE_TO_TRASH_BZL_ENABLE_URI =
+      "fs.force.to.trash.bzl.enable.uri";
   public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_ENABLE =
       "fs.force.to.trash.bzl.updater.enable";
   public static final String FS_FORCE_TO_TRASH_BZL_UPDATER_REMOTE_URL =

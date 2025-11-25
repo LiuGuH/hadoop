@@ -48,6 +48,10 @@ public class DeleteToTrashUtils {
   }
 
   public static boolean checkIfDeleteToTrash(FSDirectory fsd, String src) {
+    if (!BzlForceToTrashGlobalEnableThread.isGlobalEnable()) {
+      return false;
+    }
+
     if (!BzlDynamicConfiguration.getInstance()
         .getBoolean(FS_FORCE_TO_TRASH_BZL_ENABLE, false)) {
       return false;
