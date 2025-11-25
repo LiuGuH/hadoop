@@ -78,6 +78,8 @@ public class BzlTokenPasswordUpdateThread extends Thread {
                 SPECIFIED_GROUP_PASSWORD, GROUP_PASSWORD_FILE_PREFIX, retainVersions);
 
         if (latestVersionPaths.size() > 0) {
+          LOG.debug("BzlTokenPasswordUpdateThread find latest groupPassword file: {}",
+              latestVersionPaths.get(0).toString());
           // load
           List<PasswordData> passwordList =
               BzlAuthFileUtils.readPasswordFile(latestVersionPaths.get(0).toString());
@@ -95,16 +97,19 @@ public class BzlTokenPasswordUpdateThread extends Thread {
           }
         }
 
-        // fetch from remote url
-        List<BzlPasswordBean.PasswordData> remotePasswordList =
-            BzlJsonUtils.getGroupPasswordList(bzlAuthUrl,
-                bzlAuthUrlAc, bzlAuthUrlSk, rpcBzlTokenPasswordFetcherMetrics, "[BDH]groupQuery");
+        if (latestVersionPaths.isEmpty() || !latestVersionPaths.get(0).toString()
+            .endsWith(SPECIFIED_GROUP_PASSWORD)) {
+          // fetch from remote url
+          List<BzlPasswordBean.PasswordData> remotePasswordList =
+              BzlJsonUtils.getGroupPasswordList(bzlAuthUrl, bzlAuthUrlAc, bzlAuthUrlSk,
+                  rpcBzlTokenPasswordFetcherMetrics, "[BDH]groupQuery");
 
-        // write local password file if changed
-        if (!remotePasswordList.isEmpty() && !previousPasswordList.equals(remotePasswordList)) {
-          BzlAuthFileUtils.writePasswordFile(remotePasswordList,
-              bzlAuthFilePathPrefix + getCurrentDataString(), rpcBzlTokenPasswordFetcherMetrics);
-          isPasswordListUpdated = true;
+          // write local password file if changed
+          if (!remotePasswordList.isEmpty() && !previousPasswordList.equals(remotePasswordList)) {
+            BzlAuthFileUtils.writePasswordFile(remotePasswordList,
+                bzlAuthFilePathPrefix + getCurrentDataString(), rpcBzlTokenPasswordFetcherMetrics);
+            isPasswordListUpdated = true;
+          }
         }
       } catch (Exception e) {
         LOG.warn("BzlTokenPasswordUpdateThread catch exception:", e);
@@ -138,7 +143,7 @@ public class BzlTokenPasswordUpdateThread extends Thread {
       }
 
       if(data.allPasswordIsEmpty()) {
-        LOG.warn("BzlTokenPasswordLoader found GroupAccount {} has empty password.", data.getGroupAccount());
+        LOG.debug("BzlTokenPasswordLoader found GroupAccount {} has empty password.", data.getGroupAccount());
         rpcBzlTokenPasswordLoaderMetrics.incrBzlTokenPasswordLoaderPasswordEmpty();
         continue;
       }
