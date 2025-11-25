@@ -36,9 +36,6 @@ public class BzlTokenPasswordUpdateThread extends Thread {
   private String bzlAuthLocalDir;
   private long updatePeriod;
 
-  private String bzlAuthUrl;
-  private String bzlAuthUrlAc;
-  private String bzlAuthUrlSk;
   private String bzlAuthFilePathPrefix;
   List<PasswordData> previousPasswordList;
 
@@ -51,11 +48,6 @@ public class BzlTokenPasswordUpdateThread extends Thread {
         bzlAuthLocalDir + File.separator + GROUP_PASSWORD_FILE_PREFIX;
     this.updatePeriod =
         conf.getLong(CommonConfigurationKeysPublic.HADOOP_BZL_AUTH_UPDATE_PERIOD_MS, 60000l);
-
-    this.bzlAuthUrl = conf.get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_ENDPOINT) + conf.get(
-        CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_PASSWORDAPI);
-    this.bzlAuthUrlAc = conf.get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_AC);
-    this.bzlAuthUrlSk = conf.get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_SK);
 
     this.previousPasswordList = new ArrayList<>();
 
@@ -100,9 +92,14 @@ public class BzlTokenPasswordUpdateThread extends Thread {
         if (latestVersionPaths.isEmpty() || !latestVersionPaths.get(0).toString()
             .endsWith(SPECIFIED_GROUP_PASSWORD)) {
           // fetch from remote url
-          List<BzlPasswordBean.PasswordData> remotePasswordList =
-              BzlJsonUtils.getGroupPasswordList(bzlAuthUrl, bzlAuthUrlAc, bzlAuthUrlSk,
-                  rpcBzlTokenPasswordFetcherMetrics, "[BDH]groupQuery");
+          List<BzlPasswordBean.PasswordData> remotePasswordList = BzlJsonUtils.getGroupPasswordList(
+              BzlDynamicConfiguration.getInstance()
+                  .get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL, ""),
+              BzlDynamicConfiguration.getInstance()
+                  .get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_AC, ""),
+              BzlDynamicConfiguration.getInstance()
+                  .get(CommonConfigurationKeys.HADOOP_BZL_AUTH_URL_SK, ""),
+              rpcBzlTokenPasswordFetcherMetrics, "[BDH]groupQuery");
 
           // write local password file if changed
           if (!remotePasswordList.isEmpty() && !previousPasswordList.equals(remotePasswordList)) {
