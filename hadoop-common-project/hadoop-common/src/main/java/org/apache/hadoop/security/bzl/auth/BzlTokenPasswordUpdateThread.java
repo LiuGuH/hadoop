@@ -75,6 +75,7 @@ public class BzlTokenPasswordUpdateThread extends Thread {
           // load
           List<PasswordData> passwordList =
               BzlAuthFileUtils.readPasswordFile(latestVersionPaths.get(0).toString());
+          previousPasswordList = passwordList;
           HashMap<String, ArrayList<String>> encodePasswordMap =
               convertToHashMap(passwordList, rpcBzlTokenPasswordLoaderMetrics);
 
@@ -84,7 +85,6 @@ public class BzlTokenPasswordUpdateThread extends Thread {
             rpcBzlTokenPasswordLoaderMetrics.incrBzlTokenPasswordChangeNumbers();
             LOG.info("BzlTokenPasswordManager has changed！New ConcurrentHashMap size is {}.",
                 decodePasswordMap.size());
-            previousPasswordList = passwordList;
             rpcBzlTokenPasswordLoaderMetrics.setBzlTokenPasswordLoaderUserCount(decodePasswordMap.size());
           }
         }
