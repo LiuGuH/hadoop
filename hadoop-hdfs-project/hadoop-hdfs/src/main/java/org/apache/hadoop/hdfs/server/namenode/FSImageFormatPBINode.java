@@ -544,14 +544,10 @@ public final class FSImageFormatPBINode {
       final PermissionStatus permissions = loadPermission(f.getPermission(),
           parent.getLoaderContext().getStringTable());
 
-      long blockSize = f.getPreferredBlockSize();
-      if (isStriped && blockSize < 128 * 1024 * 1024L) {
-        blockSize = 128 * 1024 * 1024L;
-      }
       final INodeFile file = new INodeFile(n.getId(),
           n.getName().toByteArray(), permissions, f.getModificationTime(),
           f.getAccessTime(), blocks, replication, ecPolicyID,
-          blockSize, (byte)f.getStoragePolicyID(), blockType);
+          f.getPreferredBlockSize(), (byte)f.getStoragePolicyID(), blockType);
 
       if (f.hasAcl()) {
         int[] entries = AclEntryStatusFormat.toInt(loadAclEntries(
