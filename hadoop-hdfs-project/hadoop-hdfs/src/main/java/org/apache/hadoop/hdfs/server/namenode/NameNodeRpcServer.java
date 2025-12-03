@@ -279,22 +279,12 @@ public class NameNodeRpcServer implements NamenodeProtocols {
   // Users who can override the client ip
   private final String[] ipProxyUsers;
 
-  static boolean ecBlockSizeDividedEnable;
-
-  public static boolean isEcBlockSizeDividedEnable() {
-    return ecBlockSizeDividedEnable;
-  }
-
   public NameNodeRpcServer(Configuration conf, NameNode nn)
       throws IOException {
     this.nn = nn;
     this.namesystem = nn.getNamesystem();
     this.retryCache = namesystem.getRetryCache();
     this.metrics = NameNode.getNameNodeMetrics();
-
-    ecBlockSizeDividedEnable = conf.getBoolean(DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE,
-        DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE_DEFAULT);
-    LOG.info("{} is set {}.", DFS_NAMENODE_EC_BLOCKSIZE_DIVIDED_ENABLE, ecBlockSizeDividedEnable);
 
     int handlerCount = 
       conf.getInt(DFS_NAMENODE_HANDLER_COUNT_KEY, 
