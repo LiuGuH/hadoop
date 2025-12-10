@@ -17,6 +17,7 @@ public class BzlTokenPasswordGlobalEnableThread extends Thread {
   public BzlTokenPasswordGlobalEnableThread(Configuration conf) {
     this.fetcherPeriod =
         conf.getLong(CommonConfigurationKeysPublic.HADOOP_BZL_AUTH_UPDATE_PERIOD_MS, 30000l);
+    this.setDaemon(true);
   }
 
   @Override
